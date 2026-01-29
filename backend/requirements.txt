@@ -1,0 +1,68 @@
+# klantenservice.ai - Backend Dependencies
+# FastAPI & Server
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# Database
+sqlalchemy==2.0.25
+psycopg2-binary==2.9.9
+alembic==1.13.1
+
+# Validation & Serialization
+pydantic==2.5.3
+pydantic-settings==2.1.0
+email-validator==2.1.0
+
+# Async & Background Tasks
+celery==5.3.4
+redis==5.0.1
+aiohttp==3.9.1
+httpx==0.26.0
+
+# Calendar Integrations
+google-api-python-client==2.114.0
+google-auth-httplib2==0.2.0
+google-auth-oauthlib==1.2.0
+msal==1.26.0
+caldav==1.3.9
+
+# AI & RAG
+openai==1.10.0
+langchain==0.1.4
+langchain-community==0.0.16
+chromadb==0.4.22
+sentence-transformers==2.2.2
+beautifulsoup4==4.12.3
+lxml==5.1.0
+
+# PersonaPlex-7B (NVIDIA Speech-to-Speech Model)
+# Model loaded from Hugging Face: nvidia/personaplex-7b-v1
+# Requires GPU with 24GB+ VRAM for production use
+torch>=2.1.0
+torchaudio>=2.1.0
+transformers>=4.36.0
+accelerate>=0.25.0
+huggingface-hub>=0.20.0
+numpy>=1.24.0
+
+# Telephony
+twilio==8.11.1
+
+# Email
+resend==1.0.0
+
+# Utilities
+python-dotenv==1.0.0
+tenacity==8.2.3
+structlog==24.1.0
+sentry-sdk[fastapi]==1.39.1
+
+# Testing
+pytest==7.4.4
+pytest-asyncio==0.23.3
+pytest-cov==4.1.0
+httpx==0.26.0
+factory-boy==3.3.0

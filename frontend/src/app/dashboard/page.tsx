@@ -1,0 +1,321 @@
+'use client'
+
+import { useQuery } from '@tanstack/react-query'
+import { motion } from 'framer-motion'
+import {
+  Users,
+  Phone,
+  Calendar,
+  FileText,
+  TrendingUp,
+  Clock,
+  AlertCircle,
+  ArrowUpRight,
+  Headphones,
+} from 'lucide-react'
+import { DashboardLayout } from '@/components/layout/DashboardLayout'
+import { Header } from '@/components/layout/Header'
+import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card'
+import { Badge } from '@/components/ui/Badge'
+import { PageLoader } from '@/components/ui/Spinner'
+import { dashboardApi } from '@/lib/api'
+import { formatRelativeTime, formatDuration, getStatusColor, getStatusLabel } from '@/lib/utils'
+import Link from 'next/link'
+
+const container = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1,
+    },
+  },
+}
+
+const item = {
+  hidden: { opacity: 0, y: 20 },
+  show: { opacity: 1, y: 0 },
+}
+
+export default function DashboardPage() {
+  const { data: stats, isLoading: statsLoading } = useQuery({
+    queryKey: ['dashboard-stats'],
+    queryFn: dashboardApi.getStats,
+  })
+
+  const { data: recentCalls, isLoading: callsLoading } = useQuery({
+    queryKey: ['recent-calls'],
+    queryFn: () => dashboardApi.getRecentCalls(5),
+  })
+
+  const { data: upcomingAppointments, isLoading: appointmentsLoading } = useQuery({
+    queryKey: ['upcoming-appointments'],
+    queryFn: () => dashboardApi.getUpcomingAppointments(5),
+  })
+
+  const { data: actionItems, isLoading: actionsLoading } = useQuery({
+    queryKey: ['action-items'],
+    queryFn: () => dashboardApi.getActionItems(5),
+  })
+
+  const { data: workersStatus, isLoading: workersLoading } = useQuery({
+    queryKey: ['workers-status'],
+    queryFn: dashboardApi.getAIWorkersStatus,
+  })
+
+  const isLoading = statsLoading || callsLoading || appointmentsLoading || actionsLoading || workersLoading
+
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <PageLoader />
+      </DashboardLayout>
+    )
+  }
+
+  const statCards = [
+    {
+      label: 'Actieve AI-medewerkers',
+      value: `${stats?.active_ai_workers || 0}/${stats?.total_ai_workers || 0}`,
+      icon: Headphones,
+      color: 'text-primary-600 bg-primary-100',
+    },
+    {
+      label: 'Gesprekken vandaag',
+      value: stats?.calls_today || 0,
+      icon: Phone,
+      color: 'text-green-600 bg-green-100',
+    },
+    {
+      label: 'Afspraken vandaag',
+      value: stats?.appointments_today || 0,
+      icon: Calendar,
+      color: 'text-amber-600 bg-amber-100',
+    },
+    {
+      label: 'Openstaande acties',
+      value: stats?.unresolved_notes || 0,
+      icon: AlertCircle,
+      color: 'text-red-600 bg-red-100',
+    },
+  ]
+
+  return (
+    <DashboardLayout>
+      <Header
+        title="Overzicht"
+        description="Welkom terug! Hier is een overzicht van uw klantenservice."
+      />
+
+      <motion.div
+        variants={container}
+        initial="hidden"
+        animate="show"
+        className="p-6 space-y-6"
+      >
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {statCards.map((stat, index) => (
+            <motion.div key={stat.label} variants={item}>
+              <Card className="hover:shadow-soft-lg transition-shadow">
+                <CardBody className="flex items-center gap-4">
+                  <div className={`flex h-12 w-12 items-center justify-center rounded-lg ${stat.color}`}>
+                    <stat.icon className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">{stat.label}</p>
+                    <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+                  </div>
+                </CardBody>
+              </Card>
+            </motion.div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* AI Workers Status */}
+          <motion.div variants={item}>
+            <Card className="h-full">
+              <CardHeader className="flex items-center justify-between">
+                <CardTitle>AI-medewerkers</CardTitle>
+                <Link href="/dashboard/ai-workers" className="text-sm text-primary-600 hover:text-primary-700">
+                  Beheren
+                </Link>
+              </CardHeader>
+              <CardBody className="space-y-3">
+                {workersStatus?.length === 0 ? (
+                  <p className="text-sm text-gray-500 text-center py-4">
+                    Geen AI-medewerkers geconfigureerd
+                  </p>
+                ) : (
+                  workersStatus?.map((worker: any) => (
+                    <div
+                      key={worker.id}
+                      className="flex items-center justify-between p-3 rounded-lg bg-gray-50"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-100">
+                          <Headphones className="h-5 w-5 text-primary-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{worker.name}</p>
+                          <p className="text-xs text-gray-500">{worker.role_title}</p>
+                        </div>
+                      </div>
+                      <Badge
+                        variant={
+                          worker.status === 'available' ? 'success' :
+                          worker.status === 'busy' ? 'warning' : 'gray'
+                        }
+                      >
+                        {getStatusLabel(worker.status)}
+                      </Badge>
+                    </div>
+                  ))
+                )}
+              </CardBody>
+            </Card>
+          </motion.div>
+
+          {/* Recent Calls */}
+          <motion.div variants={item}>
+            <Card className="h-full">
+              <CardHeader className="flex items-center justify-between">
+                <CardTitle>Recente gesprekken</CardTitle>
+                <Link href="/dashboard/calls" className="text-sm text-primary-600 hover:text-primary-700">
+                  Alles bekijken
+                </Link>
+              </CardHeader>
+              <CardBody className="space-y-3">
+                {recentCalls?.length === 0 ? (
+                  <p className="text-sm text-gray-500 text-center py-4">
+                    Nog geen gesprekken
+                  </p>
+                ) : (
+                  recentCalls?.map((call: any) => (
+                    <div
+                      key={call.id}
+                      className="flex items-center justify-between p-3 rounded-lg bg-gray-50"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`flex h-10 w-10 items-center justify-center rounded-full ${getStatusColor(call.status)}`}>
+                          <Phone className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">
+                            {call.customer_name || call.caller_number}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {formatRelativeTime(call.started_at)} • {formatDuration(call.duration_seconds)}
+                          </p>
+                        </div>
+                      </div>
+                      <Badge
+                        variant={
+                          call.status === 'completed' ? 'success' :
+                          call.status === 'missed' ? 'danger' : 'gray'
+                        }
+                      >
+                        {getStatusLabel(call.status)}
+                      </Badge>
+                    </div>
+                  ))
+                )}
+              </CardBody>
+            </Card>
+          </motion.div>
+
+          {/* Upcoming Appointments */}
+          <motion.div variants={item}>
+            <Card className="h-full">
+              <CardHeader className="flex items-center justify-between">
+                <CardTitle>Komende afspraken</CardTitle>
+                <Link href="/dashboard/appointments" className="text-sm text-primary-600 hover:text-primary-700">
+                  Alles bekijken
+                </Link>
+              </CardHeader>
+              <CardBody className="space-y-3">
+                {upcomingAppointments?.length === 0 ? (
+                  <p className="text-sm text-gray-500 text-center py-4">
+                    Geen komende afspraken
+                  </p>
+                ) : (
+                  upcomingAppointments?.map((apt: any) => (
+                    <div
+                      key={apt.id}
+                      className="flex items-center justify-between p-3 rounded-lg bg-gray-50"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100">
+                          <Calendar className="h-5 w-5 text-amber-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{apt.title}</p>
+                          <p className="text-xs text-gray-500">
+                            {apt.customer_name} • {apt.duration_minutes} min
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-medium text-gray-900">
+                          {new Date(apt.starts_at).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {new Date(apt.starts_at).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </CardBody>
+            </Card>
+          </motion.div>
+        </div>
+
+        {/* Action Items */}
+        {actionItems && actionItems.length > 0 && (
+          <motion.div variants={item}>
+            <Card>
+              <CardHeader className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <AlertCircle className="h-5 w-5 text-amber-500" />
+                  Actie vereist
+                </CardTitle>
+                <Link href="/dashboard/notes?action_required=true" className="text-sm text-primary-600 hover:text-primary-700">
+                  Alles bekijken
+                </Link>
+              </CardHeader>
+              <CardBody>
+                <div className="divide-y divide-gray-100">
+                  {actionItems.map((note: any) => (
+                    <div key={note.id} className="py-4 first:pt-0 last:pb-0">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="font-medium text-gray-900">{note.title}</p>
+                          <p className="mt-1 text-sm text-gray-500">{note.action_description}</p>
+                          <div className="mt-2 flex items-center gap-3 text-xs text-gray-400">
+                            {note.customer_name && <span>{note.customer_name}</span>}
+                            {note.customer_phone && <span>• {note.customer_phone}</span>}
+                            <span>• {formatRelativeTime(note.created_at)}</span>
+                          </div>
+                        </div>
+                        <Badge
+                          variant={
+                            note.priority === 'urgent' ? 'danger' :
+                            note.priority === 'high' ? 'warning' : 'gray'
+                          }
+                        >
+                          {note.priority}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardBody>
+            </Card>
+          </motion.div>
+        )}
+      </motion.div>
+    </DashboardLayout>
+  )
+}

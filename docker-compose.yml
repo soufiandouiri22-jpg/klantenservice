@@ -1,0 +1,110 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: klantenservice-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: klantenservice
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: klantenservice-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ChromaDB Vector Database
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: klantenservice-chromadb
+    ports:
+      - "8001:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    environment:
+      ANONYMIZED_TELEMETRY: "false"
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: klantenservice-backend
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/klantenservice
+      - REDIS_URL=redis://redis:6379/0
+      - CHROMA_PERSIST_DIRECTORY=/data/chroma
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-in-production}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-jwt-secret-change-in-production}
+    volumes:
+      - ./backend:/app
+      - chroma_data:/data/chroma
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: klantenservice-frontend
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    command: npm run dev
+
+  # Celery Worker (for background tasks)
+  celery:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: klantenservice-celery
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/klantenservice
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - ./backend:/app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A app.worker worker --loglevel=info
+
+volumes:
+  postgres_data:
+  redis_data:
+  chroma_data:
