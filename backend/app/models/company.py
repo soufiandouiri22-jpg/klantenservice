@@ -12,9 +12,9 @@ from app.core.database import Base
 
 
 class SubscriptionPlan(str, Enum):
-    STARTER = "starter"      # 1 AI-medewerker
-    BUSINESS = "business"    # 5 AI-medewerkers
-    ENTERPRISE = "enterprise"  # 7 AI-medewerkers
+    starter = "starter"      # 1 AI-medewerker
+    business = "business"    # 5 AI-medewerkers
+    enterprise = "enterprise"  # 7 AI-medewerkers
 
 
 class Company(Base):
@@ -45,7 +45,7 @@ class Company(Base):
     # Subscription
     subscription_plan = Column(
         SQLEnum(SubscriptionPlan),
-        default=SubscriptionPlan.STARTER,
+        default=SubscriptionPlan.starter,
         nullable=False
     )
     subscription_status = Column(String(20), default="active")  # active, paused, cancelled
@@ -95,8 +95,8 @@ class Company(Base):
     def ai_worker_limit(self) -> int:
         """Get the AI worker limit based on subscription plan."""
         limits = {
-            SubscriptionPlan.STARTER: 1,
-            SubscriptionPlan.BUSINESS: 5,
-            SubscriptionPlan.ENTERPRISE: 7,
+            SubscriptionPlan.starter: 1,
+            SubscriptionPlan.business: 5,
+            SubscriptionPlan.enterprise: 7,
         }
         return limits.get(self.subscription_plan, 1)

@@ -2,6 +2,9 @@
 klantenservice.ai - PersonaPlex-7B Integration Service
 Real-time speech-to-speech conversational AI for phone calls
 
+This service connects to PersonaPlex-7B running on RunPod Serverless.
+For local development without RunPod, it operates in mock mode.
+
 PersonaPlex is NVIDIA's full-duplex speech-to-speech model that:
 - Handles audio input directly (no separate STT needed)
 - Generates audio output directly (no separate TTS needed)
@@ -9,16 +12,14 @@ PersonaPlex is NVIDIA's full-duplex speech-to-speech model that:
 - Can be conditioned with voice prompts and text personas
 
 Reference: https://huggingface.co/nvidia/personaplex-7b-v1
-
-NOTE: This model requires a GPU with at least 24GB VRAM (A100/H100 recommended).
-For local development without GPU, the service will operate in "mock mode".
 """
 import asyncio
+import aiohttp
+import base64
 import logging
 import os
 from typing import Optional, AsyncGenerator, Any
 from dataclasses import dataclass
-from pathlib import Path
 
 from app.core.config import get_settings
 from app.models.ai_worker import AIWorker, AddressForm
@@ -26,107 +27,59 @@ from app.models.ai_worker import AIWorker, AddressForm
 settings = get_settings()
 logger = logging.getLogger(__name__)
 
-# Check if we have GPU available
-try:
-    import torch
-    HAS_CUDA = torch.cuda.is_available()
-    if HAS_CUDA:
-        logger.info(f"CUDA available: {torch.cuda.get_device_name(0)}")
-except ImportError:
-    HAS_CUDA = False
-    logger.warning("PyTorch not installed - PersonaPlex will run in mock mode")
-
 
 @dataclass
 class ConversationSession:
     """Represents an active conversation session with PersonaPlex"""
     session_id: str
-    model_session: Any  # PersonaPlex session object
+    persona_prompt: str
     worker_id: str
     company_id: str
     is_active: bool = True
+    conversation_history: list = None
+    
+    def __post_init__(self):
+        if self.conversation_history is None:
+            self.conversation_history = []
 
 
 class PersonaPlexService:
     """
-    Service for managing PersonaPlex-7B conversations.
+    Service for managing PersonaPlex-7B conversations via RunPod Serverless.
     
     This service handles:
-    - Model loading and initialization
     - Building persona prompts from AI worker settings
     - Managing conversation sessions
+    - Sending audio to RunPod and receiving responses
     - Processing audio streams bidirectionally
     """
     
     def __init__(self):
-        self.model = None
-        self.processor = None
-        self.device = "cuda" if HAS_CUDA else "cpu"
-        self.is_loaded = False
-        self.mock_mode = not HAS_CUDA  # Run without actual model if no GPU
+        self.runpod_api_key = settings.RUNPOD_API_KEY
+        self.runpod_endpoint_id = settings.RUNPOD_ENDPOINT_ID
+        self.mock_mode = not self.runpod_api_key or not self.runpod_endpoint_id
         self.active_sessions: dict[str, ConversationSession] = {}
-        
-    async def load_model(self):
-        """
-        Load the PersonaPlex-7B model from Hugging Face.
-        This should be called once at startup.
-        
-        The model is loaded from: nvidia/personaplex-7b-v1
-        """
-        if self.is_loaded:
-            return
         
         if self.mock_mode:
             logger.warning(
-                "PersonaPlex running in MOCK MODE (no GPU detected). "
-                "Audio will be passed through without AI processing. "
-                "For production, use a server with NVIDIA GPU."
+                "PersonaPlex running in MOCK MODE (no RunPod endpoint configured). "
+                "Set RUNPOD_API_KEY and RUNPOD_ENDPOINT_ID for production use."
             )
-            self.is_loaded = True
-            return
-            
-        logger.info("Loading PersonaPlex-7B model from Hugging Face...")
-        
-        try:
-            import torch
-            from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor
-            
-            model_id = "nvidia/personaplex-7b-v1"
-            
-            # Get Hugging Face token from settings
-            hf_token = settings.HUGGINGFACE_TOKEN or None
-            if hf_token:
-                logger.info("Using Hugging Face token for authentication")
-            
-            # Load processor (handles audio input/output)
-            self.processor = AutoProcessor.from_pretrained(
-                model_id,
-                token=hf_token,
-                trust_remote_code=True,
-            )
-            
-            # Load model with optimizations
-            self.model = AutoModelForSpeechSeq2Seq.from_pretrained(
-                model_id,
-                torch_dtype=torch.bfloat16,
-                device_map="auto",  # Automatically distribute across GPUs
-                trust_remote_code=True,  # Required for custom model code
-                token=hf_token,
-            )
-            
-            self.is_loaded = True
-            logger.info("PersonaPlex-7B model loaded successfully")
-            
-        except ImportError as e:
-            logger.error(f"Missing dependency: {e}")
-            logger.error("Install with: pip install torch transformers accelerate")
-            self.mock_mode = True
-            self.is_loaded = True
-        except Exception as e:
-            logger.error(f"Failed to load PersonaPlex model: {e}")
-            logger.warning("Falling back to mock mode")
-            self.mock_mode = True
-            self.is_loaded = True
+        else:
+            logger.info(f"PersonaPlex configured with RunPod endpoint: {self.runpod_endpoint_id}")
+    
+    @property
+    def runpod_url(self) -> str:
+        """Get the RunPod API URL for the endpoint."""
+        return f"https://api.runpod.ai/v2/{self.runpod_endpoint_id}"
+    
+    @property
+    def headers(self) -> dict:
+        """Get headers for RunPod API requests."""
+        return {
+            "Authorization": f"Bearer {self.runpod_api_key}",
+            "Content-Type": "application/json"
+        }
     
     def build_persona_prompt(
         self, 
@@ -150,7 +103,6 @@ class PersonaPlexService:
         """
         # Determine address form
         address = "u" if worker.address_form == AddressForm.FORMAL else "jij"
-        address_verb = "bent" if address == "u" else "bent"
         
         # Get behavior settings with defaults
         behavior = worker.behavior_settings or {}
@@ -216,6 +168,85 @@ class PersonaPlexService:
         
         return prompt.strip()
     
+    async def _call_runpod(self, payload: dict, timeout: int = 30) -> dict:
+        """
+        Make a synchronous call to RunPod endpoint.
+        
+        Args:
+            payload: The request payload
+            timeout: Request timeout in seconds
+            
+        Returns:
+            Response from RunPod
+        """
+        async with aiohttp.ClientSession() as session:
+            # Use /runsync for synchronous execution (waits for result)
+            url = f"{self.runpod_url}/runsync"
+            
+            async with session.post(
+                url,
+                json={"input": payload},
+                headers=self.headers,
+                timeout=aiohttp.ClientTimeout(total=timeout)
+            ) as response:
+                if response.status != 200:
+                    error_text = await response.text()
+                    logger.error(f"RunPod API error: {response.status} - {error_text}")
+                    return {"error": f"RunPod API error: {response.status}"}
+                
+                result = await response.json()
+                
+                # Check job status
+                if result.get("status") == "COMPLETED":
+                    return result.get("output", {})
+                elif result.get("status") == "FAILED":
+                    return {"error": result.get("error", "Unknown error")}
+                else:
+                    # Job might be queued or in progress
+                    return {"status": result.get("status"), "id": result.get("id")}
+    
+    async def _call_runpod_async(self, payload: dict) -> str:
+        """
+        Start an async job on RunPod.
+        
+        Returns:
+            Job ID for polling
+        """
+        async with aiohttp.ClientSession() as session:
+            url = f"{self.runpod_url}/run"
+            
+            async with session.post(
+                url,
+                json={"input": payload},
+                headers=self.headers
+            ) as response:
+                result = await response.json()
+                return result.get("id")
+    
+    async def _poll_job_status(self, job_id: str, timeout: int = 60) -> dict:
+        """Poll for job completion."""
+        async with aiohttp.ClientSession() as session:
+            url = f"{self.runpod_url}/status/{job_id}"
+            
+            start_time = asyncio.get_event_loop().time()
+            
+            while True:
+                async with session.get(url, headers=self.headers) as response:
+                    result = await response.json()
+                    
+                    status = result.get("status")
+                    if status == "COMPLETED":
+                        return result.get("output", {})
+                    elif status == "FAILED":
+                        return {"error": result.get("error", "Job failed")}
+                    
+                    # Check timeout
+                    if asyncio.get_event_loop().time() - start_time > timeout:
+                        return {"error": "Job timeout"}
+                    
+                    # Wait before polling again
+                    await asyncio.sleep(0.5)
+    
     async def create_session(
         self,
         session_id: str,
@@ -225,7 +256,7 @@ class PersonaPlexService:
         knowledge_context: Optional[str] = None
     ) -> ConversationSession:
         """
-        Create a new conversation session with PersonaPlex.
+        Create a new conversation session.
         
         Args:
             session_id: Unique identifier for this session (usually call_log.id)
@@ -237,8 +268,6 @@ class PersonaPlexService:
         Returns:
             ConversationSession object
         """
-        await self.load_model()
-        
         # Build persona prompt
         persona_prompt = self.build_persona_prompt(
             worker=worker,
@@ -248,28 +277,26 @@ class PersonaPlexService:
         
         logger.info(f"Creating PersonaPlex session {session_id} for worker {worker.name}")
         
-        model_session = None
-        
-        if not self.mock_mode and self.model is not None:
-            # Create actual model session
-            # Store the persona prompt and voice settings for this session
-            model_session = {
-                "persona_prompt": persona_prompt,
-                "voice_prompt_path": voice_prompt_path,
-                "conversation_history": [],
-                "user_transcript": [],
-                "assistant_transcript": [],
-            }
-        
         session = ConversationSession(
             session_id=session_id,
-            model_session=model_session,
+            persona_prompt=persona_prompt,
             worker_id=str(worker.id),
             company_id=str(worker.company_id),
             is_active=True
         )
         
         self.active_sessions[session_id] = session
+        
+        # Initialize session on RunPod (warm up)
+        if not self.mock_mode:
+            try:
+                result = await self._call_runpod({
+                    "action": "init",
+                    "session_id": session_id
+                }, timeout=60)
+                logger.info(f"RunPod session initialized: {result}")
+            except Exception as e:
+                logger.error(f"Failed to initialize RunPod session: {e}")
         
         return session
     
@@ -283,8 +310,8 @@ class PersonaPlexService:
         
         This is the main processing loop that:
         1. Receives audio from the caller
-        2. Feeds it to PersonaPlex
-        3. Yields response audio chunks in real-time
+        2. Sends it to RunPod
+        3. Yields response audio chunks
         
         Args:
             session_id: The session identifier
@@ -301,58 +328,48 @@ class PersonaPlexService:
         
         # Mock mode: just log that we received audio (no response)
         if self.mock_mode:
-            # In mock mode, we don't generate responses
-            # This is useful for testing the WebSocket/Twilio integration
             logger.debug(f"Mock mode: received {len(audio_chunk)} bytes for session {session_id}")
             return
         
         try:
-            import torch
-            import numpy as np
+            # Encode audio as base64
+            audio_b64 = base64.b64encode(audio_chunk).decode("utf-8")
             
-            # Convert bytes to numpy array
-            audio_array = np.frombuffer(audio_chunk, dtype=np.int16).astype(np.float32) / 32768.0
+            # Send to RunPod
+            result = await self._call_runpod({
+                "action": "process",
+                "session_id": session_id,
+                "audio": audio_b64,
+                "persona_prompt": session.persona_prompt
+            }, timeout=10)
             
-            # Process through the model
-            inputs = self.processor(
-                audio=audio_array,
-                sampling_rate=24000,
-                return_tensors="pt",
-                padding=True
-            ).to(self.device)
+            if "error" in result:
+                logger.error(f"RunPod processing error: {result['error']}")
+                return
             
-            # Add persona context
-            if session.model_session and "persona_prompt" in session.model_session:
-                # Include persona in the generation
-                inputs["text_prompt"] = session.model_session["persona_prompt"]
-            
-            # Generate response audio
-            with torch.no_grad():
-                outputs = self.model.generate(
-                    **inputs,
-                    max_new_tokens=1024,
-                    do_sample=True,
-                    temperature=0.7,
-                )
-            
-            # Convert output to audio bytes
-            if hasattr(outputs, "audio"):
-                response_audio = outputs.audio.cpu().numpy()
-                # Convert back to int16 PCM
-                response_bytes = (response_audio * 32768).astype(np.int16).tobytes()
+            # Get response audio
+            response_audio_b64 = result.get("audio")
+            if response_audio_b64:
+                response_bytes = base64.b64decode(response_audio_b64)
                 
                 # Yield in chunks for streaming
                 chunk_size = 4800  # 100ms at 24kHz
                 for i in range(0, len(response_bytes), chunk_size):
                     yield response_bytes[i:i+chunk_size]
+            
+            # Store transcript if available
+            transcript = result.get("transcript", {})
+            if transcript:
+                session.conversation_history.append(transcript)
                     
+        except asyncio.TimeoutError:
+            logger.warning(f"RunPod request timeout for session {session_id}")
         except Exception as e:
             logger.error(f"Error processing audio for session {session_id}: {e}")
-            # Don't raise - just log and continue
     
     async def get_transcript(self, session_id: str) -> Optional[dict]:
         """
-        Get the transcript from the PersonaPlex session.
+        Get the transcript from the session.
         
         Returns:
             Dictionary with 'user' and 'assistant' transcript texts
@@ -368,16 +385,20 @@ class PersonaPlexService:
                 "assistant": "[Mock mode - no transcript available]"
             }
         
-        try:
-            if session.model_session:
-                return {
-                    "user": " ".join(session.model_session.get("user_transcript", [])),
-                    "assistant": " ".join(session.model_session.get("assistant_transcript", []))
-                }
-            return None
-        except Exception as e:
-            logger.error(f"Error getting transcript for session {session_id}: {e}")
-            return None
+        # Combine all conversation history
+        user_parts = []
+        assistant_parts = []
+        
+        for entry in session.conversation_history:
+            if entry.get("user"):
+                user_parts.append(entry["user"])
+            if entry.get("assistant"):
+                assistant_parts.append(entry["assistant"])
+        
+        return {
+            "user": " ".join(user_parts),
+            "assistant": " ".join(assistant_parts)
+        }
     
     async def end_session(self, session_id: str) -> Optional[dict]:
         """
@@ -400,13 +421,15 @@ class PersonaPlexService:
         # Get final transcript before closing
         transcript = await self.get_transcript(session_id)
         
-        # Clean up session resources
-        if session.model_session and not self.mock_mode:
+        # Notify RunPod to end session
+        if not self.mock_mode:
             try:
-                # Clear any cached data
-                session.model_session.clear() if hasattr(session.model_session, 'clear') else None
+                await self._call_runpod({
+                    "action": "end",
+                    "session_id": session_id
+                }, timeout=5)
             except Exception as e:
-                logger.error(f"Error closing session {session_id}: {e}")
+                logger.error(f"Error ending RunPod session: {e}")
         
         # Mark as inactive and remove
         session.is_active = False

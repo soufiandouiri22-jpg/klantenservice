@@ -181,19 +181,28 @@ export default function HomePage() {
         </div>
       </nav>
 
+      {/* Fixed Grid Background - stays in place while content scrolls */}
+      <div 
+        className="fixed top-0 left-0 right-0 pointer-events-none"
+        style={{
+          height: '100vh',
+          zIndex: 0,
+          backgroundImage: 'linear-gradient(to right, #f5f5f5 1px, transparent 1px), linear-gradient(to bottom, #f5f5f5 1px, transparent 1px)',
+          backgroundSize: '4rem 4rem',
+        }}
+      />
+
       {/* Hero */}
-      <section className="min-h-screen pt-24 flex items-center justify-center px-4 relative overflow-hidden">
-        {/* Grid Background - fades out at bottom of hero */}
+      <section className="min-h-screen pt-24 flex items-center justify-center px-4 relative overflow-hidden z-10">
+        {/* Fade to white at bottom of hero */}
         <div 
-          className="absolute inset-0 pointer-events-none"
+          className="absolute bottom-0 left-0 right-0 h-32 pointer-events-none"
           style={{
-            backgroundImage: 'linear-gradient(to right, #f5f5f5 1px, transparent 1px), linear-gradient(to bottom, #f5f5f5 1px, transparent 1px)',
-            backgroundSize: '5rem 5rem',
-            maskImage: 'linear-gradient(to bottom, black 0%, black 50%, transparent 100%)',
-            WebkitMaskImage: 'linear-gradient(to bottom, black 0%, black 50%, transparent 100%)',
+            background: 'linear-gradient(to bottom, transparent, white)',
+            zIndex: 5,
           }}
         />
-        <div className="max-w-4xl mx-auto text-center relative z-10">
+        <div className="max-w-4xl mx-auto text-center relative">
           {/* Badge */}
           <div className="inline-flex items-center gap-2 bg-primary-600 text-white px-4 py-2 rounded-full text-sm font-medium mb-8 shadow-md shadow-primary-600/30">
             <Phone className="h-4 w-4" />
@@ -224,7 +233,7 @@ export default function HomePage() {
       </section>
 
       {/* Demo Video Section */}
-      <section className="min-h-screen flex items-center justify-center py-20 px-4 relative">
+      <section className="min-h-screen flex items-center justify-center py-20 px-4 relative bg-white z-10">
         <div className="max-w-5xl mx-auto w-full">
           <div className="text-center mb-12">
             <h2 className="text-4xl md:text-5xl font-display font-bold text-gray-900">
@@ -303,7 +312,7 @@ export default function HomePage() {
       </section>
 
       {/* Testimonials / Case Studies - Full Width Scrolling */}
-      <section className="min-h-screen flex flex-col justify-center py-20 bg-white overflow-hidden">
+      <section className="min-h-screen flex flex-col justify-center py-20 bg-white overflow-hidden relative z-10">
         <div className="text-center mb-16 px-4">
           <h2 className="text-4xl md:text-5xl font-display font-bold text-gray-900">
             Wat onze klanten bereiken
@@ -611,7 +620,7 @@ export default function HomePage() {
       </section>
 
       {/* Features */}
-      <section id="features" className="min-h-screen flex items-center py-20 bg-white">
+      <section id="features" className="min-h-screen flex items-center py-20 bg-white relative z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
           <div className="text-center mb-16">
             <h2 className="text-4xl md:text-5xl font-display font-bold text-gray-900">
@@ -636,7 +645,7 @@ export default function HomePage() {
       </section>
 
       {/* Pricing */}
-      <section id="pricing" className="min-h-screen flex items-center py-20 relative">
+      <section id="pricing" className="min-h-screen flex items-center py-20 relative bg-white z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
           <div className="text-center mb-16">
             <h2 className="text-4xl md:text-5xl font-display font-bold text-gray-900">
@@ -725,7 +734,7 @@ export default function HomePage() {
       </section>
 
       {/* FAQ */}
-      <section id="faq" className="min-h-screen flex items-center py-20 bg-white">
+      <section id="faq" className="min-h-screen flex items-center py-20 bg-white relative z-10">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
           <div className="text-center mb-16">
             <h2 className="text-4xl md:text-5xl font-display font-bold text-gray-900">
@@ -744,7 +753,7 @@ export default function HomePage() {
       </section>
 
       {/* CTA Card */}
-      <section className="py-20 px-4 bg-white">
+      <section className="py-20 px-4 bg-white relative z-10">
         <div className="max-w-4xl mx-auto">
           <div className="bg-white rounded-2xl border border-gray-200 p-12 md:p-16 text-center">
             <h2 className="text-3xl md:text-4xl font-display font-bold text-gray-900">
@@ -767,7 +776,7 @@ export default function HomePage() {
       </section>
 
       {/* Footer */}
-      <footer className="py-16 bg-white border-t border-gray-200">
+      <footer className="py-16 bg-white border-t border-gray-200 relative z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
             {/* Logo & Description */}

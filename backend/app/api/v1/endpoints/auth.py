@@ -89,7 +89,7 @@ async def register(
         postal_code=company_data.postal_code,
         kvk_number=company_data.kvk_number,
         btw_number=company_data.btw_number,
-        subscription_plan=SubscriptionPlan.STARTER,
+        subscription_plan=SubscriptionPlan.starter,
         max_ai_workers=1,
     )
     db.add(company)
@@ -104,7 +104,7 @@ async def register(
         first_name=user_data.first_name,
         last_name=user_data.last_name,
         phone=user_data.phone,
-        role=UserRole.OWNER,
+        role=UserRole.owner,
         is_active=True,
     )
     db.add(user)
@@ -366,7 +366,7 @@ async def dev_login(db: Session = Depends(get_db)):
             hashed_password=get_password_hash(DEV_PASSWORD),
             first_name="Dev",
             last_name="Admin",
-            role=UserRole.OWNER,
+            role=UserRole.owner,
             is_active=True,
             is_verified=True,
         )
@@ -635,7 +635,7 @@ async def google_oauth_callback(
         if user:
             # Link existing account to Google
             user.google_id = google_id
-            user.oauth_provider = OAuthProvider.GOOGLE
+            user.oauth_provider = OAuthProvider.google
             db.commit()
         else:
             # Create new user and company
@@ -657,7 +657,7 @@ async def google_oauth_callback(
                 name=company_name,
                 slug=slug,
                 email=email,
-                subscription_plan=SubscriptionPlan.STARTER,
+                subscription_plan=SubscriptionPlan.starter,
                 max_ai_workers=1,
             )
             db.add(company)
@@ -671,9 +671,9 @@ async def google_oauth_callback(
                 hashed_password=None,  # OAuth-only account
                 first_name=given_name or "Gebruiker",
                 last_name=family_name or "",
-                oauth_provider=OAuthProvider.GOOGLE,
+                oauth_provider=OAuthProvider.google,
                 google_id=google_id,
-                role=UserRole.OWNER,
+                role=UserRole.owner,
                 is_active=True,
                 is_verified=True,  # Google already verified email
             )

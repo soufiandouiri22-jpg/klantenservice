@@ -99,38 +99,31 @@ export default function LoginPage() {
     }
   }
 
-  const handleDevLogin = () => {
+  const handleDevLogin = async () => {
     setIsDevLoading(true)
-    
-    // Mock user data - no backend needed
-    const mockUser = {
-      id: 'dev-user-001',
-      email: 'dev@klantenservice.ai',
-      first_name: 'Dev',
-      last_name: 'Admin',
-      role: 'owner',
-      company_id: 'dev-company-001',
+    try {
+      // Use real backend dev-login endpoint
+      const response = await authApi.devLogin()
+      
+      // Store real tokens
+      localStorage.setItem('access_token', response.access_token)
+      localStorage.setItem('refresh_token', response.refresh_token)
+      
+      // Get user and company info
+      const [user, company] = await Promise.all([
+        authApi.getMe(),
+        companyApi.get(),
+      ])
+      
+      setAuth(user, company)
+      
+      toast.success('Dev login succesvol!')
+      router.push('/dashboard')
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Dev login mislukt - is de backend actief?')
+    } finally {
+      setIsDevLoading(false)
     }
-    
-    const mockCompany = {
-      id: 'dev-company-001',
-      name: 'Dev Company',
-      slug: 'dev-company',
-      subscription_plan: 'professional',
-      max_ai_workers: 10,
-    }
-    
-    // Set fake tokens (for API interceptor compatibility)
-    localStorage.setItem('access_token', 'dev-token-mock')
-    localStorage.setItem('refresh_token', 'dev-refresh-mock')
-    
-    // Set auth state
-    setAuth(mockUser, mockCompany)
-    
-    toast.success('Dev login succesvol!')
-    router.push('/dashboard')
-    
-    setIsDevLoading(false)
   }
 
   return (

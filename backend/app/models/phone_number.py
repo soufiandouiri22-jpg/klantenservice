@@ -19,12 +19,21 @@ class PhoneNumber(Base):
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     company_id = Column(UUID(as_uuid=True), ForeignKey("companies.id"), nullable=False)
+    ai_worker_id = Column(UUID(as_uuid=True), ForeignKey("ai_workers.id"), nullable=True)  # Linked AI worker
     
     # Phone number details
-    number = Column(String(20), unique=True, nullable=False, index=True)
-    friendly_name = Column(String(100), nullable=True)  # e.g., "Hoofdnummer", "Support"
+    number = Column(String(20), unique=True, nullable=False, index=True)  # AI/Twilio number
+    business_number = Column(String(20), nullable=True, index=True)  # Customer's actual business number (e.g., kapper's number)
+    friendly_name = Column(String(100), nullable=True)  # e.g., "Kapsalon De Schaar"
     
-    # Twilio integration
+    # Provider for forwarding instructions
+    provider = Column(String(50), nullable=True)  # e.g., "kpn", "vodafone", "t-mobile", "ziggo", "odido"
+    
+    # Setup status
+    setup_completed = Column(Boolean, default=False)  # Has the user completed the setup wizard?
+    forwarding_verified = Column(Boolean, default=False)  # Has forwarding been tested successfully?
+    
+    # Twilio integration (hidden from user)
     twilio_sid = Column(String(50), nullable=True)
     
     # Business hours (stored as JSON for flexibility with different days)
@@ -64,6 +73,7 @@ class PhoneNumber(Base):
     
     # Relationships
     company = relationship("Company", back_populates="phone_numbers")
+    ai_worker = relationship("AIWorker", back_populates="phone_numbers")
     call_logs = relationship("CallLog", back_populates="phone_number")
     
     def __repr__(self):

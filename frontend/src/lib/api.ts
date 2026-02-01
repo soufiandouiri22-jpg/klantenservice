@@ -176,7 +176,8 @@ export const phoneNumbersApi = {
     return response.data
   },
   
-  create: async (data: any) => {
+  // Create starts the setup wizard - user provides their business number
+  create: async (data: { business_number: string; friendly_name?: string; ai_worker_id?: string }) => {
     const response = await api.post('/phone-numbers', data)
     return response.data
   },
@@ -188,6 +189,11 @@ export const phoneNumbersApi = {
   
   delete: async (id: string) => {
     const response = await api.delete(`/phone-numbers/${id}`)
+    return response.data
+  },
+  
+  release: async (id: string) => {
+    const response = await api.delete(`/phone-numbers/${id}/release`)
     return response.data
   },
 }

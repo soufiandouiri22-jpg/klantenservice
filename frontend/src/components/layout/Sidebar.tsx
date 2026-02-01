@@ -81,7 +81,10 @@ export function Sidebar() {
       <nav className="flex-1 overflow-y-auto p-4">
         <ul className="space-y-1">
           {navigation.map((item) => {
-            const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+            // For the dashboard root, only match exactly to avoid highlighting when on sub-pages
+            const isActive = item.href === '/dashboard' 
+              ? pathname === '/dashboard'
+              : pathname === item.href || pathname.startsWith(item.href + '/')
             return (
               <li key={item.name}>
                 <Link

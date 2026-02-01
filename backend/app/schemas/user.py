@@ -19,7 +19,7 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     """Schema for creating a new user."""
     password: str = Field(..., min_length=8, max_length=100)
-    role: UserRole = UserRole.VIEWER
+    role: UserRole = UserRole.viewer
     
     @validator("password")
     def password_strength(cls, v):
@@ -106,7 +106,7 @@ class UserInvite(BaseModel):
     first_name: str = Field(..., min_length=1, max_length=100)
     last_name: str = Field(..., min_length=1, max_length=100)
     phone: Optional[str] = None
-    role: UserRole = UserRole.VIEWER
+    role: UserRole = UserRole.viewer
 
 
 class AcceptInvite(BaseModel):

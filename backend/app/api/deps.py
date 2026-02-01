@@ -118,7 +118,7 @@ class RoleChecker:
 
 
 # Role dependencies
-require_owner = RoleChecker([UserRole.OWNER])
-require_admin = RoleChecker([UserRole.OWNER, UserRole.ADMIN])
-require_manager = RoleChecker([UserRole.OWNER, UserRole.ADMIN, UserRole.MANAGER])
-require_any_role = RoleChecker([UserRole.OWNER, UserRole.ADMIN, UserRole.MANAGER, UserRole.VIEWER])
+require_owner = RoleChecker([UserRole.owner])
+require_admin = RoleChecker([UserRole.owner, UserRole.admin])
+require_manager = RoleChecker([UserRole.owner, UserRole.admin, UserRole.manager])
+require_any_role = RoleChecker([UserRole.owner, UserRole.admin, UserRole.manager, UserRole.viewer])

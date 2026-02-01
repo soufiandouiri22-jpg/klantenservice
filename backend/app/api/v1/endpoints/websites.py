@@ -1,9 +1,10 @@
 """
 klantenservice.ai - Website Knowledge Endpoints
 """
+import asyncio
 from datetime import datetime
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from uuid import UUID, uuid4
 import secrets
@@ -23,6 +24,7 @@ from app.schemas.website import (
     WebhookSetupResponse,
 )
 from app.api.deps import get_current_user, get_current_company, require_admin
+from app.services.website_indexer import WebsiteIndexer, VectorStore
 
 router = APIRouter()
 
@@ -42,9 +44,26 @@ async def list_websites(
     return websites
 
 
+async def run_indexing(website_id: str, db_url: str):
+    """Background task to run website indexing."""
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    
+    engine = create_engine(db_url)
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    db = SessionLocal()
+    
+    try:
+        indexer = WebsiteIndexer(db)
+        await indexer.index_website(website_id)
+    finally:
+        db.close()
+
+
 @router.post("/", response_model=WebsiteKnowledgeResponse, status_code=status.HTTP_201_CREATED)
 async def create_website(
     data: WebsiteKnowledgeCreate,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(require_admin),
     company: Company = Depends(get_current_company),
     db: Session = Depends(get_db)
@@ -52,6 +71,8 @@ async def create_website(
     """
     Add a new website to index.
     """
+    from app.core.config import settings
+    
     # Check if URL already exists for this company
     existing = db.query(WebsiteKnowledge).filter(
         WebsiteKnowledge.company_id == company.id,
@@ -70,7 +91,7 @@ async def create_website(
         base_url=str(data.base_url),
         sitemap_url=str(data.sitemap_url) if data.sitemap_url else None,
         crawl_settings=data.crawl_settings.model_dump() if data.crawl_settings else {},
-        status=IndexStatus.PENDING,
+        status=IndexStatus.pending,
         webhook_secret=secrets.token_urlsafe(32),
         is_active=True,
     )
@@ -79,7 +100,8 @@ async def create_website(
     db.commit()
     db.refresh(website)
     
-    # TODO: Trigger background indexing job
+    # Trigger background indexing job
+    asyncio.create_task(run_indexing(str(website.id), settings.DATABASE_URL))
     
     return website
 
@@ -166,7 +188,12 @@ async def delete_website(
             detail="Website niet gevonden",
         )
     
-    # TODO: Also delete from vector store
+    # Delete from vector store
+    try:
+        vector_store = VectorStore(str(company.id))
+        vector_store.delete_website_chunks(str(website_id))
+    except Exception as e:
+        print(f"Error deleting from vector store: {e}")
     
     db.delete(website)
     db.commit()
@@ -182,6 +209,8 @@ async def reindex_website(
     """
     Trigger re-indexing of website content.
     """
+    from app.core.config import settings
+    
     website = db.query(WebsiteKnowledge).filter(
         WebsiteKnowledge.id == website_id,
         WebsiteKnowledge.company_id == company.id
@@ -193,19 +222,20 @@ async def reindex_website(
             detail="Website niet gevonden",
         )
     
-    if website.status == IndexStatus.INDEXING:
+    if website.status == IndexStatus.indexing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Website wordt momenteel al geïndexeerd",
         )
     
-    website.status = IndexStatus.PENDING
+    website.status = IndexStatus.pending
     db.commit()
     
-    # TODO: Trigger background indexing job
+    # Trigger background indexing job
+    asyncio.create_task(run_indexing(str(website.id), settings.DATABASE_URL))
     
     return IndexTriggerResponse(
-        message="Indexering gepland",
+        message="Indexering gestart",
         status=website.status,
         estimated_time_minutes=5,
     )
@@ -233,24 +263,43 @@ async def test_question(
             detail="Website niet gevonden",
         )
     
-    if website.status != IndexStatus.COMPLETED:
+    if website.status != IndexStatus.completed:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Website is nog niet volledig geïndexeerd",
         )
     
-    # TODO: Implement actual RAG query
-    # This is a mock response
+    # Search in vector store
+    vector_store = VectorStore(str(company.id))
+    results = vector_store.search(request.question, str(website_id), limit=5)
+    
+    if not results:
+        return TestQuestionResponse(
+            question=request.question,
+            answer="Geen relevante informatie gevonden in de geïndexeerde inhoud.",
+            sources=[],
+            confidence=0.0,
+        )
+    
+    # Build answer from found chunks
+    context = "\n\n".join([r['content'] for r in results])
+    sources = [
+        {
+            "url": r['metadata'].get('url', website.base_url),
+            "snippet": r['content'][:200] + "..." if len(r['content']) > 200 else r['content'],
+        }
+        for r in results
+    ]
+    
+    # Calculate confidence based on distance (lower distance = higher confidence)
+    avg_distance = sum(r.get('distance', 1.0) for r in results) / len(results)
+    confidence = max(0, min(1, 1 - avg_distance))
+    
     return TestQuestionResponse(
         question=request.question,
-        answer="Dit is een voorbeeldantwoord. De daadwerkelijke AI zal antwoorden geven op basis van de geïndexeerde website-inhoud.",
-        sources=[
-            {
-                "url": website.base_url,
-                "snippet": "Relevante tekst van de website...",
-            }
-        ],
-        confidence=0.85,
+        answer=f"Op basis van de website-inhoud heb ik het volgende gevonden:\n\n{results[0]['content'][:500]}...",
+        sources=sources,
+        confidence=round(confidence, 2),
     )
 
 

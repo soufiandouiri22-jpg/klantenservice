@@ -30,13 +30,19 @@ class PhoneNumberBase(BaseModel):
 
 
 class PhoneNumberCreate(PhoneNumberBase):
-    """Schema for creating/assigning a phone number."""
-    number: str = Field(..., min_length=10, max_length=20)
+    """Schema for starting the phone setup wizard - user enters their business number."""
+    business_number: str = Field(..., min_length=10, max_length=20, description="The customer's actual business phone number")
+    ai_worker_id: Optional[UUID] = None  # Link to an AI worker
 
 
 class PhoneNumberUpdate(BaseModel):
     """Schema for updating a phone number."""
     friendly_name: Optional[str] = Field(None, max_length=100)
+    business_number: Optional[str] = Field(None, max_length=20)
+    provider: Optional[str] = Field(None, max_length=50)
+    setup_completed: Optional[bool] = None
+    forwarding_verified: Optional[bool] = None
+    ai_worker_id: Optional[UUID] = None  # Link to an AI worker
     business_hours: Optional[AllBusinessHours] = None
     queue_enabled: Optional[bool] = None
     max_queue_size: Optional[int] = Field(None, ge=1, le=50)
@@ -53,7 +59,12 @@ class PhoneNumberResponse(PhoneNumberBase):
     """Schema for phone number response."""
     id: UUID
     company_id: UUID
-    number: str
+    ai_worker_id: Optional[UUID] = None
+    number: str  # AI/Twilio number (hidden from user in UI)
+    business_number: Optional[str] = None  # Customer's actual business number
+    provider: Optional[str] = None
+    setup_completed: bool = False
+    forwarding_verified: bool = False
     business_hours: Dict[str, Any]
     queue_enabled: bool
     max_queue_size: int
@@ -79,3 +90,34 @@ class PhoneNumberStats(BaseModel):
     average_wait_time_seconds: int
     missed_calls_today: int
     voicemails_today: int
+
+
+class AvailableNumber(BaseModel):
+    """Schema for an available Twilio phone number."""
+    phone_number: str
+    friendly_name: str
+    locality: Optional[str] = None  # City/region
+    region: Optional[str] = None
+    capabilities: Dict[str, bool] = {}  # voice, sms, mms
+    monthly_cost: str = "€1.00"  # Approximate cost
+
+
+class AvailableNumbersResponse(BaseModel):
+    """Schema for listing available numbers."""
+    numbers: list[AvailableNumber]
+    country: str = "NL"
+
+
+class PurchaseNumberRequest(BaseModel):
+    """Schema for purchasing a phone number."""
+    phone_number: str = Field(..., description="The phone number to purchase (E.164 format)")
+    friendly_name: Optional[str] = Field(None, max_length=100)
+    ai_worker_id: Optional[UUID] = None  # Optionally link to an AI worker immediately
+
+
+class PurchaseNumberResponse(BaseModel):
+    """Schema for purchase response."""
+    success: bool
+    phone_number: PhoneNumberResponse
+    twilio_sid: str
+    message: str

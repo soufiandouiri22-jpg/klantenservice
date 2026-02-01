@@ -37,13 +37,18 @@ class Settings(BaseSettings):
     # Hugging Face (for PersonaPlex model)
     HUGGINGFACE_TOKEN: str = ""
     
+    # RunPod (for GPU inference)
+    RUNPOD_API_KEY: str = ""
+    RUNPOD_ENDPOINT_ID: str = ""  # Your PersonaPlex endpoint ID from RunPod
+    
     # Twilio
     TWILIO_ACCOUNT_SID: str = ""
     TWILIO_AUTH_TOKEN: str = ""
     TWILIO_PHONE_NUMBER: str = ""
+    TWILIO_ADDRESS_SID: str = ""  # Address SID for purchasing NL phone numbers (required by Twilio regulations)
     
     # WebSocket (for Twilio Media Streams)
-    WEBSOCKET_URL: str = "wss://api.klantenservice.ai/ws/voice"
+    WEBSOCKET_URL: str = ""  # Set via environment variable
     
     # Google OAuth (used for both Calendar and Auth)
     GOOGLE_CLIENT_ID: str = ""

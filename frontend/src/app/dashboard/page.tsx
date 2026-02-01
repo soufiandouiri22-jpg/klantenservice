@@ -1,24 +1,25 @@
 'use client'
 
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import {
-  Users,
   Phone,
   Calendar,
-  FileText,
-  TrendingUp,
-  Clock,
   AlertCircle,
-  ArrowUpRight,
   Headphones,
+  Rocket,
+  CheckCircle2,
+  Circle,
+  ChevronRight,
+  X,
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { Header } from '@/components/layout/Header'
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { PageLoader } from '@/components/ui/Spinner'
-import { dashboardApi } from '@/lib/api'
+import { dashboardApi, aiWorkersApi, phoneNumbersApi, websitesApi } from '@/lib/api'
 import { formatRelativeTime, formatDuration, getStatusColor, getStatusLabel } from '@/lib/utils'
 import Link from 'next/link'
 
@@ -38,6 +39,8 @@ const item = {
 }
 
 export default function DashboardPage() {
+  const [hideOnboarding, setHideOnboarding] = useState(false)
+  
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ['dashboard-stats'],
     queryFn: dashboardApi.getStats,
@@ -62,6 +65,33 @@ export default function DashboardPage() {
     queryKey: ['workers-status'],
     queryFn: dashboardApi.getAIWorkersStatus,
   })
+
+  // Onboarding status queries
+  const { data: aiWorkers } = useQuery({
+    queryKey: ['ai-workers'],
+    queryFn: aiWorkersApi.list,
+  })
+
+  const { data: phoneNumbers } = useQuery({
+    queryKey: ['phone-numbers'],
+    queryFn: phoneNumbersApi.list,
+  })
+
+  const { data: websites } = useQuery({
+    queryKey: ['websites'],
+    queryFn: websitesApi.list,
+  })
+
+  // Calculate onboarding progress
+  const hasAIWorker = (aiWorkers?.length || 0) > 0
+  const hasPhoneNumber = (phoneNumbers?.length || 0) > 0
+  const phoneLinkedToAI = phoneNumbers?.some((p: any) => p.ai_worker_id) || false
+  const hasKnowledge = (websites?.length || 0) > 0
+  
+  const completedSteps = [hasAIWorker, hasKnowledge, hasPhoneNumber && phoneLinkedToAI].filter(Boolean).length
+  const totalSteps = 3
+  const progressPercent = Math.round((completedSteps / totalSteps) * 100)
+  const showOnboarding = !hideOnboarding && completedSteps < totalSteps
 
   const isLoading = statsLoading || callsLoading || appointmentsLoading || actionsLoading || workersLoading
 
@@ -113,6 +143,126 @@ export default function DashboardPage() {
         animate="show"
         className="p-6 space-y-6"
       >
+        {/* Onboarding Checklist */}
+        {showOnboarding && (
+          <motion.div variants={item}>
+            <Card className="border-primary-200 bg-gradient-to-r from-primary-50 to-white">
+              <CardBody className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-100">
+                      <Rocket className="h-5 w-5 text-primary-600" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-gray-900">Start uw AI-klantenservice</h3>
+                      <p className="text-sm text-gray-500">Voltooi deze stappen om live te gaan</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setHideOnboarding(true)}
+                    className="text-gray-400 hover:text-gray-600 p-1"
+                    title="Verbergen"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+
+                <div className="space-y-3 mb-4">
+                  {/* Step 1: AI Worker */}
+                  <Link
+                    href="/dashboard/ai-workers"
+                    className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
+                      hasAIWorker 
+                        ? 'bg-green-50 border-green-200' 
+                        : 'bg-white border-gray-200 hover:border-primary-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      {hasAIWorker ? (
+                        <CheckCircle2 className="h-5 w-5 text-green-600" />
+                      ) : (
+                        <Circle className="h-5 w-5 text-gray-300" />
+                      )}
+                      <div>
+                        <p className={`font-medium ${hasAIWorker ? 'text-green-700' : 'text-gray-900'}`}>
+                          AI-medewerker aanmaken
+                        </p>
+                        <p className="text-xs text-gray-500">Configureer naam, stem en gedrag</p>
+                      </div>
+                    </div>
+                    {!hasAIWorker && <ChevronRight className="h-5 w-5 text-gray-400" />}
+                  </Link>
+
+                  {/* Step 2: Knowledge */}
+                  <Link
+                    href="/dashboard/knowledge"
+                    className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
+                      hasKnowledge 
+                        ? 'bg-green-50 border-green-200' 
+                        : 'bg-white border-gray-200 hover:border-primary-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      {hasKnowledge ? (
+                        <CheckCircle2 className="h-5 w-5 text-green-600" />
+                      ) : (
+                        <Circle className="h-5 w-5 text-gray-300" />
+                      )}
+                      <div>
+                        <p className={`font-medium ${hasKnowledge ? 'text-green-700' : 'text-gray-900'}`}>
+                          Kennisbank vullen
+                        </p>
+                        <p className="text-xs text-gray-500">Voeg uw website toe of upload documenten</p>
+                      </div>
+                    </div>
+                    {!hasKnowledge && <ChevronRight className="h-5 w-5 text-gray-400" />}
+                  </Link>
+
+                  {/* Step 3: Phone Number */}
+                  <Link
+                    href="/dashboard/phone"
+                    className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
+                      hasPhoneNumber && phoneLinkedToAI
+                        ? 'bg-green-50 border-green-200' 
+                        : 'bg-white border-gray-200 hover:border-primary-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      {hasPhoneNumber && phoneLinkedToAI ? (
+                        <CheckCircle2 className="h-5 w-5 text-green-600" />
+                      ) : (
+                        <Circle className="h-5 w-5 text-gray-300" />
+                      )}
+                      <div>
+                        <p className={`font-medium ${hasPhoneNumber && phoneLinkedToAI ? 'text-green-700' : 'text-gray-900'}`}>
+                          Telefoonnummer koppelen
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {hasPhoneNumber && !phoneLinkedToAI 
+                            ? 'Koppel uw nummer aan een AI-medewerker' 
+                            : 'Vraag een nummer aan en koppel aan AI'}
+                        </p>
+                      </div>
+                    </div>
+                    {!(hasPhoneNumber && phoneLinkedToAI) && <ChevronRight className="h-5 w-5 text-gray-400" />}
+                  </Link>
+                </div>
+
+                {/* Progress Bar */}
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-primary-500 rounded-full transition-all duration-500"
+                      style={{ width: `${progressPercent}%` }}
+                    />
+                  </div>
+                  <span className="text-sm font-medium text-gray-600">{progressPercent}%</span>
+                </div>
+              </CardBody>
+            </Card>
+          </motion.div>
+        )}
+
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {statCards.map((stat, index) => (

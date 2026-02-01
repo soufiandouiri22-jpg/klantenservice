@@ -70,12 +70,25 @@ async def twilio_voice_webhook(
             <Hangup/>
         </Response>"""
     
-    # Find an available AI worker
-    available_worker = db.query(AIWorker).filter(
-        AIWorker.company_id == company.id,
-        AIWorker.is_active == True,
-        AIWorker.status == AIWorkerStatus.AVAILABLE
-    ).first()
+    # First try the linked AI worker for this phone number
+    available_worker = None
+    
+    if phone.ai_worker_id:
+        linked_worker = db.query(AIWorker).filter(
+            AIWorker.id == phone.ai_worker_id,
+            AIWorker.is_active == True,
+            AIWorker.status == AIWorkerStatus.AVAILABLE
+        ).first()
+        if linked_worker:
+            available_worker = linked_worker
+    
+    # Fallback: find any available AI worker for the company
+    if not available_worker:
+        available_worker = db.query(AIWorker).filter(
+            AIWorker.company_id == company.id,
+            AIWorker.is_active == True,
+            AIWorker.status == AIWorkerStatus.AVAILABLE
+        ).first()
     
     if not available_worker:
         # All workers busy - queue or voicemail
@@ -226,7 +239,7 @@ async def website_update_webhook(
         )
     
     # Trigger re-indexing
-    website.status = IndexStatus.PENDING
+    website.status = IndexStatus.pending
     db.commit()
     
     # TODO: Trigger background indexing job

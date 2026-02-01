@@ -18,19 +18,37 @@ depends_on = None
 
 
 def upgrade():
-    # Add invite system columns
-    op.add_column('users', sa.Column(
-        'invite_token', sa.String(255), nullable=True, unique=True, index=True
-    ))
-    op.add_column('users', sa.Column(
-        'invite_token_expires_at', sa.DateTime(), nullable=True
-    ))
-    op.add_column('users', sa.Column(
-        'invited_by_id', UUID(as_uuid=True), sa.ForeignKey('users.id'), nullable=True
-    ))
-    op.add_column('users', sa.Column(
-        'invited_at', sa.DateTime(), nullable=True
-    ))
+    # Note: Invite fields are now included in initial migration (000_initial)
+    # This migration is kept for historical compatibility
+    # Add columns only if they don't exist
+    
+    op.execute("""
+        DO $$ BEGIN
+            ALTER TABLE users ADD COLUMN invite_token VARCHAR(255) UNIQUE;
+        EXCEPTION WHEN duplicate_column THEN null;
+        END $$;
+    """)
+    op.execute("""
+        DO $$ BEGIN
+            ALTER TABLE users ADD COLUMN invite_token_expires_at TIMESTAMP;
+        EXCEPTION WHEN duplicate_column THEN null;
+        END $$;
+    """)
+    op.execute("""
+        DO $$ BEGIN
+            ALTER TABLE users ADD COLUMN invited_by_id UUID REFERENCES users(id);
+        EXCEPTION WHEN duplicate_column THEN null;
+        END $$;
+    """)
+    op.execute("""
+        DO $$ BEGIN
+            ALTER TABLE users ADD COLUMN invited_at TIMESTAMP;
+        EXCEPTION WHEN duplicate_column THEN null;
+        END $$;
+    """)
+    
+    # Create index if not exists
+    op.execute("CREATE INDEX IF NOT EXISTS ix_users_invite_token ON users(invite_token)")
 
 
 def downgrade():

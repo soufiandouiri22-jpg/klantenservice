@@ -81,6 +81,7 @@ class AIWorker(Base):
     # Relationships
     company = relationship("Company", back_populates="ai_workers")
     call_logs = relationship("CallLog", back_populates="ai_worker")
+    phone_numbers = relationship("PhoneNumber", back_populates="ai_worker")
     
     def __repr__(self):
         return f"<AIWorker {self.name}>"

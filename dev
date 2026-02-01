@@ -1,0 +1,55 @@
+#!/bin/bash
+set -e
+
+echo "🚀 Starting klantenservice development environment..."
+
+# Start database services
+echo "📦 Starting database services (PostgreSQL, Redis, ChromaDB)..."
+docker compose up -d db redis chromadb
+
+# Wait for databases to be ready
+echo "⏳ Waiting for databases to be ready..."
+sleep 3
+
+# Check if backend venv exists, create if not
+if [ ! -d "backend/venv" ]; then
+    echo "🐍 Creating Python virtual environment..."
+    cd backend
+    python3 -m venv venv
+    source venv/bin/activate
+    pip install --upgrade pip
+    echo "📥 Installing backend dependencies (light version)..."
+    pip install -r requirements-dev.txt
+    cd ..
+else
+    echo "✓ Backend virtual environment exists"
+fi
+
+# Check if frontend node_modules exists
+if [ ! -d "frontend/node_modules" ]; then
+    echo "📦 Installing frontend dependencies..."
+    cd frontend
+    npm install --legacy-peer-deps
+    cd ..
+else
+    echo "✓ Frontend node_modules exists"
+fi
+
+# Export environment variables
+export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/klantenservice"
+export REDIS_URL="redis://localhost:6379/0"
+export SECRET_KEY="dev-secret-key-change-in-production"
+export JWT_SECRET_KEY="dev-jwt-secret-change-in-production"
+export NEXT_PUBLIC_API_URL="http://localhost:8000"
+
+echo ""
+echo "✅ Environment ready!"
+echo ""
+echo "To start the services, run in separate terminals:"
+echo ""
+echo "  Backend:  cd backend && source venv/bin/activate && uvicorn app.main:app --reload"
+echo "  Frontend: cd frontend && npm run dev"
+echo ""
+echo "Or use these commands:"
+echo "  ./start-backend"
+echo "  ./start-frontend"

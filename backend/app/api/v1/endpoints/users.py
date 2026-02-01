@@ -53,7 +53,7 @@ async def create_user(
         )
     
     # Only owner can create other owners/admins
-    if data.role in [UserRole.OWNER, UserRole.ADMIN] and current_user.role != UserRole.OWNER:
+    if data.role in [UserRole.owner, UserRole.admin] and current_user.role != UserRole.owner:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Alleen de eigenaar kan admin-accounts aanmaken",
@@ -99,7 +99,7 @@ async def invite_user(
         )
     
     # Only owner can invite other owners/admins
-    if data.role in [UserRole.OWNER, UserRole.ADMIN] and current_user.role != UserRole.OWNER:
+    if data.role in [UserRole.owner, UserRole.admin] and current_user.role != UserRole.owner:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Alleen de eigenaar kan admin-accounts aanmaken",
@@ -254,14 +254,14 @@ async def update_user(
         )
     
     # Cannot demote owner
-    if user.role == UserRole.OWNER and data.role and data.role != UserRole.OWNER:
+    if user.role == UserRole.owner and data.role and data.role != UserRole.owner:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="De eigenaar kan niet worden gedegradeerd",
         )
     
     # Only owner can change roles to admin/owner
-    if data.role in [UserRole.OWNER, UserRole.ADMIN] and current_user.role != UserRole.OWNER:
+    if data.role in [UserRole.owner, UserRole.admin] and current_user.role != UserRole.owner:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Alleen de eigenaar kan admin-rechten toekennen",
@@ -307,7 +307,7 @@ async def delete_user(
         )
     
     # Cannot delete owner
-    if user.role == UserRole.OWNER:
+    if user.role == UserRole.owner:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="De eigenaar kan niet worden verwijderd",

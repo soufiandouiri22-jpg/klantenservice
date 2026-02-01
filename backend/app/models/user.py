@@ -12,15 +12,15 @@ from app.core.database import Base
 
 
 class UserRole(str, Enum):
-    OWNER = "owner"       # Full access, billing, can delete company
-    ADMIN = "admin"       # Full access except billing
-    MANAGER = "manager"   # Can manage AI workers, view logs
-    VIEWER = "viewer"     # Read-only access
+    owner = "owner"       # Full access, billing, can delete company
+    admin = "admin"       # Full access except billing
+    manager = "manager"   # Can manage AI workers, view logs
+    viewer = "viewer"     # Read-only access
 
 
 class OAuthProvider(str, Enum):
-    EMAIL = "email"       # Traditional email/password login
-    GOOGLE = "google"     # Google OAuth
+    email = "email"       # Traditional email/password login
+    google = "google"     # Google OAuth
 
 
 class User(Base):
@@ -38,7 +38,7 @@ class User(Base):
     hashed_password = Column(String(255), nullable=True)  # Nullable for OAuth-only accounts
     
     # OAuth
-    oauth_provider = Column(SQLEnum(OAuthProvider), default=OAuthProvider.EMAIL, nullable=False)
+    oauth_provider = Column(SQLEnum(OAuthProvider), default=OAuthProvider.email, nullable=False)
     google_id = Column(String(255), unique=True, nullable=True, index=True)
     
     # Profile
@@ -47,7 +47,7 @@ class User(Base):
     phone = Column(String(20), nullable=True)
     
     # Role & Permissions
-    role = Column(SQLEnum(UserRole), default=UserRole.VIEWER, nullable=False)
+    role = Column(SQLEnum(UserRole), default=UserRole.viewer, nullable=False)
     
     # Status
     is_active = Column(Boolean, default=True)
@@ -89,12 +89,12 @@ class User(Base):
         return f"{self.first_name} {self.last_name}"
     
     def can_manage_workers(self) -> bool:
-        return self.role in [UserRole.OWNER, UserRole.ADMIN, UserRole.MANAGER]
+        return self.role in [UserRole.owner, UserRole.admin, UserRole.manager]
     
     def can_manage_billing(self) -> bool:
-        return self.role == UserRole.OWNER
+        return self.role == UserRole.owner
     
     def can_manage_users(self) -> bool:
-        return self.role in [UserRole.OWNER, UserRole.ADMIN]
+        return self.role in [UserRole.owner, UserRole.admin]
 
 

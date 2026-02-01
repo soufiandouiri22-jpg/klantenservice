@@ -12,11 +12,11 @@ from app.core.database import Base
 
 
 class IndexStatus(str, Enum):
-    PENDING = "pending"       # Not yet indexed
-    INDEXING = "indexing"     # Currently being indexed
-    COMPLETED = "completed"   # Successfully indexed
-    FAILED = "failed"         # Indexing failed
-    OUTDATED = "outdated"     # Needs re-indexing
+    pending = "pending"       # Not yet indexed
+    indexing = "indexing"     # Currently being indexed
+    completed = "completed"   # Successfully indexed
+    failed = "failed"         # Indexing failed
+    outdated = "outdated"     # Needs re-indexing
 
 
 class WebsiteKnowledge(Base):
@@ -45,7 +45,7 @@ class WebsiteKnowledge(Base):
     })
     
     # Index status
-    status = Column(SQLEnum(IndexStatus, values_callable=lambda x: [e.value for e in x]), default=IndexStatus.PENDING)
+    status = Column(SQLEnum(IndexStatus, values_callable=lambda x: [e.value for e in x]), default=IndexStatus.pending)
     pages_indexed = Column(Integer, default=0)
     chunks_created = Column(Integer, default=0)
     

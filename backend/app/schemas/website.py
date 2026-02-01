@@ -67,7 +67,7 @@ class KnowledgeChunkResponse(BaseModel):
     source_url: str
     page_title: Optional[str]
     content: str
-    metadata: Dict[str, Any]
+    chunk_metadata: Dict[str, Any]
     created_at: datetime
     
     class Config:

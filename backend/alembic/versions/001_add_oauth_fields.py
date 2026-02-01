@@ -11,40 +11,39 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = '001_add_oauth'
-down_revision = None
+down_revision = '000_initial'
 branch_labels = None
 depends_on = None
 
 
 def upgrade() -> None:
-    # Create the oauth_provider enum type
-    oauth_provider_enum = sa.Enum('email', 'google', name='oauthprovider')
-    oauth_provider_enum.create(op.get_bind(), checkfirst=True)
+    # Note: OAuth fields are now included in initial migration (000_initial)
+    # This migration is kept for historical compatibility
+    # All fields already exist, so we use IF NOT EXISTS checks
     
-    # Add oauth_provider column with default 'email'
-    op.add_column('users', sa.Column(
-        'oauth_provider',
-        sa.Enum('email', 'google', name='oauthprovider'),
-        nullable=False,
-        server_default='email'
-    ))
+    # Create the oauth_provider enum type if not exists
+    op.execute("DO $$ BEGIN CREATE TYPE oauthprovider AS ENUM ('email', 'google'); EXCEPTION WHEN duplicate_object THEN null; END $$;")
     
-    # Add google_id column
-    op.add_column('users', sa.Column(
-        'google_id',
-        sa.String(255),
-        nullable=True,
-        unique=True
-    ))
+    # Add columns only if they don't exist
+    op.execute("""
+        DO $$ BEGIN
+            ALTER TABLE users ADD COLUMN oauth_provider oauthprovider DEFAULT 'email' NOT NULL;
+        EXCEPTION WHEN duplicate_column THEN null;
+        END $$;
+    """)
     
-    # Create index on google_id
-    op.create_index('ix_users_google_id', 'users', ['google_id'], unique=True)
+    op.execute("""
+        DO $$ BEGIN
+            ALTER TABLE users ADD COLUMN google_id VARCHAR(255) UNIQUE;
+        EXCEPTION WHEN duplicate_column THEN null;
+        END $$;
+    """)
     
-    # Make hashed_password nullable (for OAuth-only accounts)
-    op.alter_column('users', 'hashed_password',
-        existing_type=sa.String(255),
-        nullable=True
-    )
+    # Create index if not exists
+    op.execute("CREATE INDEX IF NOT EXISTS ix_users_google_id ON users(google_id)")
+    
+    # Make hashed_password nullable (safe to run multiple times)
+    op.execute("ALTER TABLE users ALTER COLUMN hashed_password DROP NOT NULL")
 
 
 def downgrade() -> None:

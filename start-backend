@@ -1,0 +1,13 @@
+#!/bin/bash
+cd "$(dirname "$0")/backend"
+
+# Activate virtual environment
+source venv/bin/activate
+
+# Load environment from .env file (don't override DATABASE_URL)
+# The .env file contains the correct Supabase connection
+
+echo "🚀 Starting backend on http://localhost:8000"
+
+# Use custom runner with reload_dirs to only watch app and alembic folders
+python run.py

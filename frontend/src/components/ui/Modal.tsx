@@ -11,7 +11,7 @@ interface ModalProps {
   title?: string
   description?: string
   children: React.ReactNode
-  size?: 'sm' | 'md' | 'lg' | 'xl'
+  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl'
 }
 
 function Modal({
@@ -27,6 +27,7 @@ function Modal({
     md: 'max-w-md',
     lg: 'max-w-lg',
     xl: 'max-w-xl',
+    '2xl': 'max-w-2xl',
   }
 
   return (
@@ -50,23 +51,23 @@ function Modal({
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               transition={{ duration: 0.2 }}
               className={cn(
-                'relative w-full rounded-xl bg-white shadow-soft-lg',
+                'relative w-full rounded-xl bg-white shadow-soft-lg max-h-[90vh] flex flex-col',
                 sizes[size]
               )}
             >
               {/* Close button */}
               <button
                 onClick={onClose}
-                className="absolute right-4 top-4 rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                className="absolute right-4 top-4 z-10 rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
               >
                 <X className="h-5 w-5" />
               </button>
 
               {/* Header */}
               {(title || description) && (
-                <div className="border-b border-gray-100 px-6 py-4">
+                <div className="border-b border-gray-100 px-6 py-4 flex-shrink-0">
                   {title && (
-                    <h2 className="text-lg font-semibold text-gray-900">
+                    <h2 className="text-lg font-semibold text-gray-900 pr-8">
                       {title}
                     </h2>
                   )}
@@ -77,7 +78,7 @@ function Modal({
               )}
 
               {/* Content */}
-              <div className="p-6">{children}</div>
+              <div className="p-6 overflow-y-auto flex-1">{children}</div>
             </motion.div>
           </div>
         </Fragment>
