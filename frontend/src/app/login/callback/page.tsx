@@ -1,13 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { Headphones } from 'lucide-react'
 import { authApi, companyApi } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 
-export default function GoogleCallbackPage() {
+function CallbackContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { setAuth } = useAuthStore()
@@ -73,6 +73,50 @@ export default function GoogleCallbackPage() {
   }, [searchParams, router, setAuth])
 
   return (
+    <>
+      {error ? (
+        <>
+          <h1 className="text-xl font-semibold text-gray-900 mb-2">
+            Er ging iets mis
+          </h1>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <p className="text-sm text-gray-500">
+            U wordt doorgestuurd naar de loginpagina...
+          </p>
+        </>
+      ) : (
+        <>
+          <h1 className="text-xl font-semibold text-gray-900 mb-2">
+            Bezig met inloggen...
+          </h1>
+          <p className="text-gray-600 mb-6">
+            Even geduld, we verwerken uw Google login.
+          </p>
+          {/* Loading spinner */}
+          <div className="flex justify-center">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-primary-600" />
+          </div>
+        </>
+      )}
+    </>
+  )
+}
+
+function LoadingFallback() {
+  return (
+    <>
+      <h1 className="text-xl font-semibold text-gray-900 mb-2">
+        Laden...
+      </h1>
+      <div className="flex justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-primary-600" />
+      </div>
+    </>
+  )
+}
+
+export default function GoogleCallbackPage() {
+  return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
       <div className="text-center">
         {/* Logo */}
@@ -82,30 +126,9 @@ export default function GoogleCallbackPage() {
           </div>
         </div>
 
-        {error ? (
-          <>
-            <h1 className="text-xl font-semibold text-gray-900 mb-2">
-              Er ging iets mis
-            </h1>
-            <p className="text-gray-600 mb-4">{error}</p>
-            <p className="text-sm text-gray-500">
-              U wordt doorgestuurd naar de loginpagina...
-            </p>
-          </>
-        ) : (
-          <>
-            <h1 className="text-xl font-semibold text-gray-900 mb-2">
-              Bezig met inloggen...
-            </h1>
-            <p className="text-gray-600 mb-6">
-              Even geduld, we verwerken uw Google login.
-            </p>
-            {/* Loading spinner */}
-            <div className="flex justify-center">
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-primary-600" />
-            </div>
-          </>
-        )}
+        <Suspense fallback={<LoadingFallback />}>
+          <CallbackContent />
+        </Suspense>
       </div>
     </div>
   )
