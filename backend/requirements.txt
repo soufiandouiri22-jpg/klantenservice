@@ -52,7 +52,7 @@ numpy>=1.24.0
 twilio==8.11.1
 
 # Email
-resend==1.0.0
+resend==0.7.2
 
 # Utilities
 python-dotenv==1.0.0
