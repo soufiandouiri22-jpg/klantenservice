@@ -141,7 +141,7 @@ const testimonials = [
   },
   {
     company: 'Brasserie Blauw',
-    logo: '/company-logos/brasserie.avif',
+    logo: '/company-logos/brasserie.jpg',
     logoType: 'image',
     gradient: 'from-indigo-500 to-purple-600',
     stat: '+200 reserv.',
@@ -307,13 +307,16 @@ function TestimonialSlider() {
       <div className="absolute left-0 top-0 bottom-0 w-8 md:w-32 bg-gradient-to-r from-white to-transparent z-10 pointer-events-none" />
       <div className="absolute right-0 top-0 bottom-0 w-8 md:w-32 bg-gradient-to-l from-white to-transparent z-10 pointer-events-none" />
       
-      {/* Auto-scrolling container */}
-      <div className="flex gap-4 md:gap-6 animate-scroll hover:[animation-play-state:paused]">
-        {/* First set of cards */}
+      {/* Auto-scroll on both, faster on mobile, swipeable */}
+      <div 
+        className="flex gap-4 md:gap-6 animate-scroll-mobile md:animate-scroll hover:[animation-play-state:paused] active:[animation-play-state:paused] touch-pan-x"
+        style={{ 
+          WebkitOverflowScrolling: 'touch'
+        }}
+      >
         {testimonials.map((t, i) => (
           <TestimonialCard key={`first-${i}`} t={t} />
         ))}
-        {/* Duplicate set for seamless loop */}
         {testimonials.map((t, i) => (
           <TestimonialCard key={`second-${i}`} t={t} />
         ))}

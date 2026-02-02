@@ -49,6 +49,7 @@ const config: Config = {
         'slide-up': 'slideUp 0.5s ease-out',
         'pulse-soft': 'pulseSoft 2s ease-in-out infinite',
         'scroll': 'scroll 30s linear infinite',
+        'scroll-mobile': 'scroll 15s linear infinite',
       },
       keyframes: {
         fadeIn: {
