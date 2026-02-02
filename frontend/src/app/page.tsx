@@ -68,7 +68,7 @@ const howItWorks = [
     step: '1',
     icon: UserPlus,
     title: 'Account aanmaken',
-    description: 'Registreer met uw bedrijfsgegevens. Eerste maand gratis, direct aan de slag.',
+    description: 'Registreer met uw bedrijfsgegevens. Probeer het gratis, direct aan de slag.',
     time: '2 min',
   },
   {
@@ -492,7 +492,7 @@ export default function HomePage() {
             </Link>
           </div>
           <p className="mt-4 text-sm text-gray-500">
-            Eerste maand gratis • Annuleren kan altijd
+            Probeer het gratis • Annuleren kan altijd
           </p>
         </div>
       </section>
@@ -822,7 +822,7 @@ export default function HomePage() {
               Kies het pakket dat bij uw bedrijf past
             </p>
             <div className="mt-6 inline-flex items-center gap-2 rounded-full bg-orange-100 px-4 py-2">
-              <span className="text-orange-600 font-semibold">🎉 Eerste maand gratis</span>
+              <span className="text-orange-600 font-semibold">🎉 Probeer het gratis</span>
               <span className="text-orange-500">•</span>
               <span className="text-orange-600">Annuleren kan altijd</span>
             </div>
@@ -891,7 +891,7 @@ export default function HomePage() {
                 </Link>
                 {typeof plan.price !== 'string' || !plan.price.includes('aanvraag') ? (
                   <p className={`mt-3 text-center text-xs ${plan.popular ? 'text-primary-200' : 'text-gray-400'}`}>
-                    Geen betaling nu nodig
+                    ✓ Nu geen betaling verschuldigd
                   </p>
                 ) : null}
               </div>

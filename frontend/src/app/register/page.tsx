@@ -35,7 +35,7 @@ type RegisterForm = z.infer<typeof registerSchema>
 
 const benefits = [
   '14 dagen gratis proberen',
-  'Eerste maand gratis',
+  'Probeer het gratis',
   'Direct operationeel',
   'Nederlandse support',
 ]
