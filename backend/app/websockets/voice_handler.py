@@ -13,6 +13,7 @@ import asyncio
 import base64
 import json
 import logging
+from datetime import datetime
 from uuid import UUID
 from typing import Optional
 
@@ -108,19 +109,27 @@ class VoiceCallHandler:
             logger.error(f"Company not found for AI worker {self.ai_worker.id}")
             raise ValueError("Company not found")
         
-        # Create call log entry
-        self.call_log = CallLog(
-            company_id=self.company.id,
-            ai_worker_id=self.ai_worker.id,
-            phone_number_id=self.phone_number.id,
-            caller_number=from_number,
-            called_number=to_number,
-            twilio_call_sid=self.call_sid,
-            status=CallStatus.IN_PROGRESS,
-        )
-        self.db.add(self.call_log)
-        self.db.commit()
-        self.db.refresh(self.call_log)
+        # Look up existing call log (created by webhook) or create new one
+        self.call_log = self.db.query(CallLog).filter(
+            CallLog.twilio_call_sid == self.call_sid
+        ).first()
+        
+        if not self.call_log:
+            # Create call log if webhook didn't create one
+            self.call_log = CallLog(
+                company_id=self.company.id,
+                ai_worker_id=self.ai_worker.id,
+                phone_number_id=self.phone_number.id,
+                caller_number=from_number,
+                called_number=to_number,
+                twilio_call_sid=self.call_sid,
+                status=CallStatus.IN_PROGRESS,
+            )
+            self.db.add(self.call_log)
+            self.db.commit()
+            self.db.refresh(self.call_log)
+        else:
+            logger.info(f"Found existing call log for {self.call_sid}")
         
         self.session_id = str(self.call_log.id)
         
@@ -330,17 +339,29 @@ class VoiceCallHandler:
         if self.call_log:
             self.call_log.status = CallStatus.COMPLETED
             self.call_log.outcome = CallOutcome.HANDLED
+            self.call_log.ended_at = datetime.utcnow()
             
-            # Save transcript
+            # Save transcript entries
             if transcript:
                 from app.models.call_log import CallTranscript
                 
-                call_transcript = CallTranscript(
-                    call_log_id=self.call_log.id,
-                    content=json.dumps(transcript),
-                    speaker_labels=True
-                )
-                self.db.add(call_transcript)
+                # Save user (caller) transcript
+                if transcript.get("user"):
+                    caller_transcript = CallTranscript(
+                        call_log_id=self.call_log.id,
+                        speaker="caller",
+                        message=transcript["user"]
+                    )
+                    self.db.add(caller_transcript)
+                
+                # Save AI (assistant) transcript
+                if transcript.get("assistant"):
+                    ai_transcript = CallTranscript(
+                        call_log_id=self.call_log.id,
+                        speaker="ai",
+                        message=transcript["assistant"]
+                    )
+                    self.db.add(ai_transcript)
             
             self.db.commit()
         
