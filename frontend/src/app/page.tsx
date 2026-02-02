@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { ArrowRight, Check, Headphones, Calendar, Globe, MessageSquare, Shield, Zap, Plus, Minus, Phone, Mail, Play } from 'lucide-react'
+import { ArrowRight, Check, Headphones, Calendar, Globe, MessageSquare, Shield, Zap, Plus, Minus, Phone, Mail, Play, UserPlus, Settings, PhoneCall, Link2 } from 'lucide-react'
+import Image from 'next/image'
 
 const features = [
   {
@@ -59,6 +60,97 @@ const plans = [
     workers: 7,
     description: 'Voor grote organisaties',
     features: ['7+ AI-medewerkers', 'Alles van Business', 'Dedicated support', 'Onbeperkte logs', 'Custom integraties'],
+  },
+]
+
+const howItWorks = [
+  {
+    step: '1',
+    icon: UserPlus,
+    title: 'Account aanmaken',
+    description: 'Registreer in 2 minuten. Geen creditcard nodig voor de proefperiode.',
+    time: '2 min',
+  },
+  {
+    step: '2',
+    icon: Settings,
+    title: 'AI configureren',
+    description: 'Koppel uw website en de AI leert automatisch alles over uw bedrijf.',
+    time: '5 min',
+  },
+  {
+    step: '3',
+    icon: PhoneCall,
+    title: 'Doorschakelen',
+    description: 'Schakel uw telefoonnummer door en uw AI-medewerker is live!',
+    time: '1 min',
+  },
+]
+
+const integrations = [
+  { name: 'Google Calendar', logo: '/integrations/google-calendar.svg' },
+  { name: 'Microsoft Outlook', logo: '/integrations/outlook.svg' },
+  { name: 'Apple Calendar', logo: '/integrations/apple-calendar.svg' },
+  { name: 'Google Meet', logo: '/integrations/google-meet.svg' },
+  { name: 'Zoom', logo: '/integrations/zoom.svg' },
+  { name: 'Microsoft Teams', logo: '/integrations/teams.svg' },
+]
+
+const testimonials = [
+  {
+    company: 'DentaCare',
+    logo: '🦷',
+    gradient: 'from-blue-500 to-blue-600',
+    stat: '+340 uur/maand',
+    statColor: 'bg-green-100 text-green-700',
+    challenge: 'Receptie overbelast met telefoontjes',
+    quote: 'Nu handelt de AI 80% van de afspraken af. Onze receptie kan zich eindelijk focussen op patiënten in de praktijk.',
+    author: 'Dr. van der Berg',
+    location: 'Amsterdam',
+  },
+  {
+    company: 'Van Dijk Makelaars',
+    logo: '🏠',
+    gradient: 'from-amber-500 to-orange-500',
+    stat: '+45% leads',
+    statColor: 'bg-primary-100 text-primary-700',
+    challenge: 'Gemiste leads buiten kantooruren',
+    quote: 'Dankzij de AI-telefonist missen we geen enkele lead meer. Onze omzet is met 30% gestegen.',
+    author: 'Jeroen K.',
+    location: 'Utrecht',
+  },
+  {
+    company: 'AutoPro Service',
+    logo: '🚗',
+    gradient: 'from-red-500 to-rose-600',
+    stat: '24/7 actief',
+    statColor: 'bg-purple-100 text-purple-700',
+    challenge: 'Monteurs gestoord door telefoon',
+    quote: 'Onze monteurs kunnen nu ongestoord werken. De AI plant APK\'s in en beantwoordt prijsvragen.',
+    author: 'Patrick S.',
+    location: 'Breda',
+  },
+  {
+    company: 'Brasserie Blauw',
+    logo: '🍽️',
+    gradient: 'from-indigo-500 to-purple-600',
+    stat: '+200 reserv.',
+    statColor: 'bg-green-100 text-green-700',
+    challenge: 'Telefoon stoort tijdens service',
+    quote: 'Nu neemt de AI alle reserveringen aan en vraagt zelfs naar allergieën. Gasten en personeel zijn blij!',
+    author: 'Lisa M.',
+    location: 'Rotterdam',
+  },
+  {
+    company: 'TechFlow Solutions',
+    logo: '💻',
+    gradient: 'from-emerald-500 to-teal-600',
+    stat: '-60% wachttijd',
+    statColor: 'bg-blue-100 text-blue-700',
+    challenge: 'Support tickets stapelden op',
+    quote: 'De AI lost 60% van de vragen direct op. Ons supportteam kan nu focussen op complexe issues.',
+    author: 'Mark R.',
+    location: 'Den Haag',
   },
 ]
 
@@ -311,6 +403,67 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* How It Works */}
+      <section className="py-24 bg-gray-50 relative z-10">
+        <div className="max-w-6xl mx-auto px-4">
+          <div className="text-center mb-16">
+            <span className="inline-flex items-center gap-2 bg-primary-100 text-primary-700 px-4 py-2 rounded-full text-sm font-medium mb-4">
+              <Zap className="h-4 w-4" />
+              Binnen 8 minuten live
+            </span>
+            <h2 className="text-4xl md:text-5xl font-display font-bold text-gray-900">
+              Zo simpel werkt het
+            </h2>
+            <p className="mt-4 text-lg text-gray-600 max-w-2xl mx-auto">
+              In drie eenvoudige stappen is uw AI-telefonist operationeel
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-8">
+            {howItWorks.map((item, index) => (
+              <div key={item.step} className="relative">
+                {/* Connector line */}
+                {index < howItWorks.length - 1 && (
+                  <div className="hidden md:block absolute top-16 left-[60%] w-[80%] h-0.5 bg-gradient-to-r from-primary-300 to-primary-100" />
+                )}
+                
+                <div className="bg-white rounded-2xl p-8 border border-gray-200 hover:shadow-xl hover:border-primary-200 transition-all relative">
+                  {/* Step number */}
+                  <div className="absolute -top-4 -left-4 w-10 h-10 bg-primary-600 rounded-xl flex items-center justify-center text-white font-bold shadow-lg shadow-primary-600/30">
+                    {item.step}
+                  </div>
+                  
+                  {/* Icon */}
+                  <div className="w-16 h-16 rounded-2xl bg-primary-100 flex items-center justify-center mb-6">
+                    <item.icon className="w-8 h-8 text-primary-600" />
+                  </div>
+                  
+                  {/* Content */}
+                  <h3 className="text-xl font-bold text-gray-900 mb-2">{item.title}</h3>
+                  <p className="text-gray-600 mb-4">{item.description}</p>
+                  
+                  {/* Time badge */}
+                  <span className="inline-flex items-center gap-1 text-sm font-medium text-primary-600 bg-primary-50 px-3 py-1 rounded-full">
+                    ⏱️ {item.time}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* CTA */}
+          <div className="text-center mt-12">
+            <Link 
+              href="/register" 
+              className="inline-flex items-center gap-2 bg-primary-600 text-white px-8 py-4 rounded-xl font-semibold hover:bg-primary-700 transition-colors shadow-lg shadow-primary-600/30"
+            >
+              Start nu - het is gratis
+              <ArrowRight className="w-5 h-5" />
+            </Link>
+          </div>
+        </div>
+      </section>
+
       {/* Testimonials / Case Studies - Full Width Scrolling */}
       <section className="min-h-screen flex flex-col justify-center py-20 bg-white overflow-hidden relative z-10">
         <div className="text-center mb-16 px-4">
@@ -332,268 +485,62 @@ export default function HomePage() {
           <div className="flex animate-scroll-slow">
             {/* First set of cards */}
             <div className="flex gap-6 px-8">
-              {/* Card 1 - DentaCare */}
-              <div className="flex-shrink-0 w-[400px] bg-white rounded-2xl border border-gray-200 p-6 hover:shadow-xl transition-all">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-bold text-lg">
-                      DC
+              {testimonials.map((t, i) => (
+                <div key={`first-${i}`} className="flex-shrink-0 w-[400px] bg-white rounded-2xl border border-gray-200 p-6 hover:shadow-xl transition-all">
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${t.gradient} flex items-center justify-center text-2xl`}>
+                        {t.logo}
+                      </div>
+                      <span className="font-bold text-gray-900 text-lg">{t.company}</span>
                     </div>
-                    <span className="font-bold text-gray-900 text-lg">DentaCare</span>
+                    <span className={`${t.statColor} text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1`}>
+                      <ArrowRight className="w-3 h-3 rotate-[-45deg]" />
+                      {t.stat}
+                    </span>
                   </div>
-                  <span className="bg-green-100 text-green-700 text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1">
-                    <ArrowRight className="w-3 h-3 rotate-[-45deg]" />
-                    +340 uur/maand
-                  </span>
-                </div>
-                <div className="bg-gray-50 rounded-xl p-4 mb-4">
-                  <p className="text-sm text-gray-500 mb-1">Uitdaging:</p>
-                  <p className="text-gray-900 font-medium">"Receptie overbelast met telefoontjes"</p>
-                </div>
-                <div className="border-l-2 border-primary-500 pl-4">
-                  <p className="text-gray-700 leading-relaxed">
-                    "Nu handelt de AI 80% van de afspraken af. Onze receptie kan zich eindelijk focussen op patiënten in de praktijk."
-                  </p>
-                  <p className="mt-3 text-sm text-gray-500">— Dr. van der Berg, Amsterdam</p>
-                </div>
-              </div>
-
-              {/* Card 2 - Van Dijk Makelaars */}
-              <div className="flex-shrink-0 w-[400px] bg-white rounded-2xl border border-gray-200 p-6 hover:shadow-xl transition-all">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center text-white font-bold text-lg">
-                      VD
-                    </div>
-                    <span className="font-bold text-gray-900 text-lg">Van Dijk Makelaars</span>
+                  <div className="bg-gray-50 rounded-xl p-4 mb-4">
+                    <p className="text-sm text-gray-500 mb-1">Uitdaging:</p>
+                    <p className="text-gray-900 font-medium">"{t.challenge}"</p>
                   </div>
-                  <span className="bg-primary-100 text-primary-700 text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1">
-                    <ArrowRight className="w-3 h-3 rotate-[-45deg]" />
-                    +45% leads
-                  </span>
-                </div>
-                <div className="bg-gray-50 rounded-xl p-4 mb-4">
-                  <p className="text-sm text-gray-500 mb-1">Uitdaging:</p>
-                  <p className="text-gray-900 font-medium">"Gemiste leads buiten kantooruren"</p>
-                </div>
-                <div className="border-l-2 border-primary-500 pl-4">
-                  <p className="text-gray-700 leading-relaxed">
-                    "Dankzij de AI-telefonist missen we geen enkele lead meer. Onze omzet is met 30% gestegen."
-                  </p>
-                  <p className="mt-3 text-sm text-gray-500">— Jeroen K., Utrecht</p>
-                </div>
-              </div>
-
-              {/* Card 3 - AutoPro */}
-              <div className="flex-shrink-0 w-[400px] bg-white rounded-2xl border border-gray-200 p-6 hover:shadow-xl transition-all">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-red-500 to-rose-600 flex items-center justify-center text-white font-bold text-lg">
-                      AP
-                    </div>
-                    <span className="font-bold text-gray-900 text-lg">AutoPro Service</span>
+                  <div className="border-l-2 border-primary-500 pl-4">
+                    <p className="text-gray-700 leading-relaxed">
+                      "{t.quote}"
+                    </p>
+                    <p className="mt-3 text-sm text-gray-500">— {t.author}, {t.location}</p>
                   </div>
-                  <span className="bg-purple-100 text-purple-700 text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1">
-                    <ArrowRight className="w-3 h-3 rotate-[-45deg]" />
-                    24/7 actief
-                  </span>
                 </div>
-                <div className="bg-gray-50 rounded-xl p-4 mb-4">
-                  <p className="text-sm text-gray-500 mb-1">Uitdaging:</p>
-                  <p className="text-gray-900 font-medium">"Monteurs gestoord door telefoon"</p>
-                </div>
-                <div className="border-l-2 border-primary-500 pl-4">
-                  <p className="text-gray-700 leading-relaxed">
-                    "Onze monteurs kunnen nu ongestoord werken. De AI plant APK's in en beantwoordt prijsvragen."
-                  </p>
-                  <p className="mt-3 text-sm text-gray-500">— Patrick S., Breda</p>
-                </div>
-              </div>
-
-              {/* Card 4 - Brasserie Blauw */}
-              <div className="flex-shrink-0 w-[400px] bg-white rounded-2xl border border-gray-200 p-6 hover:shadow-xl transition-all">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg">
-                      BB
-                    </div>
-                    <span className="font-bold text-gray-900 text-lg">Brasserie Blauw</span>
-                  </div>
-                  <span className="bg-green-100 text-green-700 text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1">
-                    <ArrowRight className="w-3 h-3 rotate-[-45deg]" />
-                    +200 reserv.
-                  </span>
-                </div>
-                <div className="bg-gray-50 rounded-xl p-4 mb-4">
-                  <p className="text-sm text-gray-500 mb-1">Uitdaging:</p>
-                  <p className="text-gray-900 font-medium">"Telefoon stoort tijdens service"</p>
-                </div>
-                <div className="border-l-2 border-primary-500 pl-4">
-                  <p className="text-gray-700 leading-relaxed">
-                    "Nu neemt de AI alle reserveringen aan en vraagt zelfs naar allergieën. Gasten en personeel zijn blij!"
-                  </p>
-                  <p className="mt-3 text-sm text-gray-500">— Lisa M., Rotterdam</p>
-                </div>
-              </div>
-
-              {/* Card 5 - TechFlow */}
-              <div className="flex-shrink-0 w-[400px] bg-white rounded-2xl border border-gray-200 p-6 hover:shadow-xl transition-all">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-bold text-lg">
-                      TF
-                    </div>
-                    <span className="font-bold text-gray-900 text-lg">TechFlow Solutions</span>
-                  </div>
-                  <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1">
-                    <ArrowRight className="w-3 h-3 rotate-[-45deg]" />
-                    -60% wachttijd
-                  </span>
-                </div>
-                <div className="bg-gray-50 rounded-xl p-4 mb-4">
-                  <p className="text-sm text-gray-500 mb-1">Uitdaging:</p>
-                  <p className="text-gray-900 font-medium">"Support tickets stapelden op"</p>
-                </div>
-                <div className="border-l-2 border-primary-500 pl-4">
-                  <p className="text-gray-700 leading-relaxed">
-                    "De AI lost 60% van de vragen direct op. Ons supportteam kan nu focussen op complexe issues."
-                  </p>
-                  <p className="mt-3 text-sm text-gray-500">— Mark R., Den Haag</p>
-                </div>
-              </div>
+              ))}
             </div>
 
             {/* Duplicate set for seamless loop */}
             <div className="flex gap-6 px-8">
-              {/* Card 1 - DentaCare */}
-              <div className="flex-shrink-0 w-[400px] bg-white rounded-2xl border border-gray-200 p-6 hover:shadow-xl transition-all">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-bold text-lg">
-                      DC
+              {testimonials.map((t, i) => (
+                <div key={`second-${i}`} className="flex-shrink-0 w-[400px] bg-white rounded-2xl border border-gray-200 p-6 hover:shadow-xl transition-all">
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${t.gradient} flex items-center justify-center text-2xl`}>
+                        {t.logo}
+                      </div>
+                      <span className="font-bold text-gray-900 text-lg">{t.company}</span>
                     </div>
-                    <span className="font-bold text-gray-900 text-lg">DentaCare</span>
+                    <span className={`${t.statColor} text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1`}>
+                      <ArrowRight className="w-3 h-3 rotate-[-45deg]" />
+                      {t.stat}
+                    </span>
                   </div>
-                  <span className="bg-green-100 text-green-700 text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1">
-                    <ArrowRight className="w-3 h-3 rotate-[-45deg]" />
-                    +340 uur/maand
-                  </span>
-                </div>
-                <div className="bg-gray-50 rounded-xl p-4 mb-4">
-                  <p className="text-sm text-gray-500 mb-1">Uitdaging:</p>
-                  <p className="text-gray-900 font-medium">"Receptie overbelast met telefoontjes"</p>
-                </div>
-                <div className="border-l-2 border-primary-500 pl-4">
-                  <p className="text-gray-700 leading-relaxed">
-                    "Nu handelt de AI 80% van de afspraken af. Onze receptie kan zich eindelijk focussen op patiënten in de praktijk."
-                  </p>
-                  <p className="mt-3 text-sm text-gray-500">— Dr. van der Berg, Amsterdam</p>
-                </div>
-              </div>
-
-              {/* Card 2 - Van Dijk Makelaars */}
-              <div className="flex-shrink-0 w-[400px] bg-white rounded-2xl border border-gray-200 p-6 hover:shadow-xl transition-all">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center text-white font-bold text-lg">
-                      VD
-                    </div>
-                    <span className="font-bold text-gray-900 text-lg">Van Dijk Makelaars</span>
+                  <div className="bg-gray-50 rounded-xl p-4 mb-4">
+                    <p className="text-sm text-gray-500 mb-1">Uitdaging:</p>
+                    <p className="text-gray-900 font-medium">"{t.challenge}"</p>
                   </div>
-                  <span className="bg-primary-100 text-primary-700 text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1">
-                    <ArrowRight className="w-3 h-3 rotate-[-45deg]" />
-                    +45% leads
-                  </span>
-                </div>
-                <div className="bg-gray-50 rounded-xl p-4 mb-4">
-                  <p className="text-sm text-gray-500 mb-1">Uitdaging:</p>
-                  <p className="text-gray-900 font-medium">"Gemiste leads buiten kantooruren"</p>
-                </div>
-                <div className="border-l-2 border-primary-500 pl-4">
-                  <p className="text-gray-700 leading-relaxed">
-                    "Dankzij de AI-telefonist missen we geen enkele lead meer. Onze omzet is met 30% gestegen."
-                  </p>
-                  <p className="mt-3 text-sm text-gray-500">— Jeroen K., Utrecht</p>
-                </div>
-              </div>
-
-              {/* Card 3 - AutoPro */}
-              <div className="flex-shrink-0 w-[400px] bg-white rounded-2xl border border-gray-200 p-6 hover:shadow-xl transition-all">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-red-500 to-rose-600 flex items-center justify-center text-white font-bold text-lg">
-                      AP
-                    </div>
-                    <span className="font-bold text-gray-900 text-lg">AutoPro Service</span>
+                  <div className="border-l-2 border-primary-500 pl-4">
+                    <p className="text-gray-700 leading-relaxed">
+                      "{t.quote}"
+                    </p>
+                    <p className="mt-3 text-sm text-gray-500">— {t.author}, {t.location}</p>
                   </div>
-                  <span className="bg-purple-100 text-purple-700 text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1">
-                    <ArrowRight className="w-3 h-3 rotate-[-45deg]" />
-                    24/7 actief
-                  </span>
                 </div>
-                <div className="bg-gray-50 rounded-xl p-4 mb-4">
-                  <p className="text-sm text-gray-500 mb-1">Uitdaging:</p>
-                  <p className="text-gray-900 font-medium">"Monteurs gestoord door telefoon"</p>
-                </div>
-                <div className="border-l-2 border-primary-500 pl-4">
-                  <p className="text-gray-700 leading-relaxed">
-                    "Onze monteurs kunnen nu ongestoord werken. De AI plant APK's in en beantwoordt prijsvragen."
-                  </p>
-                  <p className="mt-3 text-sm text-gray-500">— Patrick S., Breda</p>
-                </div>
-              </div>
-
-              {/* Card 4 - Brasserie Blauw */}
-              <div className="flex-shrink-0 w-[400px] bg-white rounded-2xl border border-gray-200 p-6 hover:shadow-xl transition-all">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg">
-                      BB
-                    </div>
-                    <span className="font-bold text-gray-900 text-lg">Brasserie Blauw</span>
-                  </div>
-                  <span className="bg-green-100 text-green-700 text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1">
-                    <ArrowRight className="w-3 h-3 rotate-[-45deg]" />
-                    +200 reserv.
-                  </span>
-                </div>
-                <div className="bg-gray-50 rounded-xl p-4 mb-4">
-                  <p className="text-sm text-gray-500 mb-1">Uitdaging:</p>
-                  <p className="text-gray-900 font-medium">"Telefoon stoort tijdens service"</p>
-                </div>
-                <div className="border-l-2 border-primary-500 pl-4">
-                  <p className="text-gray-700 leading-relaxed">
-                    "Nu neemt de AI alle reserveringen aan en vraagt zelfs naar allergieën. Gasten en personeel zijn blij!"
-                  </p>
-                  <p className="mt-3 text-sm text-gray-500">— Lisa M., Rotterdam</p>
-                </div>
-              </div>
-
-              {/* Card 5 - TechFlow */}
-              <div className="flex-shrink-0 w-[400px] bg-white rounded-2xl border border-gray-200 p-6 hover:shadow-xl transition-all">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-bold text-lg">
-                      TF
-                    </div>
-                    <span className="font-bold text-gray-900 text-lg">TechFlow Solutions</span>
-                  </div>
-                  <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1">
-                    <ArrowRight className="w-3 h-3 rotate-[-45deg]" />
-                    -60% wachttijd
-                  </span>
-                </div>
-                <div className="bg-gray-50 rounded-xl p-4 mb-4">
-                  <p className="text-sm text-gray-500 mb-1">Uitdaging:</p>
-                  <p className="text-gray-900 font-medium">"Support tickets stapelden op"</p>
-                </div>
-                <div className="border-l-2 border-primary-500 pl-4">
-                  <p className="text-gray-700 leading-relaxed">
-                    "De AI lost 60% van de vragen direct op. Ons supportteam kan nu focussen op complexe issues."
-                  </p>
-                  <p className="mt-3 text-sm text-gray-500">— Mark R., Den Haag</p>
-                </div>
-              </div>
+              ))}
             </div>
           </div>
         </div>
@@ -640,6 +587,116 @@ export default function HomePage() {
                 <p className="mt-2 text-gray-600">{feature.description}</p>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Integrations */}
+      <section className="py-24 bg-gray-50 relative z-10">
+        <div className="max-w-6xl mx-auto px-4">
+          <div className="text-center mb-16">
+            <span className="inline-flex items-center gap-2 bg-primary-100 text-primary-700 px-4 py-2 rounded-full text-sm font-medium mb-4">
+              <Link2 className="h-4 w-4" />
+              Naadloos geïntegreerd
+            </span>
+            <h2 className="text-4xl md:text-5xl font-display font-bold text-gray-900">
+              Werkt met uw favoriete tools
+            </h2>
+            <p className="mt-4 text-lg text-gray-600 max-w-2xl mx-auto">
+              Onze AI-telefonist integreert direct met de agenda- en communicatietools die u al gebruikt
+            </p>
+          </div>
+
+          {/* Integration logos grid */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
+            {/* Google Calendar */}
+            <div className="bg-white rounded-2xl p-6 border border-gray-200 hover:border-primary-200 hover:shadow-lg transition-all flex flex-col items-center justify-center gap-3">
+              <div className="w-12 h-12 flex items-center justify-center">
+                <svg viewBox="0 0 24 24" className="w-10 h-10">
+                  <rect x="2" y="3" width="20" height="18" rx="2" fill="#4285F4"/>
+                  <rect x="4" y="8" width="16" height="11" fill="white"/>
+                  <rect x="6" y="10" width="3" height="3" fill="#EA4335"/>
+                  <rect x="10.5" y="10" width="3" height="3" fill="#FBBC05"/>
+                  <rect x="15" y="10" width="3" height="3" fill="#34A853"/>
+                  <rect x="6" y="14.5" width="3" height="3" fill="#4285F4"/>
+                  <rect x="10.5" y="14.5" width="3" height="3" fill="#EA4335"/>
+                </svg>
+              </div>
+              <span className="text-sm font-medium text-gray-700">Google Calendar</span>
+            </div>
+
+            {/* Microsoft Outlook */}
+            <div className="bg-white rounded-2xl p-6 border border-gray-200 hover:border-primary-200 hover:shadow-lg transition-all flex flex-col items-center justify-center gap-3">
+              <div className="w-12 h-12 flex items-center justify-center">
+                <svg viewBox="0 0 24 24" className="w-10 h-10">
+                  <path d="M22 6V18C22 19.1 21.1 20 20 20H8C6.9 20 6 19.1 6 18V6C6 4.9 6.9 4 8 4H20C21.1 4 22 4.9 22 6Z" fill="#0078D4"/>
+                  <path d="M14 4V20H8C6.9 20 6 19.1 6 18V6C6 4.9 6.9 4 8 4H14Z" fill="#0364B8"/>
+                  <ellipse cx="9" cy="12" rx="5" ry="6" fill="#0078D4"/>
+                  <ellipse cx="9" cy="12" rx="3" ry="4" fill="white"/>
+                </svg>
+              </div>
+              <span className="text-sm font-medium text-gray-700">Outlook</span>
+            </div>
+
+            {/* Apple Calendar */}
+            <div className="bg-white rounded-2xl p-6 border border-gray-200 hover:border-primary-200 hover:shadow-lg transition-all flex flex-col items-center justify-center gap-3">
+              <div className="w-12 h-12 flex items-center justify-center">
+                <svg viewBox="0 0 24 24" className="w-10 h-10">
+                  <rect x="2" y="4" width="20" height="17" rx="3" fill="#FF3B30"/>
+                  <rect x="2" y="8" width="20" height="13" rx="2" fill="white"/>
+                  <text x="12" y="17" textAnchor="middle" fontSize="8" fontWeight="bold" fill="#FF3B30">17</text>
+                  <circle cx="7" cy="6" r="1" fill="white"/>
+                  <circle cx="17" cy="6" r="1" fill="white"/>
+                </svg>
+              </div>
+              <span className="text-sm font-medium text-gray-700">Apple Calendar</span>
+            </div>
+
+            {/* Google Meet */}
+            <div className="bg-white rounded-2xl p-6 border border-gray-200 hover:border-primary-200 hover:shadow-lg transition-all flex flex-col items-center justify-center gap-3">
+              <div className="w-12 h-12 flex items-center justify-center">
+                <svg viewBox="0 0 24 24" className="w-10 h-10">
+                  <rect x="1" y="6" width="14" height="12" rx="2" fill="#00AC47"/>
+                  <path d="M15 9L22 5V19L15 15V9Z" fill="#00AC47"/>
+                  <rect x="4" y="9" width="8" height="6" rx="1" fill="white"/>
+                </svg>
+              </div>
+              <span className="text-sm font-medium text-gray-700">Google Meet</span>
+            </div>
+
+            {/* Zoom */}
+            <div className="bg-white rounded-2xl p-6 border border-gray-200 hover:border-primary-200 hover:shadow-lg transition-all flex flex-col items-center justify-center gap-3">
+              <div className="w-12 h-12 flex items-center justify-center">
+                <svg viewBox="0 0 24 24" className="w-10 h-10">
+                  <rect x="2" y="4" width="20" height="16" rx="4" fill="#2D8CFF"/>
+                  <rect x="4" y="8" width="10" height="8" rx="1" fill="white"/>
+                  <path d="M14 10L20 7V17L14 14V10Z" fill="white"/>
+                </svg>
+              </div>
+              <span className="text-sm font-medium text-gray-700">Zoom</span>
+            </div>
+
+            {/* Microsoft Teams */}
+            <div className="bg-white rounded-2xl p-6 border border-gray-200 hover:border-primary-200 hover:shadow-lg transition-all flex flex-col items-center justify-center gap-3">
+              <div className="w-12 h-12 flex items-center justify-center">
+                <svg viewBox="0 0 24 24" className="w-10 h-10">
+                  <circle cx="17" cy="7" r="3" fill="#5059C9"/>
+                  <rect x="14" y="10" width="8" height="8" rx="1" fill="#5059C9"/>
+                  <circle cx="9" cy="6" r="4" fill="#7B83EB"/>
+                  <rect x="3" y="10" width="12" height="10" rx="2" fill="#7B83EB"/>
+                  <rect x="5" y="12" width="8" height="1.5" fill="white"/>
+                  <rect x="5" y="15" width="5" height="1.5" fill="white"/>
+                </svg>
+              </div>
+              <span className="text-sm font-medium text-gray-700">Teams</span>
+            </div>
+          </div>
+
+          {/* Additional info */}
+          <div className="mt-12 text-center">
+            <p className="text-gray-500 text-sm">
+              Mist u een integratie? <Link href="/contact" className="text-primary-600 font-medium hover:underline">Laat het ons weten</Link>
+            </p>
           </div>
         </div>
       </section>
