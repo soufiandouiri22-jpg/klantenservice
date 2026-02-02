@@ -114,6 +114,7 @@ class VoiceCallHandler:
             ai_worker_id=self.ai_worker.id,
             phone_number_id=self.phone_number.id,
             caller_number=from_number,
+            called_number=to_number,
             twilio_call_sid=self.call_sid,
             status=CallStatus.IN_PROGRESS,
         )
