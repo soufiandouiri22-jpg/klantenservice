@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
-import { ArrowRight, Check, Headphones, Calendar, Globe, MessageSquare, Shield, Zap, Plus, Minus, Phone, Mail, Play, UserPlus, Settings, PhoneCall, Link2 } from 'lucide-react'
+import { ArrowRight, Check, Headphones, Calendar, Globe, MessageSquare, Shield, Zap, Plus, Minus, Phone, Mail, Play, UserPlus, Settings, PhoneCall, Link2, Menu, X } from 'lucide-react'
 import Image from 'next/image'
 
 const features = [
@@ -68,21 +68,21 @@ const howItWorks = [
     step: '1',
     icon: UserPlus,
     title: 'Account aanmaken',
-    description: 'Registreer in 2 minuten. Geen creditcard nodig voor de proefperiode.',
+    description: 'Registreer met uw bedrijfsgegevens. Eerste maand gratis, direct aan de slag.',
     time: '2 min',
   },
   {
     step: '2',
     icon: Settings,
     title: 'AI configureren',
-    description: 'Koppel uw website en de AI leert automatisch alles over uw bedrijf.',
+    description: 'Koppel uw website en stel gedragsregels in. De AI leert automatisch alles.',
     time: '5 min',
   },
   {
     step: '3',
     icon: PhoneCall,
     title: 'Doorschakelen',
-    description: 'Schakel uw telefoonnummer door en uw AI-medewerker is live!',
+    description: 'Schakel uw telefoonnummer door naar uw nieuwe AI-medewerker. Klaar!',
     time: '1 min',
   },
 ]
@@ -99,7 +99,8 @@ const integrations = [
 const testimonials = [
   {
     company: 'DentaCare',
-    logo: '🦷',
+    logo: '/company-logos/dentacare.png',
+    logoType: 'image',
     gradient: 'from-blue-500 to-blue-600',
     stat: '+340 uur/maand',
     statColor: 'bg-green-100 text-green-700',
@@ -110,7 +111,8 @@ const testimonials = [
   },
   {
     company: 'Van Dijk Makelaars',
-    logo: '🏠',
+    logo: '/company-logos/vandijk.png',
+    logoType: 'image',
     gradient: 'from-amber-500 to-orange-500',
     stat: '+45% leads',
     statColor: 'bg-primary-100 text-primary-700',
@@ -121,7 +123,8 @@ const testimonials = [
   },
   {
     company: 'AutoPro Service',
-    logo: '🚗',
+    logo: '/company-logos/autopro.png',
+    logoType: 'image',
     gradient: 'from-red-500 to-rose-600',
     stat: '24/7 actief',
     statColor: 'bg-purple-100 text-purple-700',
@@ -132,7 +135,8 @@ const testimonials = [
   },
   {
     company: 'Brasserie Blauw',
-    logo: '🍽️',
+    logo: '/company-logos/brasserie.png',
+    logoType: 'image',
     gradient: 'from-indigo-500 to-purple-600',
     stat: '+200 reserv.',
     statColor: 'bg-green-100 text-green-700',
@@ -143,7 +147,8 @@ const testimonials = [
   },
   {
     company: 'TechFlow Solutions',
-    logo: '💻',
+    logo: '/company-logos/techflow.png',
+    logoType: 'image',
     gradient: 'from-emerald-500 to-teal-600',
     stat: '-60% wachttijd',
     statColor: 'bg-blue-100 text-blue-700',
@@ -216,8 +221,159 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
   )
 }
 
+// Testimonial Card component
+function TestimonialCard({ t }: { t: typeof testimonials[0] }) {
+  return (
+    <div className="flex-shrink-0 w-[340px] md:w-[400px] bg-white rounded-2xl border border-gray-200 p-6 hover:shadow-xl transition-all snap-center">
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <div className={`w-12 h-12 rounded-xl ${t.logoType === 'emoji' ? `bg-gradient-to-br ${t.gradient}` : 'bg-white border border-gray-100'} flex items-center justify-center overflow-hidden`}>
+            {t.logoType === 'image' ? (
+              <Image src={t.logo} alt={t.company} width={48} height={48} className="w-full h-full object-contain p-1" />
+            ) : (
+              <span className="text-2xl">{t.logo}</span>
+            )}
+          </div>
+          <span className="font-bold text-gray-900 text-lg">{t.company}</span>
+        </div>
+        <span className={`${t.statColor} text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1`}>
+          <ArrowRight className="w-3 h-3 rotate-[-45deg]" />
+          {t.stat}
+        </span>
+      </div>
+      <div className="bg-gray-50 rounded-xl p-4 mb-4">
+        <p className="text-sm text-gray-500 mb-1">Uitdaging:</p>
+        <p className="text-gray-900 font-medium">"{t.challenge}"</p>
+      </div>
+      <div className="border-l-2 border-primary-500 pl-4">
+        <p className="text-gray-700 leading-relaxed">
+          "{t.quote}"
+        </p>
+        <p className="mt-3 text-sm text-gray-500">— {t.author}, {t.location}</p>
+      </div>
+    </div>
+  )
+}
+
+// Testimonial Slider component with drag/swipe support
+function TestimonialSlider() {
+  const sliderRef = useRef<HTMLDivElement>(null)
+  const [isDragging, setIsDragging] = useState(false)
+  const [startX, setStartX] = useState(0)
+  const [scrollLeft, setScrollLeft] = useState(0)
+  const [isPaused, setIsPaused] = useState(false)
+
+  // Auto-scroll effect
+  useEffect(() => {
+    const slider = sliderRef.current
+    if (!slider || isPaused) return
+
+    const scrollSpeed = 0.5
+    let animationId: number
+
+    const autoScroll = () => {
+      if (slider && !isPaused) {
+        slider.scrollLeft += scrollSpeed
+        // Reset to start when reaching the end
+        if (slider.scrollLeft >= slider.scrollWidth - slider.clientWidth) {
+          slider.scrollLeft = 0
+        }
+      }
+      animationId = requestAnimationFrame(autoScroll)
+    }
+
+    animationId = requestAnimationFrame(autoScroll)
+
+    return () => cancelAnimationFrame(animationId)
+  }, [isPaused])
+
+  // Resume auto-scroll after 3 seconds of inactivity
+  useEffect(() => {
+    if (!isPaused) return
+    const timer = setTimeout(() => setIsPaused(false), 3000)
+    return () => clearTimeout(timer)
+  }, [isPaused])
+
+  // Mouse handlers for desktop drag
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsDragging(true)
+    setIsPaused(true)
+    setStartX(e.pageX - (sliderRef.current?.offsetLeft || 0))
+    setScrollLeft(sliderRef.current?.scrollLeft || 0)
+  }
+
+  const handleMouseUp = () => {
+    setIsDragging(false)
+  }
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging) return
+    e.preventDefault()
+    const x = e.pageX - (sliderRef.current?.offsetLeft || 0)
+    const walk = (x - startX) * 2
+    if (sliderRef.current) {
+      sliderRef.current.scrollLeft = scrollLeft - walk
+    }
+  }
+
+  // Touch handlers for mobile swipe
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setIsPaused(true)
+    setStartX(e.touches[0].pageX - (sliderRef.current?.offsetLeft || 0))
+    setScrollLeft(sliderRef.current?.scrollLeft || 0)
+  }
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    const x = e.touches[0].pageX - (sliderRef.current?.offsetLeft || 0)
+    const walk = (x - startX) * 2
+    if (sliderRef.current) {
+      sliderRef.current.scrollLeft = scrollLeft - walk
+    }
+  }
+
+  // Pause on hover
+  const handleMouseEnter = () => setIsPaused(true)
+  const handleMouseLeave = () => {
+    if (!isDragging) setIsPaused(false)
+  }
+
+  return (
+    <div className="relative w-full">
+      {/* Fade edges */}
+      <div className="absolute left-0 top-0 bottom-0 w-16 md:w-32 bg-gradient-to-r from-gray-50 to-transparent z-10 pointer-events-none" />
+      <div className="absolute right-0 top-0 bottom-0 w-16 md:w-32 bg-gradient-to-l from-gray-50 to-transparent z-10 pointer-events-none" />
+      
+      {/* Scrollable container */}
+      <div
+        ref={sliderRef}
+        className="flex gap-6 px-8 overflow-x-auto scrollbar-hide cursor-grab active:cursor-grabbing"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        onMouseDown={handleMouseDown}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={() => { handleMouseUp(); handleMouseLeave(); }}
+        onMouseMove={handleMouseMove}
+        onMouseEnter={handleMouseEnter}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={() => {}}
+      >
+        {/* Cards - duplicated for infinite scroll effect */}
+        {[...testimonials, ...testimonials].map((t, i) => (
+          <TestimonialCard key={i} t={t} />
+        ))}
+      </div>
+
+      {/* Swipe hint for mobile */}
+      <p className="text-center text-sm text-gray-400 mt-4 md:hidden">
+        ← Swipe om meer te zien →
+      </p>
+    </div>
+  )
+}
+
 export default function HomePage() {
   const [isScrolled, setIsScrolled] = useState(false)
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
   useEffect(() => {
     const handleScroll = () => {
@@ -234,13 +390,14 @@ export default function HomePage() {
       <nav className="fixed top-4 left-4 right-4 z-50">
         <div className="max-w-6xl mx-auto">
           <div 
-            className={`relative rounded-2xl px-6 transition-all duration-300 ${
-              isScrolled 
+            className={`relative rounded-2xl px-4 md:px-6 transition-all duration-300 ${
+              isScrolled || isMobileMenuOpen
                 ? 'bg-white/80 backdrop-blur-xl border border-gray-200 shadow-lg shadow-black/5' 
                 : 'bg-transparent'
             }`}
           >
             <div className="flex items-center justify-between h-16">
+              {/* Logo */}
               <div className="flex items-center gap-2">
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-600 shadow-md shadow-primary-600/30">
                   <Headphones className="h-5 w-5 text-white" />
@@ -249,6 +406,8 @@ export default function HomePage() {
                   klantenservice<span className="text-primary-600">.ai</span>
                 </span>
               </div>
+
+              {/* Desktop Navigation */}
               <div className="hidden md:flex items-center gap-8">
                 <Link href="#features" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
                   Functies
@@ -260,7 +419,9 @@ export default function HomePage() {
                   FAQ
                 </Link>
               </div>
-              <div className="flex items-center gap-4">
+
+              {/* Desktop CTA */}
+              <div className="hidden md:flex items-center gap-4">
                 <Link href="/login" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
                   Inloggen
                 </Link>
@@ -268,7 +429,64 @@ export default function HomePage() {
                   Gratis proberen
                 </Link>
               </div>
+
+              {/* Mobile Hamburger */}
+              <button
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                className="md:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                aria-label="Menu"
+              >
+                {isMobileMenuOpen ? (
+                  <X className="h-6 w-6 text-gray-700" />
+                ) : (
+                  <Menu className="h-6 w-6 text-gray-700" />
+                )}
+              </button>
             </div>
+
+            {/* Mobile Menu */}
+            {isMobileMenuOpen && (
+              <div className="md:hidden pb-4 border-t border-gray-200 mt-2 pt-4">
+                <div className="flex flex-col gap-3">
+                  <Link 
+                    href="#features" 
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="text-base font-medium text-gray-600 hover:text-gray-900 transition-colors py-2"
+                  >
+                    Functies
+                  </Link>
+                  <Link 
+                    href="#pricing" 
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="text-base font-medium text-gray-600 hover:text-gray-900 transition-colors py-2"
+                  >
+                    Prijzen
+                  </Link>
+                  <Link 
+                    href="#faq" 
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="text-base font-medium text-gray-600 hover:text-gray-900 transition-colors py-2"
+                  >
+                    FAQ
+                  </Link>
+                  <hr className="border-gray-200 my-2" />
+                  <Link 
+                    href="/login" 
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="text-base font-medium text-gray-600 hover:text-gray-900 transition-colors py-2"
+                  >
+                    Inloggen
+                  </Link>
+                  <Link 
+                    href="/register" 
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="bg-primary-600 text-white px-4 py-3 rounded-lg text-base font-semibold hover:bg-primary-700 transition-colors text-center shadow-md shadow-primary-600/30"
+                  >
+                    Gratis proberen
+                  </Link>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </nav>
@@ -301,7 +519,7 @@ export default function HomePage() {
             24/7 Beschikbaar voor uw klanten
           </div>
           
-          <h1 className="text-5xl md:text-7xl font-display font-bold text-gray-900 leading-tight">
+          <h1 className="text-4xl sm:text-5xl md:text-7xl font-display font-bold text-gray-900 leading-tight">
             AI-telefonisten voor{' '}
             <span className="gradient-text">uw bedrijf</span>
           </h1>
@@ -325,10 +543,10 @@ export default function HomePage() {
       </section>
 
       {/* Demo Video Section */}
-      <section className="min-h-screen flex items-center justify-center py-20 px-4 relative bg-white z-10">
+      <section className="min-h-[80vh] md:min-h-screen flex items-center justify-center py-16 md:py-20 px-4 relative bg-gray-50 z-10">
         <div className="max-w-5xl mx-auto w-full">
           <div className="text-center mb-12">
-            <h2 className="text-4xl md:text-5xl font-display font-bold text-gray-900">
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-display font-bold text-gray-900">
               Zie het in actie
             </h2>
             <p className="mt-4 text-lg text-gray-600 max-w-2xl mx-auto">
@@ -404,14 +622,14 @@ export default function HomePage() {
       </section>
 
       {/* How It Works */}
-      <section className="py-24 bg-gray-50 relative z-10">
+      <section className="py-16 md:py-24 bg-white relative z-10">
         <div className="max-w-6xl mx-auto px-4">
           <div className="text-center mb-16">
             <span className="inline-flex items-center gap-2 bg-primary-100 text-primary-700 px-4 py-2 rounded-full text-sm font-medium mb-4">
               <Zap className="h-4 w-4" />
               Binnen 8 minuten live
             </span>
-            <h2 className="text-4xl md:text-5xl font-display font-bold text-gray-900">
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-display font-bold text-gray-900">
               Zo simpel werkt het
             </h2>
             <p className="mt-4 text-lg text-gray-600 max-w-2xl mx-auto">
@@ -419,17 +637,17 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-8">
+          <div className="grid md:grid-cols-3 gap-6 md:gap-8">
             {howItWorks.map((item, index) => (
-              <div key={item.step} className="relative">
+              <div key={item.step} className="relative h-full pt-2 md:pt-0">
                 {/* Connector line */}
                 {index < howItWorks.length - 1 && (
                   <div className="hidden md:block absolute top-16 left-[60%] w-[80%] h-0.5 bg-gradient-to-r from-primary-300 to-primary-100" />
                 )}
                 
-                <div className="bg-white rounded-2xl p-8 border border-gray-200 hover:shadow-xl hover:border-primary-200 transition-all relative">
+                <div className="bg-white rounded-2xl p-6 md:p-8 border border-gray-200 hover:shadow-xl hover:border-primary-200 transition-all relative h-full flex flex-col">
                   {/* Step number */}
-                  <div className="absolute -top-4 -left-4 w-10 h-10 bg-primary-600 rounded-xl flex items-center justify-center text-white font-bold shadow-lg shadow-primary-600/30">
+                  <div className="absolute -top-3 left-4 md:-top-4 md:-left-4 w-8 h-8 md:w-10 md:h-10 bg-primary-600 rounded-lg md:rounded-xl flex items-center justify-center text-white font-bold text-sm md:text-base shadow-lg shadow-primary-600/30">
                     {item.step}
                   </div>
                   
@@ -440,10 +658,10 @@ export default function HomePage() {
                   
                   {/* Content */}
                   <h3 className="text-xl font-bold text-gray-900 mb-2">{item.title}</h3>
-                  <p className="text-gray-600 mb-4">{item.description}</p>
+                  <p className="text-gray-600 mb-4 flex-grow">{item.description}</p>
                   
                   {/* Time badge */}
-                  <span className="inline-flex items-center gap-1 text-sm font-medium text-primary-600 bg-primary-50 px-3 py-1 rounded-full">
+                  <span className="inline-flex items-center gap-1 text-sm font-medium text-primary-600 bg-primary-50 px-3 py-1 rounded-full self-start">
                     ⏱️ {item.time}
                   </span>
                 </div>
@@ -465,9 +683,9 @@ export default function HomePage() {
       </section>
 
       {/* Testimonials / Case Studies - Full Width Scrolling */}
-      <section className="min-h-screen flex flex-col justify-center py-20 bg-white overflow-hidden relative z-10">
+      <section className="min-h-[70vh] md:min-h-screen flex flex-col justify-center py-16 md:py-20 bg-gray-50 overflow-hidden relative z-10">
         <div className="text-center mb-16 px-4">
-          <h2 className="text-4xl md:text-5xl font-display font-bold text-gray-900">
+          <h2 className="text-3xl md:text-4xl lg:text-5xl font-display font-bold text-gray-900">
             Wat onze klanten bereiken
           </h2>
           <p className="mt-4 text-lg text-gray-600">
@@ -475,102 +693,35 @@ export default function HomePage() {
           </p>
         </div>
 
-        {/* Full Width Scrolling Cards */}
-        <div className="relative w-full">
-          {/* Fade edges */}
-          <div className="absolute left-0 top-0 bottom-0 w-32 bg-gradient-to-r from-white to-transparent z-10 pointer-events-none" />
-          <div className="absolute right-0 top-0 bottom-0 w-32 bg-gradient-to-l from-white to-transparent z-10 pointer-events-none" />
-          
-          {/* Auto-scrolling container */}
-          <div className="flex animate-scroll-slow">
-            {/* First set of cards */}
-            <div className="flex gap-6 px-8">
-              {testimonials.map((t, i) => (
-                <div key={`first-${i}`} className="flex-shrink-0 w-[400px] bg-white rounded-2xl border border-gray-200 p-6 hover:shadow-xl transition-all">
-                  <div className="flex items-center justify-between mb-6">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${t.gradient} flex items-center justify-center text-2xl`}>
-                        {t.logo}
-                      </div>
-                      <span className="font-bold text-gray-900 text-lg">{t.company}</span>
-                    </div>
-                    <span className={`${t.statColor} text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1`}>
-                      <ArrowRight className="w-3 h-3 rotate-[-45deg]" />
-                      {t.stat}
-                    </span>
-                  </div>
-                  <div className="bg-gray-50 rounded-xl p-4 mb-4">
-                    <p className="text-sm text-gray-500 mb-1">Uitdaging:</p>
-                    <p className="text-gray-900 font-medium">"{t.challenge}"</p>
-                  </div>
-                  <div className="border-l-2 border-primary-500 pl-4">
-                    <p className="text-gray-700 leading-relaxed">
-                      "{t.quote}"
-                    </p>
-                    <p className="mt-3 text-sm text-gray-500">— {t.author}, {t.location}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Duplicate set for seamless loop */}
-            <div className="flex gap-6 px-8">
-              {testimonials.map((t, i) => (
-                <div key={`second-${i}`} className="flex-shrink-0 w-[400px] bg-white rounded-2xl border border-gray-200 p-6 hover:shadow-xl transition-all">
-                  <div className="flex items-center justify-between mb-6">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${t.gradient} flex items-center justify-center text-2xl`}>
-                        {t.logo}
-                      </div>
-                      <span className="font-bold text-gray-900 text-lg">{t.company}</span>
-                    </div>
-                    <span className={`${t.statColor} text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1`}>
-                      <ArrowRight className="w-3 h-3 rotate-[-45deg]" />
-                      {t.stat}
-                    </span>
-                  </div>
-                  <div className="bg-gray-50 rounded-xl p-4 mb-4">
-                    <p className="text-sm text-gray-500 mb-1">Uitdaging:</p>
-                    <p className="text-gray-900 font-medium">"{t.challenge}"</p>
-                  </div>
-                  <div className="border-l-2 border-primary-500 pl-4">
-                    <p className="text-gray-700 leading-relaxed">
-                      "{t.quote}"
-                    </p>
-                    <p className="mt-3 text-sm text-gray-500">— {t.author}, {t.location}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+        {/* Interactive Scrolling Cards */}
+        <TestimonialSlider />
 
         {/* Stats */}
-        <div className="mt-20 max-w-5xl mx-auto px-4 grid grid-cols-2 md:grid-cols-4 gap-8">
+        <div className="mt-12 md:mt-20 max-w-5xl mx-auto px-4 grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8">
           <div className="text-center">
-            <p className="text-4xl font-bold text-primary-600">500+</p>
-            <p className="text-gray-600 mt-1">Tevreden bedrijven</p>
+            <p className="text-3xl md:text-4xl font-bold text-primary-600">500+</p>
+            <p className="text-sm md:text-base text-gray-600 mt-1">Tevreden bedrijven</p>
           </div>
           <div className="text-center">
-            <p className="text-4xl font-bold text-primary-600">2.5M+</p>
-            <p className="text-gray-600 mt-1">Gesprekken afgehandeld</p>
+            <p className="text-3xl md:text-4xl font-bold text-primary-600">2.5M+</p>
+            <p className="text-sm md:text-base text-gray-600 mt-1">Gesprekken afgehandeld</p>
           </div>
           <div className="text-center">
-            <p className="text-4xl font-bold text-primary-600">98%</p>
-            <p className="text-gray-600 mt-1">Klanttevredenheid</p>
+            <p className="text-3xl md:text-4xl font-bold text-primary-600">98%</p>
+            <p className="text-sm md:text-base text-gray-600 mt-1">Klanttevredenheid</p>
           </div>
           <div className="text-center">
-            <p className="text-4xl font-bold text-primary-600">24/7</p>
-            <p className="text-gray-600 mt-1">Altijd bereikbaar</p>
+            <p className="text-3xl md:text-4xl font-bold text-primary-600">24/7</p>
+            <p className="text-sm md:text-base text-gray-600 mt-1">Altijd bereikbaar</p>
           </div>
         </div>
       </section>
 
       {/* Features */}
-      <section id="features" className="min-h-screen flex items-center py-20 bg-white relative z-10">
+      <section id="features" className="py-16 md:py-20 bg-white relative z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
           <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-display font-bold text-gray-900">
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-display font-bold text-gray-900">
               Alles wat u nodig heeft
             </h2>
             <p className="mt-4 text-lg text-gray-600">
@@ -592,14 +743,14 @@ export default function HomePage() {
       </section>
 
       {/* Integrations */}
-      <section className="py-24 bg-gray-50 relative z-10">
+      <section className="py-16 md:py-24 bg-gray-50 relative z-10">
         <div className="max-w-6xl mx-auto px-4">
           <div className="text-center mb-16">
             <span className="inline-flex items-center gap-2 bg-primary-100 text-primary-700 px-4 py-2 rounded-full text-sm font-medium mb-4">
               <Link2 className="h-4 w-4" />
               Naadloos geïntegreerd
             </span>
-            <h2 className="text-4xl md:text-5xl font-display font-bold text-gray-900">
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-display font-bold text-gray-900">
               Werkt met uw favoriete tools
             </h2>
             <p className="mt-4 text-lg text-gray-600 max-w-2xl mx-auto">
@@ -702,10 +853,10 @@ export default function HomePage() {
       </section>
 
       {/* Pricing */}
-      <section id="pricing" className="min-h-screen flex items-center py-20 relative bg-white z-10">
+      <section id="pricing" className="py-16 md:py-20 relative bg-white z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
           <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-display font-bold text-gray-900">
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-display font-bold text-gray-900">
               Eenvoudige, transparante prijzen
             </h2>
             <p className="mt-4 text-lg text-gray-600">
@@ -791,10 +942,10 @@ export default function HomePage() {
       </section>
 
       {/* FAQ */}
-      <section id="faq" className="min-h-screen flex items-center py-20 bg-white relative z-10">
+      <section id="faq" className="py-16 md:py-20 bg-gray-50 relative z-10">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
           <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-display font-bold text-gray-900">
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-display font-bold text-gray-900">
               Veelgestelde vragen
             </h2>
             <p className="mt-4 text-lg text-gray-600">
@@ -812,8 +963,8 @@ export default function HomePage() {
       {/* CTA Card */}
       <section className="py-20 px-4 bg-white relative z-10">
         <div className="max-w-4xl mx-auto">
-          <div className="bg-white rounded-2xl border border-gray-200 p-12 md:p-16 text-center">
-            <h2 className="text-3xl md:text-4xl font-display font-bold text-gray-900">
+          <div className="bg-white rounded-2xl border border-gray-200 p-8 md:p-12 lg:p-16 text-center">
+            <h2 className="text-2xl md:text-3xl lg:text-4xl font-display font-bold text-gray-900">
               Klaar om te starten?
             </h2>
             <p className="mt-4 text-lg text-gray-600 max-w-xl mx-auto">
