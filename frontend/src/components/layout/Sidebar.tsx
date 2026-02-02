@@ -12,6 +12,7 @@ import {
   GraduationCap,
   FileText,
   ClipboardList,
+  StickyNote,
   Settings,
   ChevronLeft,
   ChevronRight,
@@ -30,7 +31,7 @@ const navigation = [
   { name: 'Training', href: '/dashboard/training', icon: GraduationCap },
   { name: 'Gesprekken', href: '/dashboard/calls', icon: FileText },
   { name: 'Afspraken', href: '/dashboard/appointments', icon: ClipboardList },
-  { name: 'Notities', href: '/dashboard/notes', icon: ClipboardList },
+  { name: 'Notities', href: '/dashboard/notes', icon: StickyNote },
 ]
 
 const bottomNavigation = [
