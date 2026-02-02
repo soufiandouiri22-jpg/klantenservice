@@ -10,8 +10,8 @@ from pgvector.sqlalchemy import Vector
 
 
 # revision identifiers
-revision = '009'
-down_revision = '008'
+revision = '009_add_pgvector'
+down_revision = '008_add_system_prompts'
 branch_labels = None
 depends_on = None
 
