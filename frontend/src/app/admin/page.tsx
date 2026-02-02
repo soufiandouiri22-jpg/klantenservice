@@ -424,7 +424,6 @@ export default function AdminPage() {
                                 <Toggle
                                   enabled={prompt.is_active}
                                   onChange={() => handleToggleActive(prompt)}
-                                  size="sm"
                                 />
                                 <Button
                                   variant="ghost"
