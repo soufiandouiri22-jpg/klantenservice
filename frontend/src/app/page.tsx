@@ -603,12 +603,12 @@ export default function HomePage() {
                   
                   <div className="bg-white rounded-2xl p-6 md:p-8 border border-gray-200 hover:shadow-xl hover:border-primary-200 transition-all relative h-full flex flex-col">
                     {/* Step number */}
-                    <div className="absolute -top-3 left-4 md:-top-4 md:-left-4 w-8 h-8 md:w-10 md:h-10 bg-primary-600 rounded-lg md:rounded-xl flex items-center justify-center text-white font-bold text-sm md:text-base shadow-lg shadow-primary-600/30">
+                    <div className="absolute -top-4 left-4 md:-top-4 md:-left-4 w-8 h-8 md:w-10 md:h-10 bg-primary-600 rounded-lg md:rounded-xl flex items-center justify-center text-white font-bold text-sm md:text-base shadow-lg shadow-primary-600/30">
                       {item.step}
                     </div>
                     
                     {/* Icon */}
-                    <div className="w-16 h-16 rounded-2xl bg-primary-100 flex items-center justify-center mb-6">
+                    <div className="w-16 h-16 rounded-2xl bg-primary-100 flex items-center justify-center mb-6 mt-3 md:mt-0">
                       <item.icon className="w-8 h-8 text-primary-600" />
                     </div>
                     
