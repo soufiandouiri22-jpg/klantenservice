@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { ArrowRight, Check, Headphones, Calendar, Globe, MessageSquare, Shield, Zap, Plus, Minus, Phone, Mail, Play, UserPlus, Settings, PhoneCall, Link2, Menu, X } from 'lucide-react'
 import Image from 'next/image'
@@ -221,10 +221,48 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
   )
 }
 
+// Animated card component with intersection observer
+function AnimatedCard({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
+  const [isVisible, setIsVisible] = useState(false)
+  const cardRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true)
+          observer.disconnect()
+        }
+      },
+      { threshold: 0.2 }
+    )
+
+    if (cardRef.current) {
+      observer.observe(cardRef.current)
+    }
+
+    return () => observer.disconnect()
+  }, [])
+
+  return (
+    <div
+      ref={cardRef}
+      className={`transition-all duration-700 ease-out ${
+        isVisible 
+          ? 'opacity-100 translate-y-0' 
+          : 'opacity-0 translate-y-8'
+      }`}
+      style={{ transitionDelay: `${delay}ms` }}
+    >
+      {children}
+    </div>
+  )
+}
+
 // Testimonial Card component
 function TestimonialCard({ t }: { t: typeof testimonials[0] }) {
   return (
-    <div className="flex-shrink-0 w-[340px] md:w-[400px] bg-white rounded-2xl border border-gray-200 p-6 hover:shadow-xl transition-all snap-center">
+    <div className="flex-shrink-0 w-[300px] md:w-[400px] bg-white rounded-2xl border border-gray-200 p-5 md:p-6 hover:shadow-xl transition-all snap-center">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <div className={`w-12 h-12 rounded-xl ${t.logoType === 'emoji' ? `bg-gradient-to-br ${t.gradient}` : 'bg-white border border-gray-100'} flex items-center justify-center overflow-hidden`}>
@@ -255,110 +293,27 @@ function TestimonialCard({ t }: { t: typeof testimonials[0] }) {
   )
 }
 
-// Testimonial Slider component with drag/swipe support
+// Testimonial Slider component with native scroll
 function TestimonialSlider() {
   const sliderRef = useRef<HTMLDivElement>(null)
-  const [isDragging, setIsDragging] = useState(false)
-  const [startX, setStartX] = useState(0)
-  const [scrollLeft, setScrollLeft] = useState(0)
-  const [isPaused, setIsPaused] = useState(false)
-
-  // Auto-scroll effect
-  useEffect(() => {
-    const slider = sliderRef.current
-    if (!slider || isPaused) return
-
-    const scrollSpeed = 0.5
-    let animationId: number
-
-    const autoScroll = () => {
-      if (slider && !isPaused) {
-        slider.scrollLeft += scrollSpeed
-        // Reset to start when reaching the end
-        if (slider.scrollLeft >= slider.scrollWidth - slider.clientWidth) {
-          slider.scrollLeft = 0
-        }
-      }
-      animationId = requestAnimationFrame(autoScroll)
-    }
-
-    animationId = requestAnimationFrame(autoScroll)
-
-    return () => cancelAnimationFrame(animationId)
-  }, [isPaused])
-
-  // Resume auto-scroll after 3 seconds of inactivity
-  useEffect(() => {
-    if (!isPaused) return
-    const timer = setTimeout(() => setIsPaused(false), 3000)
-    return () => clearTimeout(timer)
-  }, [isPaused])
-
-  // Mouse handlers for desktop drag
-  const handleMouseDown = (e: React.MouseEvent) => {
-    setIsDragging(true)
-    setIsPaused(true)
-    setStartX(e.pageX - (sliderRef.current?.offsetLeft || 0))
-    setScrollLeft(sliderRef.current?.scrollLeft || 0)
-  }
-
-  const handleMouseUp = () => {
-    setIsDragging(false)
-  }
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging) return
-    e.preventDefault()
-    const x = e.pageX - (sliderRef.current?.offsetLeft || 0)
-    const walk = (x - startX) * 2
-    if (sliderRef.current) {
-      sliderRef.current.scrollLeft = scrollLeft - walk
-    }
-  }
-
-  // Touch handlers for mobile swipe
-  const handleTouchStart = (e: React.TouchEvent) => {
-    setIsPaused(true)
-    setStartX(e.touches[0].pageX - (sliderRef.current?.offsetLeft || 0))
-    setScrollLeft(sliderRef.current?.scrollLeft || 0)
-  }
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    const x = e.touches[0].pageX - (sliderRef.current?.offsetLeft || 0)
-    const walk = (x - startX) * 2
-    if (sliderRef.current) {
-      sliderRef.current.scrollLeft = scrollLeft - walk
-    }
-  }
-
-  // Pause on hover
-  const handleMouseEnter = () => setIsPaused(true)
-  const handleMouseLeave = () => {
-    if (!isDragging) setIsPaused(false)
-  }
 
   return (
     <div className="relative w-full">
-      {/* Fade edges */}
-      <div className="absolute left-0 top-0 bottom-0 w-16 md:w-32 bg-gradient-to-r from-gray-50 to-transparent z-10 pointer-events-none" />
-      <div className="absolute right-0 top-0 bottom-0 w-16 md:w-32 bg-gradient-to-l from-gray-50 to-transparent z-10 pointer-events-none" />
+      {/* Fade edges - hidden on mobile for better UX */}
+      <div className="absolute left-0 top-0 bottom-0 w-8 md:w-32 bg-gradient-to-r from-white to-transparent z-10 pointer-events-none" />
+      <div className="absolute right-0 top-0 bottom-0 w-8 md:w-32 bg-gradient-to-l from-white to-transparent z-10 pointer-events-none" />
       
-      {/* Scrollable container */}
+      {/* Scrollable container with native scroll-snap */}
       <div
         ref={sliderRef}
-        className="flex gap-6 px-8 overflow-x-auto scrollbar-hide cursor-grab active:cursor-grabbing"
-        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-        onMouseDown={handleMouseDown}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={() => { handleMouseUp(); handleMouseLeave(); }}
-        onMouseMove={handleMouseMove}
-        onMouseEnter={handleMouseEnter}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={() => {}}
+        className="flex gap-4 md:gap-6 px-4 md:px-8 overflow-x-auto snap-x snap-mandatory scroll-smooth"
+        style={{ 
+          scrollbarWidth: 'none', 
+          msOverflowStyle: 'none',
+          WebkitOverflowScrolling: 'touch'
+        }}
       >
-        {/* Cards - duplicated for infinite scroll effect */}
-        {[...testimonials, ...testimonials].map((t, i) => (
+        {testimonials.map((t, i) => (
           <TestimonialCard key={i} t={t} />
         ))}
       </div>
@@ -543,7 +498,7 @@ export default function HomePage() {
       </section>
 
       {/* Demo Video Section */}
-      <section className="min-h-[80vh] md:min-h-screen flex items-center justify-center py-16 md:py-20 px-4 relative bg-gray-50 z-10">
+      <section className="min-h-[80vh] md:min-h-screen flex items-center justify-center py-16 md:py-20 px-4 relative bg-white z-10">
         <div className="max-w-5xl mx-auto w-full">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl lg:text-5xl font-display font-bold text-gray-900">
@@ -639,33 +594,35 @@ export default function HomePage() {
 
           <div className="grid md:grid-cols-3 gap-6 md:gap-8">
             {howItWorks.map((item, index) => (
-              <div key={item.step} className="relative h-full pt-2 md:pt-0">
-                {/* Connector line */}
-                {index < howItWorks.length - 1 && (
-                  <div className="hidden md:block absolute top-16 left-[60%] w-[80%] h-0.5 bg-gradient-to-r from-primary-300 to-primary-100" />
-                )}
-                
-                <div className="bg-white rounded-2xl p-6 md:p-8 border border-gray-200 hover:shadow-xl hover:border-primary-200 transition-all relative h-full flex flex-col">
-                  {/* Step number */}
-                  <div className="absolute -top-3 left-4 md:-top-4 md:-left-4 w-8 h-8 md:w-10 md:h-10 bg-primary-600 rounded-lg md:rounded-xl flex items-center justify-center text-white font-bold text-sm md:text-base shadow-lg shadow-primary-600/30">
-                    {item.step}
+              <AnimatedCard key={item.step} delay={index * 150}>
+                <div className="relative h-full pt-2 md:pt-0">
+                  {/* Connector line */}
+                  {index < howItWorks.length - 1 && (
+                    <div className="hidden md:block absolute top-16 left-[60%] w-[80%] h-0.5 bg-gradient-to-r from-primary-300 to-primary-100" />
+                  )}
+                  
+                  <div className="bg-white rounded-2xl p-6 md:p-8 border border-gray-200 hover:shadow-xl hover:border-primary-200 transition-all relative h-full flex flex-col">
+                    {/* Step number */}
+                    <div className="absolute -top-3 left-4 md:-top-4 md:-left-4 w-8 h-8 md:w-10 md:h-10 bg-primary-600 rounded-lg md:rounded-xl flex items-center justify-center text-white font-bold text-sm md:text-base shadow-lg shadow-primary-600/30">
+                      {item.step}
+                    </div>
+                    
+                    {/* Icon */}
+                    <div className="w-16 h-16 rounded-2xl bg-primary-100 flex items-center justify-center mb-6">
+                      <item.icon className="w-8 h-8 text-primary-600" />
+                    </div>
+                    
+                    {/* Content */}
+                    <h3 className="text-xl font-bold text-gray-900 mb-2">{item.title}</h3>
+                    <p className="text-gray-600 mb-4 flex-grow">{item.description}</p>
+                    
+                    {/* Time badge */}
+                    <span className="inline-flex items-center gap-1 text-sm font-medium text-primary-600 bg-primary-50 px-3 py-1 rounded-full self-start">
+                      ⏱️ {item.time}
+                    </span>
                   </div>
-                  
-                  {/* Icon */}
-                  <div className="w-16 h-16 rounded-2xl bg-primary-100 flex items-center justify-center mb-6">
-                    <item.icon className="w-8 h-8 text-primary-600" />
-                  </div>
-                  
-                  {/* Content */}
-                  <h3 className="text-xl font-bold text-gray-900 mb-2">{item.title}</h3>
-                  <p className="text-gray-600 mb-4 flex-grow">{item.description}</p>
-                  
-                  {/* Time badge */}
-                  <span className="inline-flex items-center gap-1 text-sm font-medium text-primary-600 bg-primary-50 px-3 py-1 rounded-full self-start">
-                    ⏱️ {item.time}
-                  </span>
                 </div>
-              </div>
+              </AnimatedCard>
             ))}
           </div>
 
@@ -683,7 +640,7 @@ export default function HomePage() {
       </section>
 
       {/* Testimonials / Case Studies - Full Width Scrolling */}
-      <section className="min-h-[70vh] md:min-h-screen flex flex-col justify-center py-16 md:py-20 bg-gray-50 overflow-hidden relative z-10">
+      <section className="min-h-[70vh] md:min-h-screen flex flex-col justify-center py-16 md:py-20 bg-white overflow-hidden relative z-10">
         <div className="text-center mb-16 px-4">
           <h2 className="text-3xl md:text-4xl lg:text-5xl font-display font-bold text-gray-900">
             Wat onze klanten bereiken
@@ -729,21 +686,23 @@ export default function HomePage() {
             </p>
           </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {features.map((feature) => (
-              <div key={feature.title} className="bg-white rounded-2xl p-8 border border-gray-200 hover:border-primary-200 hover:shadow-lg transition-all">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary-100">
-                  <feature.icon className="h-6 w-6 text-primary-600" />
+            {features.map((feature, index) => (
+              <AnimatedCard key={feature.title} delay={index * 100}>
+                <div className="bg-white rounded-2xl p-8 border border-gray-200 hover:border-primary-200 hover:shadow-lg transition-all h-full">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary-100">
+                    <feature.icon className="h-6 w-6 text-primary-600" />
+                  </div>
+                  <h3 className="mt-6 text-lg font-semibold text-gray-900">{feature.title}</h3>
+                  <p className="mt-2 text-gray-600">{feature.description}</p>
                 </div>
-                <h3 className="mt-6 text-lg font-semibold text-gray-900">{feature.title}</h3>
-                <p className="mt-2 text-gray-600">{feature.description}</p>
-              </div>
+              </AnimatedCard>
             ))}
           </div>
         </div>
       </section>
 
       {/* Integrations */}
-      <section className="py-16 md:py-24 bg-gray-50 relative z-10">
+      <section className="py-16 md:py-24 bg-white relative z-10">
         <div className="max-w-6xl mx-auto px-4">
           <div className="text-center mb-16">
             <span className="inline-flex items-center gap-2 bg-primary-100 text-primary-700 px-4 py-2 rounded-full text-sm font-medium mb-4">
@@ -942,7 +901,7 @@ export default function HomePage() {
       </section>
 
       {/* FAQ */}
-      <section id="faq" className="py-16 md:py-20 bg-gray-50 relative z-10">
+      <section id="faq" className="py-16 md:py-20 bg-white relative z-10">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl lg:text-5xl font-display font-bold text-gray-900">
