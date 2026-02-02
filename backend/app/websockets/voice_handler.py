@@ -25,6 +25,7 @@ from app.models.company import Company
 from app.models.call_log import CallLog, CallStatus, CallOutcome
 from app.models.phone_number import PhoneNumber
 from app.models.website_knowledge import WebsiteKnowledge
+from app.models.training import TrainingRule, ExampleAnswer
 from app.services.personaplex_service import personaplex_service
 from app.services.audio_utils import AudioConverter
 
@@ -80,7 +81,7 @@ class VoiceCallHandler:
         """
         # Find the phone number in the database
         self.phone_number = self.db.query(PhoneNumber).filter(
-            PhoneNumber.phone_number == to_number,
+            PhoneNumber.number == to_number,
             PhoneNumber.is_active == True
         ).first()
         
@@ -151,6 +152,43 @@ class VoiceCallHandler:
         
         return None
     
+    def get_training_rules(self) -> list:
+        """
+        Get enabled training rules for this company.
+        """
+        rules = self.db.query(TrainingRule).filter(
+            TrainingRule.company_id == self.company.id,
+            TrainingRule.is_enabled == True
+        ).order_by(TrainingRule.display_order).all()
+        
+        return [
+            {
+                "key": rule.rule_key,
+                "name": rule.rule_name,
+                "description": rule.rule_description
+            }
+            for rule in rules
+        ]
+    
+    def get_example_answers(self) -> list:
+        """
+        Get active example Q&A pairs for this company.
+        """
+        examples = self.db.query(ExampleAnswer).filter(
+            ExampleAnswer.company_id == self.company.id,
+            ExampleAnswer.is_active == True,
+            ExampleAnswer.is_verified == True
+        ).all()
+        
+        return [
+            {
+                "question": ex.question,
+                "answer": ex.answer,
+                "category": ex.category
+            }
+            for ex in examples
+        ]
+    
     async def start(self):
         """
         Start handling the voice call.
@@ -160,13 +198,23 @@ class VoiceCallHandler:
         # Get knowledge context for RAG
         knowledge_context = await self.get_knowledge_context()
         
+        # Get training rules and example answers
+        training_rules = self.get_training_rules()
+        example_answers = self.get_example_answers()
+        
+        # Get system-wide prompts (from /admin)
+        system_prompts = personaplex_service.get_system_prompts(self.db)
+        
         # Create PersonaPlex session
         await personaplex_service.create_session(
             session_id=self.session_id,
             worker=self.ai_worker,
             company_name=self.company.name,
             voice_prompt_path=self.ai_worker.voice_prompt_path,
-            knowledge_context=knowledge_context
+            knowledge_context=knowledge_context,
+            training_rules=training_rules,
+            example_answers=example_answers,
+            system_prompts=system_prompts
         )
         
         # Update AI worker status
