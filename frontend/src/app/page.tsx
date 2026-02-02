@@ -141,7 +141,7 @@ const testimonials = [
   },
   {
     company: 'Brasserie Blauw',
-    logo: '/company-logos/brasserie.png',
+    logo: '/company-logos/brasserie.avif',
     logoType: 'image',
     gradient: 'from-indigo-500 to-purple-600',
     stat: '+200 reserv.',
