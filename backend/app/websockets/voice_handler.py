@@ -142,20 +142,29 @@ class VoiceCallHandler:
         """
         Get relevant knowledge context from website scraping.
         """
+        from app.models.website_knowledge import KnowledgeChunk
+        
         # Get active website knowledge for this company
         knowledge_sources = self.db.query(WebsiteKnowledge).filter(
             WebsiteKnowledge.company_id == self.company.id,
-            WebsiteKnowledge.is_active == True
+            WebsiteKnowledge.is_active == True,
+            WebsiteKnowledge.status == "completed"
         ).all()
         
         if not knowledge_sources:
             return None
         
-        # Combine knowledge content
+        # Combine knowledge content from chunks
         context_parts = []
         for source in knowledge_sources:
-            if source.last_content:
-                context_parts.append(source.last_content[:2000])  # Limit per source
+            # Get chunks for this website (limit to most relevant)
+            chunks = self.db.query(KnowledgeChunk).filter(
+                KnowledgeChunk.website_id == source.id
+            ).limit(10).all()
+            
+            for chunk in chunks:
+                if chunk.content:
+                    context_parts.append(chunk.content[:500])  # Limit per chunk
         
         if context_parts:
             return "\n\n---\n\n".join(context_parts)[:8000]  # Total limit
@@ -220,7 +229,7 @@ class VoiceCallHandler:
             session_id=self.session_id,
             worker=self.ai_worker,
             company_name=self.company.name,
-            voice_prompt_path=self.ai_worker.voice_prompt_path,
+            voice_prompt_path=None,  # Voice cloning not yet implemented
             knowledge_context=knowledge_context,
             training_rules=training_rules,
             example_answers=example_answers,
