@@ -4,6 +4,7 @@ For receiving callbacks from external services (Twilio, calendar providers, etc.
 """
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Header
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from uuid import UUID, uuid4
 import hmac
@@ -53,22 +54,24 @@ async def twilio_voice_webhook(
     
     if not phone:
         # Return TwiML to reject the call
-        return """<?xml version="1.0" encoding="UTF-8"?>
+        twiml = """<?xml version="1.0" encoding="UTF-8"?>
         <Response>
             <Say language="nl-NL">Dit nummer is niet in gebruik.</Say>
             <Hangup/>
         </Response>"""
+        return Response(content=twiml, media_type="text/xml")
     
     company = db.query(Company).filter(Company.id == phone.company_id).first()
     
     # Check if within business hours
     if not phone.is_within_business_hours():
-        return f"""<?xml version="1.0" encoding="UTF-8"?>
+        twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
         <Response>
             <Say language="nl-NL">{phone.after_hours_message}</Say>
             {"<Record maxLength='120' transcribe='true'/>" if phone.after_hours_voicemail else ""}
             <Hangup/>
         </Response>"""
+        return Response(content=twiml, media_type="text/xml")
     
     # First try the linked AI worker for this phone number
     available_worker = None
@@ -93,18 +96,19 @@ async def twilio_voice_webhook(
     if not available_worker:
         # All workers busy - queue or voicemail
         if phone.voicemail_enabled:
-            return f"""<?xml version="1.0" encoding="UTF-8"?>
+            twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
             <Response>
                 <Say language="nl-NL">Al onze medewerkers zijn momenteel in gesprek. U kunt een bericht achterlaten na de piep.</Say>
                 <Record maxLength="120" transcribe="true"/>
                 <Hangup/>
             </Response>"""
         else:
-            return """<?xml version="1.0" encoding="UTF-8"?>
+            twiml = """<?xml version="1.0" encoding="UTF-8"?>
             <Response>
                 <Say language="nl-NL">Al onze medewerkers zijn momenteel in gesprek. Probeert u het later nog eens.</Say>
                 <Hangup/>
             </Response>"""
+        return Response(content=twiml, media_type="text/xml")
     
     # Create call log
     call_log = CallLog(
@@ -133,7 +137,7 @@ async def twilio_voice_webhook(
     # Get the WebSocket URL from settings or use default
     ws_url = settings.WEBSOCKET_URL or "wss://api.klantenservice.ai/ws/voice"
     
-    return f"""<?xml version="1.0" encoding="UTF-8"?>
+    twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
     <Response>
         <Say language="nl-NL">{disclosure}</Say>
         <Connect>
@@ -143,6 +147,7 @@ async def twilio_voice_webhook(
             </Stream>
         </Connect>
     </Response>"""
+    return Response(content=twiml, media_type="text/xml")
 
 
 @router.post("/twilio/status")
