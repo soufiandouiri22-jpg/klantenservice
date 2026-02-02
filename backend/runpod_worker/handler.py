@@ -1,243 +1,330 @@
 """
 klantenservice.ai - RunPod Serverless Worker for PersonaPlex-7B
-Real-time speech-to-speech conversational AI
+Real-time speech-to-speech conversational AI using NVIDIA PersonaPlex
 
 This worker runs on RunPod Serverless with GPU and handles:
-- Loading PersonaPlex-7B model
+- Loading PersonaPlex/Moshi models
 - Processing audio input
 - Generating audio responses
-- Streaming results back to the client
 """
 import os
 import base64
 import logging
+import json
+import tempfile
+from typing import Optional, List
+from pathlib import Path
+
 import runpod
-from typing import Optional
+import numpy as np
+import torch
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Global model instance (loaded once, reused across requests)
-model = None
-processor = None
+# Global model instances (loaded once, reused across requests)
+mimi = None
+other_mimi = None
+lm_gen = None
+text_tokenizer = None
+frame_size = None
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
+# Session state for multi-turn conversations
+sessions = {}
 
 
-def load_model():
-    """Load PersonaPlex-7B model from Hugging Face."""
-    global model, processor
+def load_models():
+    """Load PersonaPlex/Moshi models from HuggingFace."""
+    global mimi, other_mimi, lm_gen, text_tokenizer, frame_size
     
-    if model is not None:
-        logger.info("Model already loaded")
+    if mimi is not None:
+        logger.info("Models already loaded")
         return
     
-    logger.info("Loading PersonaPlex-7B model...")
+    logger.info("Loading PersonaPlex models...")
     
-    import torch
-    from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor
+    # Import moshi modules
+    from moshi.models import loaders, LMGen
+    import sentencepiece
+    from huggingface_hub import hf_hub_download
     
-    model_id = "nvidia/personaplex-7b-v1"
-    hf_token = os.environ.get("HUGGINGFACE_TOKEN")
+    hf_repo = "nvidia/personaplex-7b-v1"
     
-    # Load processor
-    processor = AutoProcessor.from_pretrained(
-        model_id,
-        token=hf_token,
-        trust_remote_code=True,
+    # Download config to increment counter
+    hf_hub_download(hf_repo, "config.json")
+    
+    # 1) Load Mimi encoders/decoders
+    logger.info("Loading Mimi encoder/decoder...")
+    mimi_weight = hf_hub_download(hf_repo, loaders.MIMI_NAME)
+    mimi = loaders.get_mimi(mimi_weight, device)
+    other_mimi = loaders.get_mimi(mimi_weight, device)
+    logger.info("Mimi loaded")
+    
+    # 2) Load tokenizer
+    logger.info("Loading tokenizer...")
+    tokenizer_path = hf_hub_download(hf_repo, loaders.TEXT_TOKENIZER_NAME)
+    text_tokenizer = sentencepiece.SentencePieceProcessor(tokenizer_path)
+    logger.info("Tokenizer loaded")
+    
+    # 3) Load Moshi LM
+    logger.info("Loading Moshi LM (this may take a while)...")
+    moshi_weight = hf_hub_download(hf_repo, loaders.MOSHI_NAME)
+    lm = loaders.get_moshi_lm(moshi_weight, device=device)
+    lm.eval()
+    logger.info("Moshi LM loaded")
+    
+    # 4) Create LMGen for generation
+    frame_size = int(mimi.sample_rate / mimi.frame_rate)
+    lm_gen = LMGen(
+        lm,
+        audio_silence_frame_cnt=int(0.5 * mimi.frame_rate),
+        sample_rate=mimi.sample_rate,
+        device=device,
+        frame_rate=mimi.frame_rate,
+        save_voice_prompt_embeddings=False,
+        use_sampling=True,
+        temp=0.8,
+        temp_text=0.7,
+        top_k=250,
+        top_k_text=25,
     )
     
-    # Load model with optimizations
-    model = AutoModelForSpeechSeq2Seq.from_pretrained(
-        model_id,
-        torch_dtype=torch.bfloat16,
-        device_map="auto",
-        trust_remote_code=True,
-        token=hf_token,
-    )
+    # Set streaming mode
+    mimi.streaming_forever(1)
+    other_mimi.streaming_forever(1)
+    lm_gen.streaming_forever(1)
     
-    logger.info("PersonaPlex-7B loaded successfully")
+    # Warmup
+    logger.info("Warming up models...")
+    warmup()
+    
+    logger.info("PersonaPlex models loaded successfully!")
 
 
-def process_audio(job_input: dict) -> dict:
-    """
-    Process audio input and generate response.
+def warmup():
+    """Run warmup to initialize CUDA graphs."""
+    global mimi, other_mimi, lm_gen, frame_size
     
-    Input format:
-    {
-        "audio": "<base64 encoded PCM audio at 24kHz>",
-        "persona_prompt": "Je bent Lisa, een receptionist bij...",
-        "session_id": "unique-session-id",
-        "action": "process" | "init" | "end"
+    for _ in range(4):
+        chunk = torch.zeros(1, 1, frame_size, dtype=torch.float32, device=device)
+        codes = mimi.encode(chunk)
+        _ = other_mimi.encode(chunk)
+        for c in range(codes.shape[-1]):
+            tokens = lm_gen.step(codes[:, :, c : c + 1])
+            if tokens is None:
+                continue
+            _ = mimi.decode(tokens[:, 1:9])
+            _ = other_mimi.decode(tokens[:, 1:9])
+    
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
+
+
+def wrap_with_system_tags(text: str) -> str:
+    """Add system tags as the model expects."""
+    cleaned = text.strip()
+    if cleaned.startswith("<|system|>") and cleaned.endswith("<|/system|>"):
+        return cleaned
+    return f"<|system|> {cleaned} <|/system|>"
+
+
+def init_session(session_id: str, text_prompt: str, voice_prompt: str = "NATF2.pt"):
+    """Initialize a new conversation session."""
+    global mimi, other_mimi, lm_gen, text_tokenizer, sessions
+    
+    from huggingface_hub import hf_hub_download
+    import tarfile
+    
+    logger.info(f"Initializing session {session_id}")
+    
+    # Download voice prompts if needed
+    hf_repo = "nvidia/personaplex-7b-v1"
+    voices_tgz = hf_hub_download(hf_repo, "voices.tgz")
+    voices_tgz = Path(voices_tgz)
+    voices_dir = voices_tgz.parent / "voices"
+    
+    if not voices_dir.exists():
+        logger.info(f"Extracting voice prompts...")
+        with tarfile.open(voices_tgz, "r:gz") as tar:
+            tar.extractall(path=voices_tgz.parent)
+    
+    voice_prompt_path = str(voices_dir / voice_prompt)
+    
+    # Reset streaming state
+    mimi.reset_streaming()
+    other_mimi.reset_streaming()
+    lm_gen.reset_streaming()
+    
+    # Load voice prompt
+    if voice_prompt_path.endswith('.pt'):
+        lm_gen.load_voice_prompt_embeddings(voice_prompt_path)
+    else:
+        lm_gen.load_voice_prompt(voice_prompt_path)
+    
+    # Set text prompt
+    if text_prompt:
+        lm_gen.text_prompt_tokens = text_tokenizer.encode(wrap_with_system_tags(text_prompt))
+    else:
+        lm_gen.text_prompt_tokens = None
+    
+    # Run system prompts phase
+    lm_gen.step_system_prompts(mimi)
+    mimi.reset_streaming()
+    
+    # Store session
+    sessions[session_id] = {
+        "text_prompt": text_prompt,
+        "voice_prompt": voice_prompt,
+        "transcript_user": [],
+        "transcript_assistant": [],
     }
     
-    Output format:
-    {
-        "audio": "<base64 encoded PCM response audio>",
-        "transcript": {"user": "...", "assistant": "..."}
-    }
-    """
-    import torch
-    import numpy as np
+    logger.info(f"Session {session_id} initialized")
+    return {"status": "initialized", "session_id": session_id}
+
+
+def process_audio(session_id: str, audio_b64: str) -> dict:
+    """Process audio input and generate response."""
+    global mimi, other_mimi, lm_gen, text_tokenizer, frame_size
     
-    action = job_input.get("action", "process")
-    session_id = job_input.get("session_id", "default")
+    from moshi.models.lm import _iterate_audio as lm_iterate_audio
+    from moshi.models.lm import encode_from_sphn as lm_encode_from_sphn
     
-    if action == "init":
-        # Initialize session (model warm-up)
-        load_model()
-        return {
-            "status": "initialized",
-            "session_id": session_id
-        }
+    if session_id not in sessions:
+        return {"error": f"Session {session_id} not found. Call init first."}
     
-    if action == "end":
-        # End session (cleanup if needed)
-        return {
-            "status": "ended",
-            "session_id": session_id
-        }
-    
-    # Process audio
-    load_model()
-    
-    # Decode input audio
-    audio_b64 = job_input.get("audio")
-    if not audio_b64:
-        return {"error": "No audio provided"}
-    
+    # Decode input audio (PCM 24kHz)
     audio_bytes = base64.b64decode(audio_b64)
+    audio_np = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
     
-    # Convert bytes to numpy array (assuming 16-bit PCM at 24kHz)
-    audio_array = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
+    # Reshape for model (1, T)
+    user_audio = torch.from_numpy(audio_np).unsqueeze(0).to(device)
     
-    # Get persona prompt
-    persona_prompt = job_input.get("persona_prompt", "")
+    # Process through model
+    generated_frames = []
+    generated_text = []
     
-    try:
-        # Process through model
-        inputs = processor(
-            audio=audio_array,
-            sampling_rate=24000,
-            return_tensors="pt",
-            padding=True
-        ).to(model.device)
-        
-        # Add persona context if provided
-        if persona_prompt:
-            inputs["text_prompt"] = persona_prompt
-        
-        # Generate response
-        with torch.no_grad():
-            outputs = model.generate(
-                **inputs,
-                max_new_tokens=1024,
-                do_sample=True,
-                temperature=0.7,
-            )
-        
-        # Extract audio from outputs
-        response_audio = None
-        transcript = {"user": "", "assistant": ""}
-        
-        if hasattr(outputs, "audio"):
-            response_audio_np = outputs.audio.cpu().numpy()
-            # Convert back to int16 PCM
-            response_bytes = (response_audio_np * 32768).astype(np.int16).tobytes()
-            response_audio = base64.b64encode(response_bytes).decode("utf-8")
-        
-        if hasattr(outputs, "text"):
-            transcript["assistant"] = outputs.text
-        
-        return {
-            "audio": response_audio,
-            "transcript": transcript,
-            "session_id": session_id
-        }
-        
-    except Exception as e:
-        logger.error(f"Error processing audio: {e}")
-        return {
-            "error": str(e),
-            "session_id": session_id
-        }
+    sample_rate = mimi.sample_rate
+    
+    # Encode and process user audio
+    for user_encoded in lm_encode_from_sphn(
+        mimi,
+        lm_iterate_audio(user_audio, sample_interval_size=frame_size, pad=True),
+        max_batch=1,
+    ):
+        steps = user_encoded.shape[-1]
+        for c in range(steps):
+            step_in = user_encoded[:, :, c : c + 1]
+            tokens = lm_gen.step(step_in)
+            
+            if tokens is None:
+                continue
+            
+            # Decode audio
+            pcm = mimi.decode(tokens[:, 1:9])
+            _ = other_mimi.decode(tokens[:, 1:9])
+            pcm_np = pcm.detach().cpu().numpy()[0, 0]
+            generated_frames.append(pcm_np)
+            
+            # Decode text token
+            text_token = tokens[0, 0, 0].item()
+            if text_token not in (0, 3):  # Skip PAD tokens
+                text = text_tokenizer.id_to_piece(text_token)
+                text = text.replace("▁", " ")
+                generated_text.append(text)
+    
+    if len(generated_frames) == 0:
+        return {"audio": None, "transcript": {"user": "", "assistant": ""}}
+    
+    # Concatenate frames
+    output_pcm = np.concatenate(generated_frames, axis=-1)
+    
+    # Convert to int16 PCM
+    output_bytes = (output_pcm * 32768).astype(np.int16).tobytes()
+    output_b64 = base64.b64encode(output_bytes).decode("utf-8")
+    
+    # Update session transcript
+    assistant_text = "".join(generated_text)
+    sessions[session_id]["transcript_assistant"].append(assistant_text)
+    
+    return {
+        "audio": output_b64,
+        "transcript": {
+            "user": "",  # We don't have ASR here
+            "assistant": assistant_text
+        },
+        "session_id": session_id
+    }
+
+
+def end_session(session_id: str) -> dict:
+    """End a conversation session and return transcript."""
+    if session_id not in sessions:
+        return {"error": f"Session {session_id} not found"}
+    
+    session = sessions[session_id]
+    transcript = {
+        "user": " ".join(session["transcript_user"]),
+        "assistant": " ".join(session["transcript_assistant"])
+    }
+    
+    del sessions[session_id]
+    
+    return {
+        "status": "ended",
+        "session_id": session_id,
+        "transcript": transcript
+    }
 
 
 def handler(job):
     """
     RunPod Serverless handler function.
     
-    This is the entry point for all requests to the serverless endpoint.
+    Actions:
+    - init: Initialize a new session with persona prompt
+    - process: Process audio and get response
+    - end: End session and get transcript
     """
     job_input = job.get("input", {})
+    action = job_input.get("action", "process")
+    session_id = job_input.get("session_id", "default")
     
-    logger.info(f"Received job: action={job_input.get('action', 'process')}, session={job_input.get('session_id', 'unknown')}")
-    
-    result = process_audio(job_input)
-    
-    return result
-
-
-# Generator handler for streaming responses
-def generator_handler(job):
-    """
-    Streaming handler for real-time audio responses.
-    
-    Yields audio chunks as they're generated for lower latency.
-    """
-    import torch
-    import numpy as np
-    
-    job_input = job.get("input", {})
-    
-    load_model()
-    
-    audio_b64 = job_input.get("audio")
-    if not audio_b64:
-        yield {"error": "No audio provided"}
-        return
-    
-    audio_bytes = base64.b64decode(audio_b64)
-    audio_array = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
-    
-    persona_prompt = job_input.get("persona_prompt", "")
+    logger.info(f"Received job: action={action}, session={session_id}")
     
     try:
-        inputs = processor(
-            audio=audio_array,
-            sampling_rate=24000,
-            return_tensors="pt",
-            padding=True
-        ).to(model.device)
+        # Load models if not already loaded
+        load_models()
         
-        if persona_prompt:
-            inputs["text_prompt"] = persona_prompt
+        if action == "init":
+            text_prompt = job_input.get("persona_prompt", "You are a wise and friendly teacher.")
+            voice_prompt = job_input.get("voice_prompt", "NATF2.pt")
+            return init_session(session_id, text_prompt, voice_prompt)
         
-        # Stream generation
-        with torch.no_grad():
-            for output_chunk in model.generate(
-                **inputs,
-                max_new_tokens=1024,
-                do_sample=True,
-                temperature=0.7,
-                streamer=True,  # Enable streaming if supported
-            ):
-                if hasattr(output_chunk, "audio"):
-                    audio_np = output_chunk.audio.cpu().numpy()
-                    chunk_bytes = (audio_np * 32768).astype(np.int16).tobytes()
-                    yield {
-                        "audio_chunk": base64.b64encode(chunk_bytes).decode("utf-8")
-                    }
+        elif action == "process":
+            audio_b64 = job_input.get("audio")
+            if not audio_b64:
+                return {"error": "No audio provided"}
+            
+            # Auto-init session if needed
+            if session_id not in sessions:
+                text_prompt = job_input.get("persona_prompt", "You are a wise and friendly teacher.")
+                init_session(session_id, text_prompt)
+            
+            return process_audio(session_id, audio_b64)
         
-        yield {"status": "complete"}
+        elif action == "end":
+            return end_session(session_id)
         
+        else:
+            return {"error": f"Unknown action: {action}"}
+    
     except Exception as e:
-        logger.error(f"Error in streaming: {e}")
-        yield {"error": str(e)}
+        logger.error(f"Error in handler: {e}", exc_info=True)
+        return {"error": str(e)}
 
 
 if __name__ == "__main__":
     # Start the serverless worker
-    runpod.serverless.start({
-        "handler": handler,
-        # Uncomment for streaming support:
-        # "handler": generator_handler,
-    })
+    runpod.serverless.start({"handler": handler})

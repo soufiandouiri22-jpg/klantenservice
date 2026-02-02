@@ -1,12 +1,14 @@
 # RunPod Worker Dependencies for PersonaPlex-7B
 runpod>=1.6.0
-transformers>=4.36.0
+torch>=2.2.0
 accelerate>=0.25.0
-torch>=2.1.0
 safetensors
 sentencepiece
 protobuf
 numpy
 scipy
 soundfile
-librosa
+huggingface_hub
+sphn
+
+# Moshi/PersonaPlex - installed from git in Dockerfile

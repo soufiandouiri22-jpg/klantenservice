@@ -1,94 +1,102 @@
-# PersonaPlex-7B RunPod Worker
+# PersonaPlex RunPod Worker
 
-Deze folder bevat de RunPod Serverless worker voor het PersonaPlex-7B spraak-naar-spraak model.
+This is a RunPod Serverless worker for running NVIDIA PersonaPlex-7B speech-to-speech AI.
 
-## Vereisten
+## Requirements
 
-- Docker geïnstalleerd
-- RunPod account met API key
-- Docker Hub account (of andere container registry)
+- RunPod account with GPU (24GB+ VRAM recommended, A100 or H100)
+- HuggingFace account with accepted PersonaPlex license
+- Docker for building the image
 
-## Deployment Stappen
+## Setup
 
-### 1. Build de Docker image
+### 1. Accept PersonaPlex License
+
+Go to https://huggingface.co/nvidia/personaplex-7b-v1 and click "Agree and access repository".
+
+### 2. Build Docker Image
 
 ```bash
 cd backend/runpod_worker
-docker build --platform linux/amd64 -t yourusername/klantenservice-personaplex:latest .
+docker build -t your-username/klantenservice-personaplex:latest .
+docker push your-username/klantenservice-personaplex:latest
 ```
 
-### 2. Push naar Docker Hub
+### 3. Create RunPod Serverless Endpoint
 
-```bash
-docker login
-docker push yourusername/klantenservice-personaplex:latest
-```
+1. Go to RunPod Serverless
+2. Create new endpoint
+3. Use your Docker image: `your-username/klantenservice-personaplex:latest`
+4. Set environment variable: `HF_TOKEN=hf_your_token_here`
+5. Configure:
+   - GPU: A100 80GB recommended
+   - Max Workers: 3
+   - Idle Timeout: 60 seconds (model loading is slow)
 
-### 3. Maak een RunPod Endpoint
+### 4. Update Backend Config
 
-1. Ga naar [RunPod Console](https://www.runpod.io/console/serverless)
-2. Klik op **"New Endpoint"**
-3. Selecteer **"Import from Docker Registry"**
-4. Vul in:
-   - **Container Image**: `docker.io/yourusername/klantenservice-personaplex:latest`
-   - **Container Disk**: 20 GB (voor model cache)
-5. Klik **"Next"**
-6. Configureer:
-   - **Endpoint Type**: Queue
-   - **GPU Configuration**: Selecteer **24 GB** of hoger (A100/H100 aanbevolen)
-   - **Max Workers**: Start met 1, verhoog bij meer traffic
-   - **Idle Timeout**: 60 seconden (houdt model geladen)
-7. Voeg **Environment Variables** toe:
-   - `HUGGINGFACE_TOKEN`: Je Hugging Face token
-8. Klik **"Deploy Endpoint"**
+Add to your Render environment variables:
+- `RUNPOD_API_KEY`: Your RunPod API key
+- `RUNPOD_ENDPOINT_ID`: The endpoint ID from step 3
 
-### 4. Kopieer de Endpoint ID
+## API
 
-Na deployment zie je je endpoint ID (bijv. `abc123xyz`).
-
-### 5. Update de Backend .env
-
-Voeg de endpoint ID toe aan je backend `.env`:
-
-```env
-RUNPOD_ENDPOINT_ID=abc123xyz
-```
-
-### 6. Herstart de Backend
-
-```bash
-./start-backend
-```
-
-## Testen
-
-Test de endpoint via de RunPod console:
+### Initialize Session
 
 ```json
 {
   "input": {
     "action": "init",
-    "session_id": "test-123"
+    "session_id": "unique-id",
+    "persona_prompt": "Je bent Lisa, een klantenservice medewerker bij...",
+    "voice_prompt": "NATF2.pt"
   }
 }
 ```
 
-## Kosten
+### Process Audio
 
-- **RunPod A100 40GB**: ~$0.001-0.002 per seconde
-- **Idle Timeout**: Na 60s zonder requests wordt de worker gestopt
-- **Cold Start**: ~30-60 seconden (model laden)
+```json
+{
+  "input": {
+    "action": "process",
+    "session_id": "unique-id",
+    "audio": "<base64 encoded PCM audio at 24kHz>"
+  }
+}
+```
 
-## Troubleshooting
+Response:
+```json
+{
+  "audio": "<base64 encoded PCM response audio>",
+  "transcript": {
+    "user": "",
+    "assistant": "Goedemiddag, waarmee kan ik u helpen?"
+  }
+}
+```
 
-### Model laadt niet
-- Check of `HUGGINGFACE_TOKEN` correct is ingesteld
-- PersonaPlex vereist akkoord met de licentie op Hugging Face
+### End Session
 
-### Timeout errors
-- Verhoog de timeout in de backend service
-- Check of de GPU voldoende VRAM heeft (24GB+ nodig)
+```json
+{
+  "input": {
+    "action": "end",
+    "session_id": "unique-id"
+  }
+}
+```
 
-### Geen audio response
-- Check de RunPod logs via de console
-- Verifieer dat de audio correct base64 encoded is
+## Available Voices
+
+- Natural Female: `NATF0.pt`, `NATF1.pt`, `NATF2.pt`, `NATF3.pt`
+- Natural Male: `NATM0.pt`, `NATM1.pt`, `NATM2.pt`, `NATM3.pt`
+- Variety Female: `VARF0.pt` - `VARF4.pt`
+- Variety Male: `VARM0.pt` - `VARM4.pt`
+
+## Notes
+
+- First request will take longer (model loading)
+- Audio should be PCM 24kHz mono
+- PersonaPlex is English-only (for now)
