@@ -647,3 +647,47 @@ export const inviteApi = {
     return response.data as { access_token: string; refresh_token: string }
   },
 }
+
+// Admin API (superadmin only)
+export const adminApi = {
+  // System Prompts
+  getPrompts: async (category?: string) => {
+    const response = await api.get('/admin/prompts', { params: { category } })
+    return response.data
+  },
+  
+  getPrompt: async (id: string) => {
+    const response = await api.get(`/admin/prompts/${id}`)
+    return response.data
+  },
+  
+  createPrompt: async (data: any) => {
+    const response = await api.post('/admin/prompts', data)
+    return response.data
+  },
+  
+  updatePrompt: async (id: string, data: any) => {
+    const response = await api.put(`/admin/prompts/${id}`, data)
+    return response.data
+  },
+  
+  deletePrompt: async (id: string) => {
+    const response = await api.delete(`/admin/prompts/${id}`)
+    return response.data
+  },
+  
+  previewPrompt: async () => {
+    const response = await api.get('/admin/prompts/preview')
+    return response.data
+  },
+  
+  seedPrompts: async () => {
+    const response = await api.post('/admin/prompts/seed')
+    return response.data
+  },
+  
+  getCategories: async () => {
+    const response = await api.get('/admin/categories')
+    return response.data
+  },
+}

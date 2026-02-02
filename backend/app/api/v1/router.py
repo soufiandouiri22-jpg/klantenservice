@@ -17,6 +17,7 @@ from app.api.v1.endpoints import (
     notes,
     dashboard,
     webhooks,
+    admin,
 )
 
 api_router = APIRouter()
@@ -110,4 +111,11 @@ api_router.include_router(
     webhooks.router,
     prefix="/webhooks",
     tags=["Webhooks"]
+)
+
+# Admin (Platform-wide settings, superadmin only)
+api_router.include_router(
+    admin.router,
+    prefix="/admin",
+    tags=["Admin"]
 )

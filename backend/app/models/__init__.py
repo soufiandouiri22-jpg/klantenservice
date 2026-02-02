@@ -8,6 +8,7 @@ from app.models.phone_number import PhoneNumber
 from app.models.calendar_integration import CalendarIntegration
 from app.models.website_knowledge import WebsiteKnowledge, KnowledgeChunk
 from app.models.training import TrainingRule, ExampleAnswer
+from app.models.system_prompt import SystemPrompt
 from app.models.call_log import CallLog, CallTranscript
 from app.models.appointment import Appointment
 from app.models.internal_note import InternalNote
@@ -23,6 +24,7 @@ __all__ = [
     "KnowledgeChunk",
     "TrainingRule",
     "ExampleAnswer",
+    "SystemPrompt",
     "CallLog",
     "CallTranscript",
     "Appointment",

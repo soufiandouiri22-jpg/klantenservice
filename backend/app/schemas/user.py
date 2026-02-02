@@ -48,6 +48,7 @@ class UserResponse(UserBase):
     role: UserRole
     is_active: bool
     is_verified: bool
+    is_superadmin: bool = False
     last_login_at: Optional[datetime]
     created_at: datetime
     

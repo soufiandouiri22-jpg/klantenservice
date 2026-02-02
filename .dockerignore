@@ -1,0 +1,7 @@
+# Ignore everything except what's needed for RunPod worker
+*
+
+# Include only these files
+!handler.py
+!requirements.txt
+!src/

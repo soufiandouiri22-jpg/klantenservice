@@ -48,6 +48,7 @@ class User(Base):
     
     # Role & Permissions
     role = Column(SQLEnum(UserRole), default=UserRole.viewer, nullable=False)
+    is_superadmin = Column(Boolean, default=False)  # klantenservice.ai platform admin
     
     # Status
     is_active = Column(Boolean, default=True)

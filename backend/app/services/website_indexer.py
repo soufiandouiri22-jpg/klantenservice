@@ -2,7 +2,7 @@
 klantenservice.ai - Website Indexer Service
 
 This service crawls websites, extracts content, chunks text,
-and stores embeddings in ChromaDB for RAG.
+and stores embeddings in PostgreSQL using pgvector for RAG.
 """
 import asyncio
 import hashlib
@@ -11,30 +11,25 @@ from datetime import datetime
 from typing import List, Dict, Optional, Set
 from urllib.parse import urljoin, urlparse
 from uuid import uuid4
+import logging
 
 import httpx
 from bs4 import BeautifulSoup
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from app.core.config import settings
 from app.models.website_knowledge import WebsiteKnowledge, KnowledgeChunk, IndexStatus
 
-# Try to import ChromaDB - it's optional for local development
-try:
-    import chromadb
-    from chromadb.config import Settings as ChromaSettings
-    CHROMA_AVAILABLE = True
-except ImportError:
-    CHROMA_AVAILABLE = False
-    print("ChromaDB not available - running in mock mode")
+logger = logging.getLogger(__name__)
 
-# Try to import sentence-transformers for local embeddings
+# Try to import sentence-transformers for embeddings
 try:
     from sentence_transformers import SentenceTransformer
     EMBEDDINGS_AVAILABLE = True
 except ImportError:
     EMBEDDINGS_AVAILABLE = False
-    print("Sentence-transformers not available - embeddings disabled")
+    logger.warning("Sentence-transformers not available - embeddings disabled")
 
 
 class WebsiteCrawler:
@@ -244,117 +239,171 @@ class TextChunker:
 
 
 class VectorStore:
-    """Manages embeddings in ChromaDB."""
+    """Manages embeddings in PostgreSQL using pgvector."""
     
-    def __init__(self, company_id: str):
+    # Class-level embedding model (loaded once, shared across instances)
+    _embedding_model = None
+    _model_loaded = False
+    
+    def __init__(self, company_id: str, db: Session = None):
         self.company_id = str(company_id)
-        self.collection_name = f"company_{self.company_id}"
+        self.db = db
         
-        if CHROMA_AVAILABLE:
-            # Connect to ChromaDB
-            self.client = chromadb.HttpClient(
-                host="localhost",
-                port=8001,  # ChromaDB port from docker-compose
-            )
-            self.collection = self.client.get_or_create_collection(
-                name=self.collection_name,
-                metadata={"company_id": self.company_id}
-            )
-        else:
-            self.client = None
-            self.collection = None
-        
-        # Load embedding model if available
-        if EMBEDDINGS_AVAILABLE:
-            self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
-        else:
-            self.embedding_model = None
+        # Load embedding model if not already loaded
+        if not VectorStore._model_loaded and EMBEDDINGS_AVAILABLE:
+            try:
+                VectorStore._embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+                VectorStore._model_loaded = True
+                logger.info("Loaded embedding model: all-MiniLM-L6-v2")
+            except Exception as e:
+                logger.error(f"Failed to load embedding model: {e}")
+                VectorStore._model_loaded = True  # Don't retry
     
-    def add_chunks(self, chunks: List[Dict], website_id: str) -> List[str]:
-        """Add chunks to the vector store."""
-        if not self.collection or not self.embedding_model:
-            # Return mock IDs if not available
-            return [f"mock_{i}" for i in range(len(chunks))]
+    @property
+    def embedding_model(self):
+        return VectorStore._embedding_model
+    
+    def generate_embedding(self, text: str) -> Optional[List[float]]:
+        """Generate embedding for a single text."""
+        if not self.embedding_model:
+            return None
+        try:
+            return self.embedding_model.encode(text).tolist()
+        except Exception as e:
+            logger.error(f"Error generating embedding: {e}")
+            return None
+    
+    def generate_embeddings(self, texts: List[str]) -> List[List[float]]:
+        """Generate embeddings for multiple texts."""
+        if not self.embedding_model:
+            return [[] for _ in texts]
+        try:
+            return self.embedding_model.encode(texts).tolist()
+        except Exception as e:
+            logger.error(f"Error generating embeddings: {e}")
+            return [[] for _ in texts]
+    
+    def add_chunks(self, chunks: List[Dict], website_id: str, db: Session = None) -> List[str]:
+        """Add chunks to the database with embeddings."""
+        db = db or self.db
+        if not db:
+            logger.error("No database session available")
+            return [f"error_{i}" for i in range(len(chunks))]
         
         ids = []
-        documents = []
-        embeddings = []
-        metadatas = []
+        documents = [chunk['content'] for chunk in chunks]
+        
+        # Generate all embeddings at once (more efficient)
+        embeddings = self.generate_embeddings(documents)
         
         for i, chunk in enumerate(chunks):
             chunk_id = f"{website_id}_{chunk['hash']}_{i}"
             ids.append(chunk_id)
-            documents.append(chunk['content'])
-            metadatas.append({
-                **chunk.get('metadata', {}),
-                'website_id': str(website_id),
-                'company_id': self.company_id,
-            })
-        
-        # Generate embeddings
-        embeddings = self.embedding_model.encode(documents).tolist()
-        
-        # Add to ChromaDB
-        self.collection.add(
-            ids=ids,
-            documents=documents,
-            embeddings=embeddings,
-            metadatas=metadatas,
-        )
+            
+            # Update existing chunk or the chunk object with embedding
+            chunk['embedding'] = embeddings[i] if embeddings[i] else None
         
         return ids
     
-    def delete_website_chunks(self, website_id: str):
+    def delete_website_chunks(self, website_id: str, db: Session = None):
         """Delete all chunks for a website."""
-        if not self.collection:
+        db = db or self.db
+        if not db:
+            logger.warning("No database session - skipping delete")
             return
         
         try:
-            # Get all chunks for this website
-            results = self.collection.get(
-                where={"website_id": str(website_id)}
-            )
-            
-            if results['ids']:
-                self.collection.delete(ids=results['ids'])
+            db.query(KnowledgeChunk).filter(
+                KnowledgeChunk.website_id == website_id
+            ).delete()
+            db.commit()
+            logger.info(f"Deleted chunks for website {website_id}")
         except Exception as e:
-            print(f"Error deleting chunks: {e}")
+            logger.error(f"Error deleting chunks: {e}")
+            db.rollback()
     
-    def search(self, query: str, website_id: str = None, limit: int = 5) -> List[Dict]:
-        """Search for relevant chunks."""
-        if not self.collection or not self.embedding_model:
+    def search(self, query: str, website_id: str = None, limit: int = 5, db: Session = None) -> List[Dict]:
+        """Search for relevant chunks using cosine similarity."""
+        db = db or self.db
+        if not db:
+            logger.error("No database session available for search")
             return []
         
-        query_embedding = self.embedding_model.encode([query]).tolist()
+        # Generate query embedding
+        query_embedding = self.generate_embedding(query)
+        if not query_embedding:
+            logger.warning("Could not generate query embedding")
+            return []
         
-        # Build filter for ChromaDB (use $and for multiple conditions)
-        if website_id:
-            where_filter = {
-                "$and": [
-                    {"company_id": {"$eq": self.company_id}},
-                    {"website_id": {"$eq": str(website_id)}}
-                ]
-            }
-        else:
-            where_filter = {"company_id": {"$eq": self.company_id}}
-        
-        results = self.collection.query(
-            query_embeddings=query_embedding,
-            n_results=limit,
-            where=where_filter,
-            include=["documents", "metadatas", "distances"]
-        )
-        
-        chunks = []
-        if results['documents'] and results['documents'][0]:
-            for i, doc in enumerate(results['documents'][0]):
+        try:
+            # Build the query using pgvector's cosine distance operator
+            # Lower distance = more similar
+            embedding_str = f"[{','.join(map(str, query_embedding))}]"
+            
+            if website_id:
+                # Search within specific website
+                sql = text("""
+                    SELECT 
+                        kc.id,
+                        kc.content,
+                        kc.source_url,
+                        kc.page_title,
+                        kc.chunk_metadata,
+                        kc.embedding <=> :embedding::vector AS distance
+                    FROM knowledge_chunks kc
+                    JOIN website_knowledge wk ON kc.website_id = wk.id
+                    WHERE wk.company_id = :company_id
+                    AND kc.website_id = :website_id
+                    AND kc.embedding IS NOT NULL
+                    ORDER BY distance ASC
+                    LIMIT :limit
+                """)
+                results = db.execute(sql, {
+                    'embedding': embedding_str,
+                    'company_id': self.company_id,
+                    'website_id': website_id,
+                    'limit': limit
+                }).fetchall()
+            else:
+                # Search across all company websites
+                sql = text("""
+                    SELECT 
+                        kc.id,
+                        kc.content,
+                        kc.source_url,
+                        kc.page_title,
+                        kc.chunk_metadata,
+                        kc.embedding <=> :embedding::vector AS distance
+                    FROM knowledge_chunks kc
+                    JOIN website_knowledge wk ON kc.website_id = wk.id
+                    WHERE wk.company_id = :company_id
+                    AND kc.embedding IS NOT NULL
+                    ORDER BY distance ASC
+                    LIMIT :limit
+                """)
+                results = db.execute(sql, {
+                    'embedding': embedding_str,
+                    'company_id': self.company_id,
+                    'limit': limit
+                }).fetchall()
+            
+            chunks = []
+            for row in results:
                 chunks.append({
-                    'content': doc,
-                    'metadata': results['metadatas'][0][i],
-                    'distance': results['distances'][0][i],
+                    'content': row.content,
+                    'metadata': {
+                        'url': row.source_url,
+                        'title': row.page_title,
+                        **(row.chunk_metadata or {})
+                    },
+                    'distance': float(row.distance),
                 })
-        
-        return chunks
+            
+            return chunks
+            
+        except Exception as e:
+            logger.error(f"Error searching chunks: {e}")
+            return []
 
 
 class WebsiteIndexer:
@@ -372,7 +421,7 @@ class WebsiteIndexer:
         ).first()
         
         if not website:
-            print(f"Website {website_id} not found")
+            logger.error(f"Website {website_id} not found")
             return False
         
         try:
@@ -381,13 +430,12 @@ class WebsiteIndexer:
             website.last_error = None
             self.db.commit()
             
-            print(f"Starting indexing for {website.base_url}")
+            logger.info(f"Starting indexing for {website.base_url}")
             
-            # Initialize vector store
-            vector_store = VectorStore(str(website.company_id))
+            # Initialize vector store with database session
+            vector_store = VectorStore(str(website.company_id), self.db)
             
-            # Delete existing chunks
-            vector_store.delete_website_chunks(str(website.id))
+            # Delete existing chunks (now handled by VectorStore which uses PostgreSQL)
             self.db.query(KnowledgeChunk).filter(
                 KnowledgeChunk.website_id == website.id
             ).delete()
@@ -419,10 +467,10 @@ class WebsiteIndexer:
                 )
                 
                 if chunks:
-                    # Store in vector database
-                    vector_ids = vector_store.add_chunks(chunks, str(website.id))
+                    # Generate embeddings for chunks
+                    vector_store.add_chunks(chunks, str(website.id), self.db)
                     
-                    # Store in PostgreSQL for reference
+                    # Store in PostgreSQL with embeddings
                     for i, chunk in enumerate(chunks):
                         db_chunk = KnowledgeChunk(
                             id=uuid4(),
@@ -431,7 +479,7 @@ class WebsiteIndexer:
                             page_title=page['title'],
                             content=chunk['content'],
                             content_hash=chunk['hash'],
-                            vector_id=vector_ids[i] if i < len(vector_ids) else None,
+                            embedding=chunk.get('embedding'),  # Now stored directly in PostgreSQL
                             chunk_metadata=chunk.get('metadata', {}),
                         )
                         self.db.add(db_chunk)
@@ -446,11 +494,11 @@ class WebsiteIndexer:
             website.last_error = None
             self.db.commit()
             
-            print(f"Indexing complete: {len(pages)} pages, {total_chunks} chunks")
+            logger.info(f"Indexing complete: {len(pages)} pages, {total_chunks} chunks")
             return True
             
         except Exception as e:
-            print(f"Indexing failed: {e}")
+            logger.error(f"Indexing failed: {e}")
             website.status = IndexStatus.failed
             website.last_error = str(e)
             self.db.commit()

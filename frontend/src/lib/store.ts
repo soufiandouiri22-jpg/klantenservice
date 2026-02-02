@@ -9,6 +9,7 @@ interface User {
   role: string
   company_id: string
   oauth_provider?: 'email' | 'google'
+  is_superadmin?: boolean
 }
 
 interface Company {

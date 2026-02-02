@@ -23,6 +23,7 @@ from dataclasses import dataclass
 
 from app.core.config import get_settings
 from app.models.ai_worker import AIWorker, AddressForm
+from app.models.system_prompt import SystemPrompt
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
@@ -81,11 +82,43 @@ class PersonaPlexService:
             "Content-Type": "application/json"
         }
     
+    def get_system_prompts(self, db) -> str:
+        """
+        Get combined system prompts from the database.
+        These are platform-wide prompts that apply to ALL AI workers.
+        
+        Args:
+            db: Database session
+            
+        Returns:
+            Combined system prompt string
+        """
+        try:
+            prompts = db.query(SystemPrompt).filter(
+                SystemPrompt.is_active == True
+            ).order_by(SystemPrompt.display_order).all()
+            
+            if not prompts:
+                return ""
+            
+            # Combine all active prompts
+            combined_parts = []
+            for prompt in prompts:
+                combined_parts.append(f"## {prompt.name}\n{prompt.content}")
+            
+            return "\n\n".join(combined_parts)
+        except Exception as e:
+            logger.error(f"Failed to get system prompts: {e}")
+            return ""
+    
     def build_persona_prompt(
         self, 
         worker: AIWorker, 
         company_name: str,
-        knowledge_context: Optional[str] = None
+        knowledge_context: Optional[str] = None,
+        training_rules: Optional[list] = None,
+        example_answers: Optional[list] = None,
+        system_prompts: Optional[str] = None
     ) -> str:
         """
         Build a persona prompt for PersonaPlex from AI worker settings.
@@ -97,6 +130,9 @@ class PersonaPlexService:
             worker: The AI worker configuration
             company_name: Name of the company for context
             knowledge_context: Optional RAG context from website knowledge
+            training_rules: Optional list of enabled training rules
+            example_answers: Optional list of Q&A pairs for common questions
+            system_prompts: Optional pre-fetched system prompts string
             
         Returns:
             Formatted persona prompt string
@@ -107,18 +143,26 @@ class PersonaPlexService:
         # Get behavior settings with defaults
         behavior = worker.behavior_settings or {}
         
-        # Build behavior rules
+        # Build behavior rules from training_rules if provided, otherwise use defaults
         behavior_rules = []
-        if behavior.get("apologize_on_complaints", True):
-            behavior_rules.append("- Bied oprecht excuses aan wanneer een klant een klacht heeft")
-        if behavior.get("always_offer_alternatives", True):
-            behavior_rules.append("- Bied altijd een alternatief aan als iets niet mogelijk is")
-        if behavior.get("never_guess", True):
-            behavior_rules.append("- Geef alleen antwoord als je zeker bent. Zeg anders dat je het niet weet en verwijs door naar een collega")
-        if behavior.get("confirm_appointments", True):
-            behavior_rules.append("- Bevestig afspraken altijd door datum, tijd en locatie te herhalen")
-        if behavior.get("summarize_at_end", True):
-            behavior_rules.append("- Vat aan het einde van het gesprek kort samen wat er is besproken")
+        
+        if training_rules:
+            # Use the company's custom training rules
+            for rule in training_rules:
+                if rule.get("description"):
+                    behavior_rules.append(f"- {rule['description']}")
+        else:
+            # Fallback to default behavior settings
+            if behavior.get("apologize_on_complaints", True):
+                behavior_rules.append("- Bied oprecht excuses aan wanneer een klant een klacht heeft")
+            if behavior.get("always_offer_alternatives", True):
+                behavior_rules.append("- Bied altijd een alternatief aan als iets niet mogelijk is")
+            if behavior.get("never_guess", True):
+                behavior_rules.append("- Geef alleen antwoord als je zeker bent. Zeg anders dat je het niet weet en verwijs door naar een collega")
+            if behavior.get("confirm_appointments", True):
+                behavior_rules.append("- Bevestig afspraken altijd door datum, tijd en locatie te herhalen")
+            if behavior.get("summarize_at_end", True):
+                behavior_rules.append("- Vat aan het einde van het gesprek kort samen wat er is besproken")
         
         # Build permissions
         permissions = []
@@ -140,33 +184,48 @@ class PersonaPlexService:
         else:
             permissions.append("- Je mag GEEN prijsinformatie geven. Verwijs door naar een collega")
         
-        # Build the complete prompt
-        prompt = f"""Je bent {worker.name}, een {worker.role_title} bij {company_name}.
+        # Build example Q&A section
+        example_qa_section = ""
+        if example_answers and len(example_answers) > 0:
+            qa_items = []
+            for ex in example_answers[:20]:  # Limit to 20 examples
+                qa_items.append(f"V: {ex['question']}\nA: {ex['answer']}")
+            example_qa_section = f"""
+## Voorbeeldantwoorden
+Als de klant een van deze vragen stelt, gebruik dan het bijbehorende antwoord als basis:
+
+{chr(10).join(qa_items)}
+"""
+        
+        # Build the complete prompt with system prompts first
+        prompt_parts = []
+        
+        # 1. System-wide base prompts (from /admin)
+        if system_prompts:
+            prompt_parts.append(f"""# BASISINSTRUCTIES (klantenservice.ai)
+{system_prompts}""")
+        
+        # 2. Company/Worker specific configuration
+        worker_prompt = f"""# BEDRIJFSCONFIGURATIE
+
+Je bent {worker.name}, een {worker.role_title} bij {company_name}.
 
 ## Communicatiestijl
 - Spreek de klant aan met "{address}"
-- Taal: Nederlands
-- Toon: Vriendelijk, professioneel en behulpzaam
 {f"- Extra tooninstructies: {worker.tone_of_voice}" if worker.tone_of_voice else ""}
 
-## Gedragsregels
+## Gedragsregels (bedrijfsspecifiek)
 {chr(10).join(behavior_rules)}
 
 ## Jouw rechten en bevoegdheden
 {chr(10).join(permissions)}
-
-## Belangrijke instructies
-- Begin elk gesprek met een vriendelijke begroeting en vraag hoe je kunt helpen
-- Luister actief en laat de klant uitpraten
-- Als je onderbroken wordt, stop dan met praten en luister
-- Gebruik korte, duidelijke zinnen
-- Beëindig het gesprek altijd met een vriendelijke afsluiting
-
+{example_qa_section}
 {f'''## Bedrijfsinformatie
-{knowledge_context}''' if knowledge_context else ""}
-"""
+{knowledge_context}''' if knowledge_context else ""}"""
         
-        return prompt.strip()
+        prompt_parts.append(worker_prompt)
+        
+        return "\n\n---\n\n".join(prompt_parts).strip()
     
     async def _call_runpod(self, payload: dict, timeout: int = 30) -> dict:
         """
@@ -253,7 +312,10 @@ class PersonaPlexService:
         worker: AIWorker,
         company_name: str,
         voice_prompt_path: Optional[str] = None,
-        knowledge_context: Optional[str] = None
+        knowledge_context: Optional[str] = None,
+        training_rules: Optional[list] = None,
+        example_answers: Optional[list] = None,
+        system_prompts: Optional[str] = None
     ) -> ConversationSession:
         """
         Create a new conversation session.
@@ -264,6 +326,9 @@ class PersonaPlexService:
             company_name: Name of the company
             voice_prompt_path: Optional path to voice prompt audio for voice cloning
             knowledge_context: Optional RAG context from website knowledge
+            training_rules: Optional list of enabled training rules
+            example_answers: Optional list of Q&A pairs for common questions
+            system_prompts: Optional pre-fetched system prompts string
             
         Returns:
             ConversationSession object
@@ -272,7 +337,10 @@ class PersonaPlexService:
         persona_prompt = self.build_persona_prompt(
             worker=worker,
             company_name=company_name,
-            knowledge_context=knowledge_context
+            knowledge_context=knowledge_context,
+            training_rules=training_rules,
+            example_answers=example_answers,
+            system_prompts=system_prompts
         )
         
         logger.info(f"Creating PersonaPlex session {session_id} for worker {worker.name}")

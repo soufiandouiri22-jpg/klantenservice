@@ -6,6 +6,7 @@ from enum import Enum
 from sqlalchemy import Column, String, DateTime, Boolean, Integer, Text, ForeignKey, Enum as SQLEnum, JSON
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
+from pgvector.sqlalchemy import Vector
 import uuid
 
 from app.core.database import Base
@@ -96,7 +97,10 @@ class KnowledgeChunk(Base):
     # Chunk metadata
     chunk_metadata = Column(JSON, default=dict)  # e.g., {"section": "FAQ", "category": "Prijzen"}
     
-    # Vector embedding (stored in ChromaDB, referenced by ID)
+    # Vector embedding (stored directly in PostgreSQL with pgvector)
+    embedding = Column(Vector(384), nullable=True)  # 384 dimensions for all-MiniLM-L6-v2
+    
+    # Legacy field for ChromaDB reference (deprecated, kept for migration)
     vector_id = Column(String(100), nullable=True)
     
     # Timestamps

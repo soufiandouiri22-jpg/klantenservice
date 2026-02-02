@@ -188,10 +188,10 @@ async def delete_website(
             detail="Website niet gevonden",
         )
     
-    # Delete from vector store
+    # Delete from vector store (now just deletes from PostgreSQL)
     try:
-        vector_store = VectorStore(str(company.id))
-        vector_store.delete_website_chunks(str(website_id))
+        vector_store = VectorStore(str(company.id), db)
+        vector_store.delete_website_chunks(str(website_id), db)
     except Exception as e:
         print(f"Error deleting from vector store: {e}")
     
@@ -269,9 +269,9 @@ async def test_question(
             detail="Website is nog niet volledig geïndexeerd",
         )
     
-    # Search in vector store
-    vector_store = VectorStore(str(company.id))
-    results = vector_store.search(request.question, str(website_id), limit=5)
+    # Search in vector store (now uses PostgreSQL with pgvector)
+    vector_store = VectorStore(str(company.id), db)
+    results = vector_store.search(request.question, str(website_id), limit=5, db=db)
     
     if not results:
         return TestQuestionResponse(
