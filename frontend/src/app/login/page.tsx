@@ -7,7 +7,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
-import { Headphones, ArrowLeft, Zap } from 'lucide-react'
+import { Headphones, ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { authApi, companyApi } from '@/lib/api'
@@ -49,7 +49,6 @@ export default function LoginPage() {
   const { setAuth } = useAuthStore()
   const [isLoading, setIsLoading] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
-  const [isDevLoading, setIsDevLoading] = useState(false)
 
   const {
     register,
@@ -96,33 +95,6 @@ export default function LoginPage() {
     } catch (error: any) {
       toast.error(error.response?.data?.detail || 'Kon Google login niet starten')
       setIsGoogleLoading(false)
-    }
-  }
-
-  const handleDevLogin = async () => {
-    setIsDevLoading(true)
-    try {
-      // Use real backend dev-login endpoint
-      const response = await authApi.devLogin()
-      
-      // Store real tokens
-      localStorage.setItem('access_token', response.access_token)
-      localStorage.setItem('refresh_token', response.refresh_token)
-      
-      // Get user and company info
-      const [user, company] = await Promise.all([
-        authApi.getMe(),
-        companyApi.get(),
-      ])
-      
-      setAuth(user, company)
-      
-      toast.success('Dev login succesvol!')
-      router.push('/dashboard')
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Dev login mislukt - is de backend actief?')
-    } finally {
-      setIsDevLoading(false)
     }
   }
 
@@ -223,21 +195,6 @@ export default function LoginPage() {
                 <GoogleIcon className="h-5 w-5" />
               )}
               Doorgaan met Google
-            </button>
-
-            {/* Dev Login Button - Mock login without backend */}
-            <button
-              type="button"
-              onClick={handleDevLogin}
-              disabled={isDevLoading}
-              className="mt-3 w-full flex items-center justify-center gap-3 px-4 py-3 border-2 border-dashed border-amber-400 rounded-lg bg-amber-50 text-amber-700 font-medium hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {isDevLoading ? (
-                <div className="h-5 w-5 animate-spin rounded-full border-2 border-amber-300 border-t-amber-600" />
-              ) : (
-                <Zap className="h-5 w-5" />
-              )}
-              Dev Login (Admin)
             </button>
           </div>
 

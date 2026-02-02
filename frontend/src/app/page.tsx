@@ -487,7 +487,7 @@ export default function HomePage() {
               <ArrowRight className="ml-2 h-5 w-5" />
             </Link>
             <Link href="#features" className="bg-white text-gray-900 px-8 py-4 rounded-lg text-base font-semibold border border-gray-200 hover:bg-gray-50 transition-colors">
-              Bekijk functies
+              Boek een demo
             </Link>
           </div>
           <p className="mt-4 text-sm text-gray-500">
@@ -876,7 +876,7 @@ export default function HomePage() {
                           /maand
                         </span>
                         <p className={`mt-1 text-sm font-medium ${plan.popular ? 'text-orange-300' : 'text-orange-500'}`}>
-                          Eerste maand €0
+                          14 dagen gratis
                         </p>
                       </>
                     )}
@@ -903,7 +903,7 @@ export default function HomePage() {
                       : 'bg-primary-600 text-white hover:bg-primary-700'
                   }`}
                 >
-                  {typeof plan.price === 'string' && plan.price.includes('aanvraag') ? 'Plan een gesprek' : 'Start gratis maand'}
+                  {typeof plan.price === 'string' && plan.price.includes('aanvraag') ? 'Plan een gesprek' : 'Probeer het gratis uit'}
                 </Link>
                 {typeof plan.price !== 'string' || !plan.price.includes('aanvraag') ? (
                   <p className={`mt-3 text-center text-xs ${plan.popular ? 'text-primary-200' : 'text-gray-400'}`}>
