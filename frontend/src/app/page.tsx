@@ -94,6 +94,12 @@ const integrations = [
   { name: 'Google Meet', logo: '/integrations/google-meet.svg' },
   { name: 'Zoom', logo: '/integrations/zoom.svg' },
   { name: 'Microsoft Teams', logo: '/integrations/teams.svg' },
+  { name: 'Shopify', logo: '/integrations/shopify.svg' },
+  { name: 'RDW', logo: '/integrations/rdw.svg' },
+  { name: 'WhatsApp', logo: '/integrations/whatsapp.svg' },
+  { name: 'Mollie', logo: '/integrations/mollie.svg' },
+  { name: 'Slack', logo: '/integrations/slack.svg' },
+  { name: 'Knipklok', logo: '/integrations/knipklok.svg' },
 ]
 
 const testimonials = [
@@ -293,35 +299,25 @@ function TestimonialCard({ t }: { t: typeof testimonials[0] }) {
   )
 }
 
-// Testimonial Slider component with native scroll
+// Testimonial Slider component with auto-scroll
 function TestimonialSlider() {
-  const sliderRef = useRef<HTMLDivElement>(null)
-
   return (
-    <div className="relative w-full">
-      {/* Fade edges - hidden on mobile for better UX */}
+    <div className="relative w-full overflow-hidden">
+      {/* Fade edges */}
       <div className="absolute left-0 top-0 bottom-0 w-8 md:w-32 bg-gradient-to-r from-white to-transparent z-10 pointer-events-none" />
       <div className="absolute right-0 top-0 bottom-0 w-8 md:w-32 bg-gradient-to-l from-white to-transparent z-10 pointer-events-none" />
       
-      {/* Scrollable container with native scroll-snap */}
-      <div
-        ref={sliderRef}
-        className="flex gap-4 md:gap-6 px-4 md:px-8 overflow-x-auto snap-x snap-mandatory scroll-smooth"
-        style={{ 
-          scrollbarWidth: 'none', 
-          msOverflowStyle: 'none',
-          WebkitOverflowScrolling: 'touch'
-        }}
-      >
+      {/* Auto-scrolling container */}
+      <div className="flex gap-4 md:gap-6 animate-scroll hover:[animation-play-state:paused]">
+        {/* First set of cards */}
         {testimonials.map((t, i) => (
-          <TestimonialCard key={i} t={t} />
+          <TestimonialCard key={`first-${i}`} t={t} />
+        ))}
+        {/* Duplicate set for seamless loop */}
+        {testimonials.map((t, i) => (
+          <TestimonialCard key={`second-${i}`} t={t} />
         ))}
       </div>
-
-      {/* Swipe hint for mobile */}
-      <p className="text-center text-sm text-gray-400 mt-4 md:hidden">
-        ← Swipe om meer te zien →
-      </p>
     </div>
   )
 }
@@ -722,15 +718,7 @@ export default function HomePage() {
             {/* Google Calendar */}
             <div className="bg-white rounded-2xl p-6 border border-gray-200 hover:border-primary-200 hover:shadow-lg transition-all flex flex-col items-center justify-center gap-3">
               <div className="w-12 h-12 flex items-center justify-center">
-                <svg viewBox="0 0 24 24" className="w-10 h-10">
-                  <rect x="2" y="3" width="20" height="18" rx="2" fill="#4285F4"/>
-                  <rect x="4" y="8" width="16" height="11" fill="white"/>
-                  <rect x="6" y="10" width="3" height="3" fill="#EA4335"/>
-                  <rect x="10.5" y="10" width="3" height="3" fill="#FBBC05"/>
-                  <rect x="15" y="10" width="3" height="3" fill="#34A853"/>
-                  <rect x="6" y="14.5" width="3" height="3" fill="#4285F4"/>
-                  <rect x="10.5" y="14.5" width="3" height="3" fill="#EA4335"/>
-                </svg>
+                <Image src="/app-icons/google-calendar.png" alt="Google Calendar" width={40} height={40} className="object-contain" />
               </div>
               <span className="text-sm font-medium text-gray-700">Google Calendar</span>
             </div>
@@ -738,12 +726,7 @@ export default function HomePage() {
             {/* Microsoft Outlook */}
             <div className="bg-white rounded-2xl p-6 border border-gray-200 hover:border-primary-200 hover:shadow-lg transition-all flex flex-col items-center justify-center gap-3">
               <div className="w-12 h-12 flex items-center justify-center">
-                <svg viewBox="0 0 24 24" className="w-10 h-10">
-                  <path d="M22 6V18C22 19.1 21.1 20 20 20H8C6.9 20 6 19.1 6 18V6C6 4.9 6.9 4 8 4H20C21.1 4 22 4.9 22 6Z" fill="#0078D4"/>
-                  <path d="M14 4V20H8C6.9 20 6 19.1 6 18V6C6 4.9 6.9 4 8 4H14Z" fill="#0364B8"/>
-                  <ellipse cx="9" cy="12" rx="5" ry="6" fill="#0078D4"/>
-                  <ellipse cx="9" cy="12" rx="3" ry="4" fill="white"/>
-                </svg>
+                <Image src="/app-icons/Outlook_2013_23477.png" alt="Outlook" width={40} height={40} className="object-contain" />
               </div>
               <span className="text-sm font-medium text-gray-700">Outlook</span>
             </div>
@@ -751,13 +734,7 @@ export default function HomePage() {
             {/* Apple Calendar */}
             <div className="bg-white rounded-2xl p-6 border border-gray-200 hover:border-primary-200 hover:shadow-lg transition-all flex flex-col items-center justify-center gap-3">
               <div className="w-12 h-12 flex items-center justify-center">
-                <svg viewBox="0 0 24 24" className="w-10 h-10">
-                  <rect x="2" y="4" width="20" height="17" rx="3" fill="#FF3B30"/>
-                  <rect x="2" y="8" width="20" height="13" rx="2" fill="white"/>
-                  <text x="12" y="17" textAnchor="middle" fontSize="8" fontWeight="bold" fill="#FF3B30">17</text>
-                  <circle cx="7" cy="6" r="1" fill="white"/>
-                  <circle cx="17" cy="6" r="1" fill="white"/>
-                </svg>
+                <Image src="/app-icons/applecalendar.png" alt="Apple Calendar" width={40} height={40} className="object-contain" />
               </div>
               <span className="text-sm font-medium text-gray-700">Apple Calendar</span>
             </div>
@@ -765,11 +742,7 @@ export default function HomePage() {
             {/* Google Meet */}
             <div className="bg-white rounded-2xl p-6 border border-gray-200 hover:border-primary-200 hover:shadow-lg transition-all flex flex-col items-center justify-center gap-3">
               <div className="w-12 h-12 flex items-center justify-center">
-                <svg viewBox="0 0 24 24" className="w-10 h-10">
-                  <rect x="1" y="6" width="14" height="12" rx="2" fill="#00AC47"/>
-                  <path d="M15 9L22 5V19L15 15V9Z" fill="#00AC47"/>
-                  <rect x="4" y="9" width="8" height="6" rx="1" fill="white"/>
-                </svg>
+                <Image src="/app-icons/google-meet.png" alt="Google Meet" width={40} height={40} className="object-contain" />
               </div>
               <span className="text-sm font-medium text-gray-700">Google Meet</span>
             </div>
@@ -777,11 +750,7 @@ export default function HomePage() {
             {/* Zoom */}
             <div className="bg-white rounded-2xl p-6 border border-gray-200 hover:border-primary-200 hover:shadow-lg transition-all flex flex-col items-center justify-center gap-3">
               <div className="w-12 h-12 flex items-center justify-center">
-                <svg viewBox="0 0 24 24" className="w-10 h-10">
-                  <rect x="2" y="4" width="20" height="16" rx="4" fill="#2D8CFF"/>
-                  <rect x="4" y="8" width="10" height="8" rx="1" fill="white"/>
-                  <path d="M14 10L20 7V17L14 14V10Z" fill="white"/>
-                </svg>
+                <Image src="/app-icons/zoom.png" alt="Zoom" width={40} height={40} className="object-contain" />
               </div>
               <span className="text-sm font-medium text-gray-700">Zoom</span>
             </div>
@@ -789,16 +758,60 @@ export default function HomePage() {
             {/* Microsoft Teams */}
             <div className="bg-white rounded-2xl p-6 border border-gray-200 hover:border-primary-200 hover:shadow-lg transition-all flex flex-col items-center justify-center gap-3">
               <div className="w-12 h-12 flex items-center justify-center">
-                <svg viewBox="0 0 24 24" className="w-10 h-10">
-                  <circle cx="17" cy="7" r="3" fill="#5059C9"/>
-                  <rect x="14" y="10" width="8" height="8" rx="1" fill="#5059C9"/>
-                  <circle cx="9" cy="6" r="4" fill="#7B83EB"/>
-                  <rect x="3" y="10" width="12" height="10" rx="2" fill="#7B83EB"/>
-                  <rect x="5" y="12" width="8" height="1.5" fill="white"/>
-                  <rect x="5" y="15" width="5" height="1.5" fill="white"/>
-                </svg>
+                <Image src="/app-icons/teams.png" alt="Teams" width={40} height={40} className="object-contain" />
               </div>
               <span className="text-sm font-medium text-gray-700">Teams</span>
+            </div>
+
+            {/* Shopify */}
+            <div className="bg-white rounded-2xl p-6 border border-gray-200 hover:border-primary-200 hover:shadow-lg transition-all flex flex-col items-center justify-center gap-3">
+              <div className="w-12 h-12 flex items-center justify-center">
+                <Image src="/app-icons/shopify.png" alt="Shopify" width={40} height={40} className="object-contain" />
+              </div>
+              <span className="text-sm font-medium text-gray-700">Shopify</span>
+            </div>
+
+            {/* RDW */}
+            <div className="bg-white rounded-2xl p-6 border border-gray-200 hover:border-primary-200 hover:shadow-lg transition-all flex flex-col items-center justify-center gap-3">
+              <div className="w-12 h-12 flex items-center justify-center">
+                <svg viewBox="0 0 100 50" className="w-10 h-10">
+                  <rect width="100" height="50" rx="6" fill="#003082"/>
+                  <text x="50" y="33" textAnchor="middle" fontSize="20" fontWeight="bold" fill="white" fontFamily="Arial, sans-serif">RDW</text>
+                </svg>
+              </div>
+              <span className="text-sm font-medium text-gray-700">RDW</span>
+            </div>
+
+            {/* WhatsApp */}
+            <div className="bg-white rounded-2xl p-6 border border-gray-200 hover:border-primary-200 hover:shadow-lg transition-all flex flex-col items-center justify-center gap-3">
+              <div className="w-12 h-12 flex items-center justify-center">
+                <Image src="/app-icons/whatsapp.png" alt="WhatsApp" width={40} height={40} className="object-contain" />
+              </div>
+              <span className="text-sm font-medium text-gray-700">WhatsApp</span>
+            </div>
+
+            {/* Mollie */}
+            <div className="bg-white rounded-2xl p-6 border border-gray-200 hover:border-primary-200 hover:shadow-lg transition-all flex flex-col items-center justify-center gap-3">
+              <div className="w-12 h-12 flex items-center justify-center">
+                <Image src="/app-icons/mollie.jpg" alt="Mollie" width={40} height={40} className="object-contain" />
+              </div>
+              <span className="text-sm font-medium text-gray-700">Mollie</span>
+            </div>
+
+            {/* Slack */}
+            <div className="bg-white rounded-2xl p-6 border border-gray-200 hover:border-primary-200 hover:shadow-lg transition-all flex flex-col items-center justify-center gap-3">
+              <div className="w-12 h-12 flex items-center justify-center">
+                <Image src="/app-icons/slack.png" alt="Slack" width={40} height={40} className="object-contain" />
+              </div>
+              <span className="text-sm font-medium text-gray-700">Slack</span>
+            </div>
+
+            {/* Knipklok */}
+            <div className="bg-white rounded-2xl p-6 border border-gray-200 hover:border-primary-200 hover:shadow-lg transition-all flex flex-col items-center justify-center gap-3">
+              <div className="w-12 h-12 flex items-center justify-center">
+                <Image src="/app-icons/knipklok.png" alt="Knipklok" width={40} height={40} className="object-contain" />
+              </div>
+              <span className="text-sm font-medium text-gray-700">Knipklok</span>
             </div>
           </div>
 
