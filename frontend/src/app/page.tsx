@@ -302,28 +302,38 @@ function TestimonialCard({ t }: { t: typeof testimonials[0] }) {
   )
 }
 
-// Testimonial Slider component with auto-scroll
+// Testimonial Slider component - swipeable on mobile, auto-scroll on desktop
 function TestimonialSlider() {
   return (
-    <div className="relative w-full overflow-hidden">
-      {/* Fade edges */}
-      <div className="absolute left-0 top-0 bottom-0 w-8 md:w-32 bg-gradient-to-r from-white to-transparent z-10 pointer-events-none" />
-      <div className="absolute right-0 top-0 bottom-0 w-8 md:w-32 bg-gradient-to-l from-white to-transparent z-10 pointer-events-none" />
+    <div className="relative w-full">
+      {/* Fade edges - only on desktop */}
+      <div className="hidden md:block absolute left-0 top-0 bottom-0 w-32 bg-gradient-to-r from-white to-transparent z-10 pointer-events-none" />
+      <div className="hidden md:block absolute right-0 top-0 bottom-0 w-32 bg-gradient-to-l from-white to-transparent z-10 pointer-events-none" />
       
-      {/* Auto-scroll on both, faster on mobile, swipeable */}
+      {/* Mobile: swipeable scroll, Desktop: auto-scroll animation */}
       <div 
-        className="flex gap-4 md:gap-6 animate-scroll-mobile md:animate-scroll hover:[animation-play-state:paused] active:[animation-play-state:paused] touch-pan-x"
+        className="flex gap-4 md:gap-6 px-4 md:px-0 overflow-x-auto md:overflow-hidden snap-x snap-mandatory md:snap-none scrollbar-hide md:animate-scroll md:hover:[animation-play-state:paused]"
         style={{ 
-          WebkitOverflowScrolling: 'touch'
+          WebkitOverflowScrolling: 'touch',
+          scrollbarWidth: 'none',
+          msOverflowStyle: 'none'
         }}
       >
         {testimonials.map((t, i) => (
           <TestimonialCard key={`first-${i}`} t={t} />
         ))}
-        {testimonials.map((t, i) => (
-          <TestimonialCard key={`second-${i}`} t={t} />
-        ))}
+        {/* Duplicate only for desktop infinite scroll */}
+        <div className="hidden md:contents">
+          {testimonials.map((t, i) => (
+            <TestimonialCard key={`second-${i}`} t={t} />
+          ))}
+        </div>
       </div>
+      
+      {/* Mobile scroll hint */}
+      <p className="md:hidden text-center text-xs text-gray-400 mt-4">
+        ← Swipe voor meer →
+      </p>
     </div>
   )
 }
