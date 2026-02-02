@@ -22,6 +22,7 @@ class CallStatus(str, Enum):
 
 
 class CallOutcome(str, Enum):
+    HANDLED = "handled"  # Call was handled by AI
     APPOINTMENT_MADE = "appointment_made"
     APPOINTMENT_CANCELLED = "appointment_cancelled"
     APPOINTMENT_RESCHEDULED = "appointment_rescheduled"
