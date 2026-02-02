@@ -94,12 +94,13 @@ const integrations = [
   { name: 'Google Meet', logo: '/integrations/google-meet.svg' },
   { name: 'Zoom', logo: '/integrations/zoom.svg' },
   { name: 'Microsoft Teams', logo: '/integrations/teams.svg' },
-  { name: 'Shopify', logo: '/integrations/shopify.svg' },
-  { name: 'RDW', logo: '/integrations/rdw.svg' },
-  { name: 'WhatsApp', logo: '/integrations/whatsapp.svg' },
-  { name: 'Mollie', logo: '/integrations/mollie.svg' },
-  { name: 'Slack', logo: '/integrations/slack.svg' },
-  { name: 'Knipklok', logo: '/integrations/knipklok.svg' },
+  // TODO: Toevoegen zodra geïntegreerd:
+  // { name: 'Shopify', logo: '/integrations/shopify.svg' },
+  // { name: 'RDW', logo: '/integrations/rdw.svg' },
+  // { name: 'WhatsApp', logo: '/integrations/whatsapp.svg' },
+  // { name: 'Mollie', logo: '/integrations/mollie.svg' },
+  // { name: 'Slack', logo: '/integrations/slack.svg' },
+  // { name: 'Knipklok', logo: '/integrations/knipklok.svg' },
 ]
 
 const testimonials = [
@@ -766,56 +767,7 @@ export default function HomePage() {
               <span className="text-sm font-medium text-gray-700">Teams</span>
             </div>
 
-            {/* Shopify */}
-            <div className="bg-white rounded-2xl p-6 border border-gray-200 hover:border-primary-200 hover:shadow-lg transition-all flex flex-col items-center justify-center gap-3">
-              <div className="w-12 h-12 flex items-center justify-center">
-                <Image src="/app-icons/shopify.png" alt="Shopify" width={40} height={40} className="object-contain" />
-              </div>
-              <span className="text-sm font-medium text-gray-700">Shopify</span>
-            </div>
-
-            {/* RDW */}
-            <div className="bg-white rounded-2xl p-6 border border-gray-200 hover:border-primary-200 hover:shadow-lg transition-all flex flex-col items-center justify-center gap-3">
-              <div className="w-12 h-12 flex items-center justify-center">
-                <svg viewBox="0 0 100 50" className="w-10 h-10">
-                  <rect width="100" height="50" rx="6" fill="#003082"/>
-                  <text x="50" y="33" textAnchor="middle" fontSize="20" fontWeight="bold" fill="white" fontFamily="Arial, sans-serif">RDW</text>
-                </svg>
-              </div>
-              <span className="text-sm font-medium text-gray-700">RDW</span>
-            </div>
-
-            {/* WhatsApp */}
-            <div className="bg-white rounded-2xl p-6 border border-gray-200 hover:border-primary-200 hover:shadow-lg transition-all flex flex-col items-center justify-center gap-3">
-              <div className="w-12 h-12 flex items-center justify-center">
-                <Image src="/app-icons/whatsapp.png" alt="WhatsApp" width={40} height={40} className="object-contain" />
-              </div>
-              <span className="text-sm font-medium text-gray-700">WhatsApp</span>
-            </div>
-
-            {/* Mollie */}
-            <div className="bg-white rounded-2xl p-6 border border-gray-200 hover:border-primary-200 hover:shadow-lg transition-all flex flex-col items-center justify-center gap-3">
-              <div className="w-12 h-12 flex items-center justify-center">
-                <Image src="/app-icons/mollie.jpg" alt="Mollie" width={40} height={40} className="object-contain" />
-              </div>
-              <span className="text-sm font-medium text-gray-700">Mollie</span>
-            </div>
-
-            {/* Slack */}
-            <div className="bg-white rounded-2xl p-6 border border-gray-200 hover:border-primary-200 hover:shadow-lg transition-all flex flex-col items-center justify-center gap-3">
-              <div className="w-12 h-12 flex items-center justify-center">
-                <Image src="/app-icons/slack.png" alt="Slack" width={40} height={40} className="object-contain" />
-              </div>
-              <span className="text-sm font-medium text-gray-700">Slack</span>
-            </div>
-
-            {/* Knipklok */}
-            <div className="bg-white rounded-2xl p-6 border border-gray-200 hover:border-primary-200 hover:shadow-lg transition-all flex flex-col items-center justify-center gap-3">
-              <div className="w-12 h-12 flex items-center justify-center">
-                <Image src="/app-icons/knipklok.png" alt="Knipklok" width={40} height={40} className="object-contain" />
-              </div>
-              <span className="text-sm font-medium text-gray-700">Knipklok</span>
-            </div>
+            {/* TODO: Toevoegen zodra geïntegreerd: Shopify, RDW, WhatsApp, Mollie, Slack, Knipklok */}
           </div>
 
           {/* Additional info */}
