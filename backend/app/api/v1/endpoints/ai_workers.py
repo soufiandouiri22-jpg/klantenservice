@@ -19,7 +19,7 @@ from app.api.deps import get_current_user, get_current_company, require_manager
 router = APIRouter()
 
 
-@router.get("/", response_model=List[AIWorkerResponse])
+@router.get("", response_model=List[AIWorkerResponse])
 async def list_ai_workers(
     current_user: User = Depends(get_current_user),
     company: Company = Depends(get_current_company),
@@ -32,7 +32,7 @@ async def list_ai_workers(
     return workers
 
 
-@router.post("/", response_model=AIWorkerResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=AIWorkerResponse, status_code=status.HTTP_201_CREATED)
 async def create_ai_worker(
     data: AIWorkerCreate,
     current_user: User = Depends(require_manager),

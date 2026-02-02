@@ -20,7 +20,7 @@ from app.api.deps import get_current_user, get_current_company, require_admin
 router = APIRouter()
 
 
-@router.get("/", response_model=List[UserResponse])
+@router.get("", response_model=List[UserResponse])
 async def list_users(
     current_user: User = Depends(get_current_user),
     company: Company = Depends(get_current_company),
@@ -33,7 +33,7 @@ async def list_users(
     return users
 
 
-@router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def create_user(
     data: UserCreate,
     current_user: User = Depends(require_admin),

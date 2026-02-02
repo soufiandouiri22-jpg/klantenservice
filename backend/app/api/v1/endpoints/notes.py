@@ -23,7 +23,7 @@ from app.api.deps import get_current_user, get_current_company, require_manager
 router = APIRouter()
 
 
-@router.get("/", response_model=InternalNoteListResponse)
+@router.get("", response_model=InternalNoteListResponse)
 async def list_notes(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -78,7 +78,7 @@ async def list_notes(
     )
 
 
-@router.post("/", response_model=InternalNoteResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=InternalNoteResponse, status_code=status.HTTP_201_CREATED)
 async def create_note(
     data: InternalNoteCreate,
     current_user: User = Depends(require_manager),

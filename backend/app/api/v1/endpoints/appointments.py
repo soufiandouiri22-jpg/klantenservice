@@ -25,7 +25,7 @@ from app.api.deps import get_current_user, get_current_company, require_manager
 router = APIRouter()
 
 
-@router.get("/", response_model=AppointmentListResponse)
+@router.get("", response_model=AppointmentListResponse)
 async def list_appointments(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -73,7 +73,7 @@ async def list_appointments(
     )
 
 
-@router.post("/", response_model=AppointmentResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=AppointmentResponse, status_code=status.HTTP_201_CREATED)
 async def create_appointment(
     data: AppointmentCreate,
     current_user: User = Depends(require_manager),

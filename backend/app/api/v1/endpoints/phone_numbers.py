@@ -38,7 +38,7 @@ def get_twilio_client() -> TwilioClient:
     return TwilioClient(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
 
 
-@router.get("/", response_model=List[PhoneNumberResponse])
+@router.get("", response_model=List[PhoneNumberResponse])
 async def list_phone_numbers(
     current_user: User = Depends(get_current_user),
     company: Company = Depends(get_current_company),
@@ -51,7 +51,7 @@ async def list_phone_numbers(
     return numbers
 
 
-@router.post("/", response_model=PhoneNumberResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=PhoneNumberResponse, status_code=status.HTTP_201_CREATED)
 async def create_phone_number(
     data: PhoneNumberCreate,
     current_user: User = Depends(require_admin),

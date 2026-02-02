@@ -68,6 +68,7 @@ app = FastAPI(
     redoc_url="/api/redoc" if settings.DEBUG else None,
     openapi_url="/api/openapi.json" if settings.DEBUG else None,
     lifespan=lifespan,
+    redirect_slashes=False,  # Prevent 307 redirects for trailing slashes
 )
 
 # Configure CORS
@@ -80,8 +81,9 @@ app.add_middleware(
 )
 
 
-# Health check endpoint
+# Health check endpoints
 @app.get("/health")
+@app.get("/healthz")
 async def health_check():
     """Health check endpoint for load balancers."""
     return {"status": "healthy", "service": "klantenservice.ai"}

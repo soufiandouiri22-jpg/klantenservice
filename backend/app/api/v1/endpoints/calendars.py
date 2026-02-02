@@ -27,7 +27,7 @@ from app.api.deps import get_current_user, get_current_company, require_admin
 router = APIRouter()
 
 
-@router.get("/", response_model=List[CalendarIntegrationResponse])
+@router.get("", response_model=List[CalendarIntegrationResponse])
 async def list_calendars(
     current_user: User = Depends(get_current_user),
     company: Company = Depends(get_current_company),
@@ -42,7 +42,7 @@ async def list_calendars(
     return calendars
 
 
-@router.post("/", response_model=CalendarIntegrationResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=CalendarIntegrationResponse, status_code=status.HTTP_201_CREATED)
 async def create_calendar(
     data: CalendarIntegrationCreate,
     current_user: User = Depends(require_admin),

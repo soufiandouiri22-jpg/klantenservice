@@ -26,7 +26,7 @@ from app.api.deps import get_current_user, get_current_company
 router = APIRouter()
 
 
-@router.get("/", response_model=CallLogListResponse)
+@router.get("", response_model=CallLogListResponse)
 async def list_calls(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),

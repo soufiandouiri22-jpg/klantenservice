@@ -29,7 +29,7 @@ from app.services.website_indexer import WebsiteIndexer, VectorStore
 router = APIRouter()
 
 
-@router.get("/", response_model=List[WebsiteKnowledgeResponse])
+@router.get("", response_model=List[WebsiteKnowledgeResponse])
 async def list_websites(
     current_user: User = Depends(get_current_user),
     company: Company = Depends(get_current_company),
@@ -60,7 +60,7 @@ async def run_indexing(website_id: str, db_url: str):
         db.close()
 
 
-@router.post("/", response_model=WebsiteKnowledgeResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=WebsiteKnowledgeResponse, status_code=status.HTTP_201_CREATED)
 async def create_website(
     data: WebsiteKnowledgeCreate,
     background_tasks: BackgroundTasks,
