@@ -314,7 +314,7 @@ function TestimonialSlider() {
       
       {/* Mobile: swipeable scroll, Desktop: auto-scroll animation */}
       <div 
-        className="flex gap-4 md:gap-6 px-4 md:px-0 overflow-x-auto md:overflow-hidden snap-x snap-mandatory md:snap-none scrollbar-hide md:animate-scroll md:hover:[animation-play-state:paused]"
+        className="flex gap-4 md:gap-6 px-4 md:px-0 overflow-x-auto md:overflow-hidden snap-x snap-mandatory md:snap-none scrollbar-hide md:w-max md:animate-scroll md:hover:[animation-play-state:paused]"
         style={{ 
           WebkitOverflowScrolling: 'touch',
           scrollbarWidth: 'none',
