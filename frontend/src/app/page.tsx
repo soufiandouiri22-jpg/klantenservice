@@ -272,21 +272,23 @@ function AnimatedCard({ children, delay = 0 }: { children: React.ReactNode; dela
 function TestimonialCard({ t }: { t: typeof testimonials[0] }) {
   return (
     <div className="flex-shrink-0 w-[300px] md:w-[400px] bg-white rounded-2xl border border-gray-200 p-5 md:p-6 hover:shadow-xl transition-all snap-center">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className={`w-12 h-12 rounded-xl ${t.logoType === 'emoji' ? `bg-gradient-to-br ${t.gradient}` : 'bg-white border border-gray-100'} flex items-center justify-center overflow-hidden`}>
-            {t.logoType === 'image' ? (
-              <Image src={t.logo} alt={t.company} width={48} height={48} className="w-full h-full object-contain p-1" />
-            ) : (
-              <span className="text-2xl">{t.logo}</span>
-            )}
+      <div className="flex flex-col gap-3 mb-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 md:w-12 md:h-12 rounded-xl ${t.logoType === 'emoji' ? `bg-gradient-to-br ${t.gradient}` : 'bg-white border border-gray-100'} flex items-center justify-center overflow-hidden flex-shrink-0`}>
+              {t.logoType === 'image' ? (
+                <Image src={t.logo} alt={t.company} width={48} height={48} className="w-full h-full object-contain p-1" />
+              ) : (
+                <span className="text-xl md:text-2xl">{t.logo}</span>
+              )}
+            </div>
+            <span className="font-bold text-gray-900 text-base md:text-lg">{t.company}</span>
           </div>
-          <span className="font-bold text-gray-900 text-lg">{t.company}</span>
+          <span className={`${t.statColor} text-xs font-semibold px-2 md:px-3 py-1 md:py-1.5 rounded-full flex items-center gap-1 whitespace-nowrap`}>
+            <ArrowRight className="w-3 h-3 rotate-[-45deg]" />
+            {t.stat}
+          </span>
         </div>
-        <span className={`${t.statColor} text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1`}>
-          <ArrowRight className="w-3 h-3 rotate-[-45deg]" />
-          {t.stat}
-        </span>
       </div>
       <div className="bg-gray-50 rounded-xl p-4 mb-4">
         <p className="text-sm text-gray-500 mb-1">Uitdaging:</p>
@@ -384,7 +386,7 @@ export default function HomePage() {
               Start gratis proefperiode
               <ArrowRight className="ml-2 h-5 w-5" />
             </Link>
-            <Link href="#features" className="bg-white text-gray-900 px-8 py-4 rounded-lg text-base font-semibold border border-gray-200 hover:bg-gray-50 transition-colors">
+            <Link href="/boekeendemo" className="bg-white text-gray-900 px-8 py-4 rounded-lg text-base font-semibold border border-gray-200 hover:bg-gray-50 transition-colors">
               Boek een demo
             </Link>
           </div>
@@ -799,7 +801,7 @@ export default function HomePage() {
                 Start gratis proefperiode
                 <ArrowRight className="ml-2 h-5 w-5" />
               </Link>
-              <Link href="/contact" className="text-gray-900 px-8 py-4 rounded-lg text-base font-semibold border border-gray-200 hover:bg-gray-50 transition-colors">
+              <Link href="/boekeendemo" className="text-gray-900 px-8 py-4 rounded-lg text-base font-semibold border border-gray-200 hover:bg-gray-50 transition-colors">
                 Bekijk demo
               </Link>
             </div>
