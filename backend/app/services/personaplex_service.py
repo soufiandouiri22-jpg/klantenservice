@@ -282,7 +282,7 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
                 result = await response.json()
                 return result.get("id")
     
-    async def _poll_job_status(self, job_id: str, timeout: int = 60) -> dict:
+    async def _poll_job_status(self, job_id: str, timeout: int = 120) -> dict:
         """Poll for job completion."""
         async with aiohttp.ClientSession() as session:
             url = f"{self.runpod_url}/status/{job_id}"
@@ -356,13 +356,19 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
         self.active_sessions[session_id] = session
         
         # Initialize session on RunPod (warm up)
+        # Note: Cold start can take 60-90s (worker spin-up + model loading)
         if not self.mock_mode:
             try:
+                logger.info(f"Initializing RunPod session {session_id} (may take up to 2 min for cold start)...")
                 result = await self._call_runpod({
                     "action": "init",
-                    "session_id": session_id
-                }, timeout=60)
+                    "session_id": session_id,
+                    "persona_prompt": persona_prompt
+                }, timeout=120)  # 2 minutes for cold start + model loading
                 logger.info(f"RunPod session initialized: {result}")
+            except asyncio.TimeoutError:
+                logger.error(f"RunPod session init timeout after 120s - likely cold start issue")
+                raise
             except Exception as e:
                 logger.error(f"Failed to initialize RunPod session: {e}")
         
@@ -404,12 +410,13 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
             audio_b64 = base64.b64encode(audio_chunk).decode("utf-8")
             
             # Send to RunPod
+            # Note: First few requests may be slower while model warms up
             result = await self._call_runpod({
                 "action": "process",
                 "session_id": session_id,
                 "audio": audio_b64,
                 "persona_prompt": session.persona_prompt
-            }, timeout=10)
+            }, timeout=30)  # Increased from 10s for cold start scenarios
             
             if "error" in result:
                 logger.error(f"RunPod processing error: {result['error']}")
@@ -431,7 +438,10 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
                 session.conversation_history.append(transcript)
                     
         except asyncio.TimeoutError:
-            logger.warning(f"RunPod request timeout for session {session_id}")
+            logger.warning(
+                f"RunPod request timeout for session {session_id} after 30s. "
+                f"This may indicate a cold start - consider setting Min Workers >= 1"
+            )
         except Exception as e:
             logger.error(f"Error processing audio for session {session_id}: {e}")
     
