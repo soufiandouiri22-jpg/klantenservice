@@ -254,14 +254,19 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
                     return {"error": f"RunPod API error: {response.status}"}
                 
                 result = await response.json()
+                logger.info(f"RunPod raw response: status={result.get('status')}, id={result.get('id')}")
                 
                 # Check job status
                 if result.get("status") == "COMPLETED":
-                    return result.get("output", {})
+                    output = result.get("output", {})
+                    logger.info(f"RunPod COMPLETED: has_audio={bool(output.get('audio'))}, has_error={bool(output.get('error'))}, keys={list(output.keys())}")
+                    return output
                 elif result.get("status") == "FAILED":
+                    logger.error(f"RunPod FAILED: {result.get('error')}")
                     return {"error": result.get("error", "Unknown error")}
                 else:
                     # Job might be queued or in progress
+                    logger.warning(f"RunPod job not completed: status={result.get('status')}, id={result.get('id')}")
                     return {"status": result.get("status"), "id": result.get("id")}
     
     async def _call_runpod_async(self, payload: dict) -> str:
@@ -356,21 +361,25 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
         self.active_sessions[session_id] = session
         
         # Initialize session on RunPod (warm up)
-        # Note: Cold start can take 60-90s (worker spin-up + model loading)
+        # Note: Cold start can take 2-3 min (worker spin-up + model loading)
         if not self.mock_mode:
             try:
-                logger.info(f"Initializing RunPod session {session_id} (may take up to 2 min for cold start)...")
+                logger.info(f"Initializing RunPod session {session_id} (may take up to 4 min for cold start)...")
                 result = await self._call_runpod({
                     "action": "init",
                     "session_id": session_id,
                     "persona_prompt": persona_prompt
-                }, timeout=120)  # 2 minutes for cold start + model loading
-                logger.info(f"RunPod session initialized: {result}")
+                }, timeout=240)  # 4 minutes for cold start + model loading
+                logger.info(f"RunPod session init result: {result}")
+                if result.get("error"):
+                    logger.error(f"RunPod init returned error: {result['error']}")
+                elif result.get("status") == "initialized":
+                    logger.info(f"RunPod session {session_id} successfully initialized!")
             except asyncio.TimeoutError:
-                logger.error(f"RunPod session init timeout after 120s - likely cold start issue")
-                raise
+                logger.error(f"RunPod session init timeout after 240s - cold start too long, worker may not be ready")
+                # Don't raise - try to continue anyway, process will auto-init
             except Exception as e:
-                logger.error(f"Failed to initialize RunPod session: {e}")
+                logger.error(f"Failed to initialize RunPod session: {e}", exc_info=True)
         
         return session
     
@@ -408,6 +417,7 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
         try:
             # Encode audio as base64
             audio_b64 = base64.b64encode(audio_chunk).decode("utf-8")
+            logger.debug(f"Sending {len(audio_chunk)} bytes audio to RunPod for session {session_id}")
             
             # Send to RunPod
             # Note: First few requests may be slower while model warms up
@@ -418,24 +428,35 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
                 "persona_prompt": session.persona_prompt
             }, timeout=30)  # Increased from 10s for cold start scenarios
             
+            logger.info(f"RunPod process result for {session_id}: has_audio={bool(result.get('audio'))}, error={result.get('error')}, status={result.get('status')}")
+            
             if "error" in result:
                 logger.error(f"RunPod processing error: {result['error']}")
+                return
+            
+            # Check for non-completed status (job queued/in_progress)
+            if result.get("status") and result.get("status") not in ["COMPLETED", "initialized"]:
+                logger.warning(f"RunPod job not ready: {result.get('status')}")
                 return
             
             # Get response audio
             response_audio_b64 = result.get("audio")
             if response_audio_b64:
                 response_bytes = base64.b64decode(response_audio_b64)
+                logger.info(f"Got {len(response_bytes)} bytes audio response from RunPod")
                 
                 # Yield in chunks for streaming
                 chunk_size = 4800  # 100ms at 24kHz
                 for i in range(0, len(response_bytes), chunk_size):
                     yield response_bytes[i:i+chunk_size]
+            else:
+                logger.warning(f"RunPod returned no audio for session {session_id}")
             
             # Store transcript if available
             transcript = result.get("transcript", {})
             if transcript:
                 session.conversation_history.append(transcript)
+                logger.debug(f"Transcript: {transcript}")
                     
         except asyncio.TimeoutError:
             logger.warning(
