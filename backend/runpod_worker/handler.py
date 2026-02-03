@@ -192,14 +192,17 @@ def process_audio(session_id: str, audio_b64: str) -> dict:
     from moshi.models.lm import encode_from_sphn as lm_encode_from_sphn
     
     if session_id not in sessions:
+        logger.error(f"Session {session_id} not in sessions dict: {list(sessions.keys())}")
         return {"error": f"Session {session_id} not found. Call init first."}
     
     # Decode input audio (PCM 24kHz)
     audio_bytes = base64.b64decode(audio_b64)
     audio_np = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
     
-    # Reshape for model (1, T)
-    user_audio = torch.from_numpy(audio_np).unsqueeze(0).to(device)
+    logger.info(f"Audio decoded: {len(audio_np)} samples, duration={len(audio_np)/24000:.2f}s")
+    
+    # Reshape for model (1, T) - keep on CPU for _iterate_audio (numpy ops)
+    user_audio = torch.from_numpy(audio_np).unsqueeze(0)
     
     # Process through model
     generated_frames = []
@@ -208,6 +211,9 @@ def process_audio(session_id: str, audio_b64: str) -> dict:
     sample_rate = mimi.sample_rate
     
     # Encode and process user audio
+    step_count = 0
+    token_count = 0
+    
     for user_encoded in lm_encode_from_sphn(
         mimi,
         lm_iterate_audio(user_audio, sample_interval_size=frame_size, pad=True),
@@ -215,11 +221,14 @@ def process_audio(session_id: str, audio_b64: str) -> dict:
     ):
         steps = user_encoded.shape[-1]
         for c in range(steps):
+            step_count += 1
             step_in = user_encoded[:, :, c : c + 1]
             tokens = lm_gen.step(step_in)
             
             if tokens is None:
                 continue
+            
+            token_count += 1
             
             # Decode audio
             pcm = mimi.decode(tokens[:, 1:9])
@@ -234,7 +243,10 @@ def process_audio(session_id: str, audio_b64: str) -> dict:
                 text = text.replace("▁", " ")
                 generated_text.append(text)
     
+    logger.info(f"Processed {step_count} steps, generated {token_count} tokens, {len(generated_frames)} audio frames")
+    
     if len(generated_frames) == 0:
+        logger.warning(f"No audio frames generated for session {session_id}")
         return {"audio": None, "transcript": {"user": "", "assistant": ""}}
     
     # Concatenate frames
@@ -247,6 +259,8 @@ def process_audio(session_id: str, audio_b64: str) -> dict:
     # Update session transcript
     assistant_text = "".join(generated_text)
     sessions[session_id]["transcript_assistant"].append(assistant_text)
+    
+    logger.info(f"Generated {len(output_bytes)} bytes audio, transcript: '{assistant_text[:100]}'")
     
     return {
         "audio": output_b64,
@@ -286,12 +300,15 @@ def handler(job):
     - init: Initialize a new session with persona prompt
     - process: Process audio and get response
     - end: End session and get transcript
+    
+    NOTE: Moshi is stateful - each worker maintains its own session state.
+    RunPod may route requests to different workers, so we auto-init on each worker.
     """
     job_input = job.get("input", {})
     action = job_input.get("action", "process")
     session_id = job_input.get("session_id", "default")
     
-    logger.info(f"Received job: action={action}, session={session_id}")
+    logger.info(f"Received job: action={action}, session={session_id}, existing_sessions={list(sessions.keys())}")
     
     try:
         # Load models if not already loaded
@@ -300,6 +317,7 @@ def handler(job):
         if action == "init":
             text_prompt = job_input.get("persona_prompt", "You are a wise and friendly teacher.")
             voice_prompt = job_input.get("voice_prompt", "NATF2.pt")
+            logger.info(f"Init session {session_id} with prompt length {len(text_prompt)}")
             return init_session(session_id, text_prompt, voice_prompt)
         
         elif action == "process":
@@ -307,12 +325,26 @@ def handler(job):
             if not audio_b64:
                 return {"error": "No audio provided"}
             
-            # Auto-init session if needed
+            # Auto-init session if needed (handles stateless serverless routing)
             if session_id not in sessions:
-                text_prompt = job_input.get("persona_prompt", "You are a wise and friendly teacher.")
+                text_prompt = job_input.get("persona_prompt")
+                if not text_prompt:
+                    logger.error(f"Session {session_id} not found on this worker and no persona_prompt provided!")
+                    return {"error": f"Session {session_id} not found on this worker. Provide persona_prompt for auto-init."}
+                
+                logger.info(f"Auto-initializing session {session_id} on this worker (routed from different worker)")
                 init_session(session_id, text_prompt)
             
-            return process_audio(session_id, audio_b64)
+            audio_bytes = base64.b64decode(audio_b64)
+            logger.info(f"Processing {len(audio_bytes)} bytes audio for session {session_id}")
+            
+            result = process_audio(session_id, audio_b64)
+            
+            # Log result details
+            has_audio = bool(result.get("audio"))
+            logger.info(f"Process result: has_audio={has_audio}, transcript={result.get('transcript', {}).get('assistant', '')[:50]}")
+            
+            return result
         
         elif action == "end":
             return end_session(session_id)
