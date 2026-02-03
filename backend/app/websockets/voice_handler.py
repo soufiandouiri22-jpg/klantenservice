@@ -28,6 +28,7 @@ from app.models.phone_number import PhoneNumber
 from app.models.website_knowledge import WebsiteKnowledge
 from app.models.training import TrainingRule, ExampleAnswer
 from app.services.personaplex_service import personaplex_service
+from app.services.question_detector import analyze_call_transcript
 from app.services.audio_utils import AudioConverter
 
 logger = logging.getLogger(__name__)
@@ -371,6 +372,22 @@ class VoiceCallHandler:
                         message=transcript["assistant"]
                     )
                     self.db.add(ai_transcript)
+                
+                # Analyze transcript for unanswered questions
+                try:
+                    detected_questions = analyze_call_transcript(
+                        db=self.db,
+                        company_id=str(self.company.id),
+                        user_transcript=transcript.get("user", ""),
+                        assistant_transcript=transcript.get("assistant", "")
+                    )
+                    if detected_questions:
+                        logger.info(
+                            f"Detected {len(detected_questions)} unanswered questions "
+                            f"in call {self.call_sid}"
+                        )
+                except Exception as e:
+                    logger.error(f"Error analyzing transcript for questions: {e}")
             
             self.db.commit()
         

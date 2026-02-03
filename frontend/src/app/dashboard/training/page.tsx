@@ -162,43 +162,53 @@ export default function TrainingPage() {
         </Card>
 
         {/* Detected Questions */}
-        {detectedQuestions && detectedQuestions.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Lightbulb className="h-5 w-5 text-amber-500" />
-                Gedetecteerde vragen
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Lightbulb className="h-5 w-5 text-amber-500" />
+              Gedetecteerde vragen
+              {detectedQuestions && detectedQuestions.length > 0 && (
                 <Badge variant="warning">{detectedQuestions.length} nieuw</Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardBody>
-              <p className="text-sm text-gray-500 mb-4">
-                Deze vragen zijn vaak gesteld door bellers. Voeg een antwoord toe zodat de AI deze vragen kan beantwoorden.
-              </p>
-              <div className="space-y-3">
-                {detectedQuestions.map((q: any) => (
-                  <div key={q.id} className="flex items-center justify-between p-4 rounded-lg bg-amber-50 border border-amber-100">
-                    <div>
-                      <p className="font-medium text-gray-900">{q.question}</p>
-                      <p className="text-sm text-gray-500">{q.occurrences}x gevraagd</p>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardBody>
+            {!detectedQuestions || detectedQuestions.length === 0 ? (
+              <EmptyState
+                icon={Lightbulb}
+                title="Nog geen vragen gedetecteerd"
+                description="Zodra bellers vragen stellen die de AI niet kan beantwoorden, verschijnen ze hier automatisch. U kunt dan eenvoudig een antwoord toevoegen."
+              />
+            ) : (
+              <>
+                <p className="text-sm text-gray-500 mb-4">
+                  Deze vragen zijn vaak gesteld door bellers. Voeg een antwoord toe zodat de AI deze vragen kan beantwoorden.
+                </p>
+                <div className="space-y-3">
+                  {detectedQuestions.map((q: any) => (
+                    <div key={q.id} className="flex items-center justify-between p-4 rounded-lg bg-amber-50 border border-amber-100">
+                      <div>
+                        <p className="font-medium text-gray-900">{q.question}</p>
+                        <p className="text-sm text-gray-500">{q.occurrences}x gevraagd</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            setNewQuestion(q.question)
+                            setIsAddAnswerModalOpen(true)
+                          }}
+                        >
+                          Antwoord toevoegen
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        onClick={() => {
-                          setNewQuestion(q.question)
-                          setIsAddAnswerModalOpen(true)
-                        }}
-                      >
-                        Antwoord toevoegen
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardBody>
-          </Card>
-        )}
+                  ))}
+                </div>
+              </>
+            )}
+          </CardBody>
+        </Card>
 
         {/* Example Answers */}
         <Card>
