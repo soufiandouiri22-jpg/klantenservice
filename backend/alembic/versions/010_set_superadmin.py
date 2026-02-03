@@ -1,7 +1,7 @@
 """Set superadmin for anarchyamsterdam@gmail.com
 
 Revision ID: 010_set_superadmin
-Revises: 009_add_pgvector_embeddings
+Revises: 009_add_pgvector
 Create Date: 2026-02-03
 
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = '010_set_superadmin'
-down_revision = '009_add_pgvector_embeddings'
+down_revision = '009_add_pgvector'
 branch_labels = None
 depends_on = None
 
