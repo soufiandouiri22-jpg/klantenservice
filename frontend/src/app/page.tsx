@@ -43,18 +43,18 @@ const features = [
 const plans = [
   {
     name: 'Starter',
-    price: '59',
+    price: '149',
     workers: 1,
     description: 'Perfect voor kleine ondernemers',
-    features: ['1 AI-medewerker', 'Onbeperkte gesprekken', 'Agenda integratie', 'Website kennis', '30 dagen logs'],
+    features: ['1 AI-medewerker', '500 belminuten/maand', 'Agenda integratie', 'Website kennis', '30 dagen logs'],
   },
   {
     name: 'Business',
-    price: '99',
-    workers: 5,
+    price: '299',
+    workers: 3,
     popular: true,
     description: 'Ideaal voor groeiende bedrijven',
-    features: ['5 AI-medewerkers', 'Alles van Starter', 'Prioriteit support', '90 dagen logs', 'API toegang'],
+    features: ['3 AI-medewerkers', '2000 belminuten/maand', 'Prioriteit support', '90 dagen logs', 'API toegang'],
   },
   {
     name: 'Enterprise',
