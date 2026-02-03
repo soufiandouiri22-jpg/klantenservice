@@ -79,7 +79,14 @@ export default function KnowledgePage() {
       toast.error('Voer een URL in')
       return
     }
-    createMutation.mutate({ base_url: newUrl })
+    
+    // Auto-add https:// if no protocol specified
+    let url = newUrl.trim()
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = 'https://' + url
+    }
+    
+    createMutation.mutate({ base_url: url })
   }
 
   const handleTestQuestion = () => {
