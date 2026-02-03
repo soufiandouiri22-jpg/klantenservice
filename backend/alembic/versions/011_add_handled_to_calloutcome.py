@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 # revision identifiers
 revision = '011'
-down_revision = '010'
+down_revision = '010_set_superadmin'
 branch_labels = None
 depends_on = None
 
