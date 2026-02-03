@@ -476,7 +476,7 @@ export default function HomePage() {
       </section>
 
       {/* How It Works */}
-      <section className="py-16 md:py-24 bg-white relative z-10">
+      <section className="min-h-screen flex items-center py-16 md:py-24 bg-white relative z-10">
         <div className="max-w-6xl mx-auto px-4">
           <div className="text-center mb-16">
             <span className="inline-flex items-center gap-2 bg-primary-100 text-primary-700 px-4 py-2 rounded-full text-sm font-medium mb-4">
@@ -574,7 +574,7 @@ export default function HomePage() {
       </section>
 
       {/* Features */}
-      <section id="features" className="py-16 md:py-20 bg-white relative z-10">
+      <section id="features" className="min-h-screen flex items-center py-16 md:py-20 bg-white relative z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl lg:text-5xl font-display font-bold text-gray-900">
@@ -601,7 +601,7 @@ export default function HomePage() {
       </section>
 
       {/* Integrations */}
-      <section className="py-16 md:py-24 bg-white relative z-10">
+      <section className="min-h-screen flex items-center py-16 md:py-24 bg-white relative z-10">
         <div className="max-w-6xl mx-auto px-4">
           <div className="text-center mb-16">
             <span className="inline-flex items-center gap-2 bg-primary-100 text-primary-700 px-4 py-2 rounded-full text-sm font-medium mb-4">
@@ -679,7 +679,7 @@ export default function HomePage() {
       </section>
 
       {/* Pricing */}
-      <section id="pricing" className="py-16 md:py-20 relative bg-white z-10">
+      <section id="pricing" className="min-h-screen flex items-center py-16 md:py-20 relative bg-white z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl lg:text-5xl font-display font-bold text-gray-900">
@@ -768,7 +768,7 @@ export default function HomePage() {
       </section>
 
       {/* FAQ */}
-      <section id="faq" className="py-16 md:py-20 bg-white relative z-10">
+      <section id="faq" className="min-h-screen flex items-center py-16 md:py-20 bg-white relative z-10">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl lg:text-5xl font-display font-bold text-gray-900">
@@ -787,7 +787,7 @@ export default function HomePage() {
       </section>
 
       {/* CTA Card */}
-      <section className="py-20 px-4 bg-white relative z-10">
+      <section className="min-h-screen flex items-center py-20 px-4 bg-white relative z-10">
         <div className="max-w-4xl mx-auto">
           <div className="bg-white rounded-2xl border border-gray-200 p-8 md:p-12 lg:p-16 text-center">
             <h2 className="text-2xl md:text-3xl lg:text-4xl font-display font-bold text-gray-900">
