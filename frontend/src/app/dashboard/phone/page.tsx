@@ -890,14 +890,31 @@ export default function PhonePage() {
             </div>
 
             {/* Forwarding info */}
-            {selectedPhone.provider && (
+            {selectedPhone.number && (
               <div>
                 <h4 className="font-medium text-gray-900 mb-3">Doorschakelen</h4>
-                <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
-                  <p className="text-sm text-blue-800 mb-2">
-                    Doorschakelen uitzetten? Toets dit in op uw telefoon:
-                  </p>
-                  <code className="bg-blue-100 px-2 py-1 rounded font-mono text-blue-900">#21#</code>
+                <div className="bg-blue-50 rounded-lg p-4 border border-blue-100 space-y-4">
+                  {/* Activation code */}
+                  <div>
+                    <p className="text-sm text-blue-800 mb-2 font-medium">
+                      Aanzetten:
+                    </p>
+                    <code className="bg-blue-100 px-2 py-1 rounded font-mono text-blue-900">
+                      {(() => {
+                        const provider = providers.find(p => p.id === selectedPhone.provider)
+                        const code = provider?.code || '*21*'
+                        const number = selectedPhone.number.replace('+', '')
+                        return `${code}${number}#`
+                      })()}
+                    </code>
+                  </div>
+                  {/* Deactivation code */}
+                  <div>
+                    <p className="text-sm text-blue-800 mb-2 font-medium">
+                      Uitzetten:
+                    </p>
+                    <code className="bg-blue-100 px-2 py-1 rounded font-mono text-blue-900">#21#</code>
+                  </div>
                 </div>
               </div>
             )}
