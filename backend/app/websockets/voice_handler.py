@@ -70,6 +70,12 @@ class VoiceCallHandler:
         # Queue for sending audio back to Twilio
         self.send_queue: asyncio.Queue[bytes] = asyncio.Queue()
         
+        # Audio buffer for collecting enough samples before sending to PersonaPlex
+        # Moshi/PersonaPlex needs at least 80ms (1920 samples at 24kHz) per frame
+        self.audio_buffer = bytearray()
+        self.MIN_AUDIO_SAMPLES = 1920  # 80ms at 24kHz
+        self.MIN_AUDIO_BYTES = self.MIN_AUDIO_SAMPLES * 2  # 16-bit = 2 bytes per sample
+        
         # Running flag
         self.is_running = False
     
@@ -274,12 +280,24 @@ class VoiceCallHandler:
                     # Convert mulaw to PCM for PersonaPlex
                     pcm_audio = self.audio_converter.mulaw_to_pcm(mulaw_audio)
                     
-                    # Process through PersonaPlex and queue responses
-                    async for response_audio in personaplex_service.process_audio(
-                        self.session_id, 
-                        pcm_audio
-                    ):
-                        await self.send_queue.put(response_audio)
+                    # Buffer audio until we have enough for PersonaPlex (80ms minimum)
+                    # Moshi needs at least 1920 samples (80ms at 24kHz) per frame
+                    self.audio_buffer.extend(pcm_audio)
+                    
+                    # Only send when we have enough samples
+                    if len(self.audio_buffer) >= self.MIN_AUDIO_BYTES:
+                        # Take the buffered audio
+                        audio_to_process = bytes(self.audio_buffer)
+                        self.audio_buffer.clear()
+                        
+                        logger.debug(f"Sending {len(audio_to_process)} bytes ({len(audio_to_process)//2} samples) to PersonaPlex")
+                        
+                        # Process through PersonaPlex and queue responses
+                        async for response_audio in personaplex_service.process_audio(
+                            self.session_id, 
+                            audio_to_process
+                        ):
+                            await self.send_queue.put(response_audio)
                 
                 elif event_type == "stop":
                     logger.info(f"Received stop event for call {self.call_sid}")
@@ -341,6 +359,17 @@ class VoiceCallHandler:
         Cleanup after call ends.
         """
         self.is_running = False
+        
+        # Process any remaining buffered audio
+        if len(self.audio_buffer) > 0:
+            logger.info(f"Processing remaining {len(self.audio_buffer)} bytes from audio buffer")
+            audio_to_process = bytes(self.audio_buffer)
+            self.audio_buffer.clear()
+            async for response_audio in personaplex_service.process_audio(
+                self.session_id, 
+                audio_to_process
+            ):
+                pass  # Don't send at cleanup, call is ending
         
         # Get transcript from PersonaPlex
         transcript = await personaplex_service.end_session(self.session_id)
