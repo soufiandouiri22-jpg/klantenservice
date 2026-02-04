@@ -130,7 +130,8 @@ export default function SettingsPage() {
   })
 
   const checkoutMutation = useMutation({
-    mutationFn: paymentsApi.createCheckoutSession,
+    mutationFn: ({ plan, interval }: { plan: string; interval?: 'monthly' | 'yearly' }) => 
+      paymentsApi.createCheckoutSession(plan, interval),
     onSuccess: (data) => {
       // Redirect to Stripe Checkout
       if (data.checkout_url) {
@@ -144,7 +145,7 @@ export default function SettingsPage() {
   })
 
   const portalMutation = useMutation({
-    mutationFn: paymentsApi.createPortalSession,
+    mutationFn: () => paymentsApi.createPortalSession(),
     onSuccess: (data) => {
       // Redirect to Stripe Customer Portal
       if (data.portal_url) {
@@ -157,8 +158,8 @@ export default function SettingsPage() {
     },
   })
 
-  const handleUpgrade = (plan: string) => {
-    checkoutMutation.mutate(plan)
+  const handleUpgrade = (plan: string, interval: 'monthly' | 'yearly' = 'monthly') => {
+    checkoutMutation.mutate({ plan, interval })
   }
 
   const handleManageSubscription = () => {
