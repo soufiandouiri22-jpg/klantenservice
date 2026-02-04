@@ -100,6 +100,9 @@ async def create_checkout_session(
         cancel_url = request.cancel_url or f"{settings.FRONTEND_URL}/dashboard/settings?payment=cancelled"
         
         # Create checkout session
+        # Add 14-day trial for starter and business plans
+        trial_days = 14 if request.plan in ["starter", "business"] else None
+        
         checkout_session = stripe.checkout.Session.create(
             customer=customer_id,
             payment_method_types=["card", "ideal"],  # Card and iDEAL for NL
@@ -115,6 +118,7 @@ async def create_checkout_session(
                 "plan": request.plan
             },
             subscription_data={
+                "trial_period_days": trial_days,
                 "metadata": {
                     "company_id": str(company.id),
                     "plan": request.plan
