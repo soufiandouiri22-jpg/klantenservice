@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -66,10 +66,14 @@ const benefits = [
 
 export default function RegisterPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { setAuth } = useAuthStore()
   const [isLoading, setIsLoading] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
   const [step, setStep] = useState(1)
+  
+  // Get redirect URL from query params (used for checkout flow)
+  const redirectUrl = searchParams.get('redirect') || '/dashboard'
 
   const {
     register,
@@ -108,7 +112,7 @@ export default function RegisterPage() {
       localStorage.setItem('refresh_token', response.data.refresh_token)
       
       toast.success('Account aangemaakt! Welkom bij klantenservice.ai')
-      router.push('/dashboard')
+      router.push(redirectUrl)
     } catch (error: any) {
       toast.error(error.response?.data?.detail || 'Registratie mislukt')
     } finally {
@@ -122,6 +126,8 @@ export default function RegisterPage() {
       const { auth_url, state } = await authApi.getGoogleUrl()
       // Store state in sessionStorage for verification after redirect
       sessionStorage.setItem('google_oauth_state', state)
+      // Store redirect URL for after OAuth callback
+      sessionStorage.setItem('auth_redirect_url', redirectUrl)
       // Redirect to Google
       window.location.href = auth_url
     } catch (error: any) {

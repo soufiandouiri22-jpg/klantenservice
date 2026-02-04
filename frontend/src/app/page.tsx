@@ -747,7 +747,7 @@ export default function HomePage() {
                   ))}
                 </ul>
                 <Link
-                  href={typeof plan.price === 'string' && plan.price.includes('aanvraag') ? '/contact' : '/register'}
+                  href={typeof plan.price === 'string' && plan.price.includes('aanvraag') ? '/contact' : `/checkout?plan=${plan.name.toLowerCase()}`}
                   className={`mt-8 block w-full rounded-xl py-4 text-center text-sm font-semibold transition-colors ${
                     plan.popular
                       ? 'bg-white text-primary-600 hover:bg-primary-50'
@@ -758,7 +758,7 @@ export default function HomePage() {
                 </Link>
                 {typeof plan.price !== 'string' || !plan.price.includes('aanvraag') ? (
                   <p className={`mt-3 text-center text-xs ${plan.popular ? 'text-primary-200' : 'text-gray-400'}`}>
-                    ✓ Nu geen betaling verschuldigd
+                    ✓ 14 dagen gratis proberen
                   </p>
                 ) : null}
               </div>

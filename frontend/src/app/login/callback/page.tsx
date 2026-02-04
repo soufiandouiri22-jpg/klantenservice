@@ -40,8 +40,12 @@ function CallbackContent() {
         return
       }
 
-      // Clear stored state
+      // Get stored redirect URL before clearing
+      const redirectUrl = sessionStorage.getItem('auth_redirect_url') || '/dashboard'
+      
+      // Clear stored state and redirect URL
       sessionStorage.removeItem('google_oauth_state')
+      sessionStorage.removeItem('auth_redirect_url')
 
       try {
         // Exchange code for tokens
@@ -60,7 +64,7 @@ function CallbackContent() {
         setAuth(user, company)
         
         toast.success('Welkom!')
-        router.push('/dashboard')
+        router.push(redirectUrl)
       } catch (err: any) {
         const message = err.response?.data?.detail || 'Google login mislukt'
         setError(message)
