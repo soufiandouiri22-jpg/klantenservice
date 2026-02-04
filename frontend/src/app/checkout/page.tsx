@@ -8,6 +8,9 @@ import toast from 'react-hot-toast'
 import { paymentsApi } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 
+// Force dynamic rendering - this page uses searchParams and localStorage
+export const dynamic = 'force-dynamic'
+
 export default function CheckoutPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
