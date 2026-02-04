@@ -23,7 +23,7 @@ from app.schemas.phone_number import (
     PurchaseNumberRequest,
     PurchaseNumberResponse,
 )
-from app.api.deps import get_current_user, get_current_company, require_admin
+from app.api.deps import get_current_user, get_current_company, get_current_company_with_subscription, require_admin
 
 router = APIRouter()
 
@@ -55,14 +55,26 @@ async def list_phone_numbers(
 async def create_phone_number(
     data: PhoneNumberCreate,
     current_user: User = Depends(require_admin),
-    company: Company = Depends(get_current_company),
+    company: Company = Depends(get_current_company_with_subscription),  # Requires active subscription
     db: Session = Depends(get_db)
 ):
     """
     Start the phone setup wizard.
     User provides their business phone number, system automatically assigns an AI number.
     Requires admin or owner role.
+    Requires active subscription or trial.
     """
+    # Check phone number limit based on subscription plan (same as AI workers limit)
+    current_count = db.query(PhoneNumber).filter(
+        PhoneNumber.company_id == company.id
+    ).count()
+    
+    if current_count >= company.ai_worker_limit:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"U heeft het maximum aantal telefoonnummers ({company.ai_worker_limit}) bereikt. Upgrade uw abonnement voor meer nummers.",
+        )
+    
     # Check if business number already exists for this company
     existing = db.query(PhoneNumber).filter(
         PhoneNumber.business_number == data.business_number,

@@ -14,7 +14,7 @@ from app.models.company import Company
 from app.models.ai_worker import AIWorker, AIWorkerStatus
 from app.models.call_log import CallLog
 from app.schemas.ai_worker import AIWorkerCreate, AIWorkerUpdate, AIWorkerResponse, AIWorkerStats
-from app.api.deps import get_current_user, get_current_company, require_manager
+from app.api.deps import get_current_user, get_current_company, get_current_company_with_subscription, require_manager
 
 router = APIRouter()
 
@@ -36,14 +36,15 @@ async def list_ai_workers(
 async def create_ai_worker(
     data: AIWorkerCreate,
     current_user: User = Depends(require_manager),
-    company: Company = Depends(get_current_company),
+    company: Company = Depends(get_current_company_with_subscription),  # Requires active subscription
     db: Session = Depends(get_db)
 ):
     """
     Create a new AI worker.
     Requires manager, admin, or owner role.
+    Requires active subscription or trial.
     """
-    # Check worker limit based on subscription
+    # Check worker limit based on subscription plan
     current_count = db.query(AIWorker).filter(
         AIWorker.company_id == company.id
     ).count()

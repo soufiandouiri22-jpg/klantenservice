@@ -101,6 +101,21 @@ def get_current_company(
     return company
 
 
+def get_current_company_with_subscription(
+    company: Company = Depends(get_current_company),
+) -> Company:
+    """
+    Get the company and verify it has an active subscription or trial.
+    Use this dependency for endpoints that require paid features.
+    """
+    if company.subscription_status not in ["trialing", "active"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Activeer eerst je abonnement om deze functie te gebruiken. Ga naar Instellingen > Abonnement.",
+        )
+    return company
+
+
 class RoleChecker:
     """
     Dependency class to check user roles.

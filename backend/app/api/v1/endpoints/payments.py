@@ -30,10 +30,10 @@ PLAN_PRICES = {
     "enterprise_yearly": settings.STRIPE_PRICE_ENTERPRISE_YEARLY,
 }
 
-# Plan limits
+# Plan limits (AI workers and phone numbers per plan)
 PLAN_LIMITS = {
     "starter": 1,
-    "business": 5,
+    "business": 3,
     "enterprise": 10,
 }
 
@@ -275,23 +275,34 @@ async def handle_checkout_completed(session: dict, db: Session):
         logger.warning(f"Company not found: {company_id}")
         return
     
-    # Update company
+    # Update company plan
     if plan and hasattr(SubscriptionPlan, plan):
         company.subscription_plan = SubscriptionPlan[plan]
         company.max_ai_workers = PLAN_LIMITS.get(plan, 1)
     
     if subscription_id:
         company.stripe_subscription_id = subscription_id
+        
+        # Get subscription status from Stripe to determine if trial
+        try:
+            subscription = stripe.Subscription.retrieve(subscription_id)
+            company.subscription_status = subscription.status  # "trialing" or "active"
+            logger.info(f"Subscription status from Stripe: {subscription.status}")
+        except stripe.error.StripeError as e:
+            logger.warning(f"Could not fetch subscription status: {e}")
+            company.subscription_status = "active"
+    else:
+        company.subscription_status = "active"
     
-    company.subscription_status = "active"
     db.commit()
     
-    logger.info(f"Checkout completed for company {company.name}, plan: {plan}")
+    logger.info(f"Checkout completed for company {company.name}, plan: {plan}, status: {company.subscription_status}")
 
 
 async def handle_subscription_created(subscription: dict, db: Session):
     """Handle new subscription."""
     company_id = subscription.get("metadata", {}).get("company_id")
+    plan = subscription.get("metadata", {}).get("plan")
     
     if not company_id:
         # Try to find by customer ID
@@ -307,10 +318,16 @@ async def handle_subscription_created(subscription: dict, db: Session):
         return
     
     company.stripe_subscription_id = subscription["id"]
-    company.subscription_status = subscription["status"]
+    company.subscription_status = subscription["status"]  # "trialing" or "active"
+    
+    # Update plan if provided in metadata
+    if plan and hasattr(SubscriptionPlan, plan):
+        company.subscription_plan = SubscriptionPlan[plan]
+        company.max_ai_workers = PLAN_LIMITS.get(plan, 1)
+    
     db.commit()
     
-    logger.info(f"Subscription created for company {company.name}")
+    logger.info(f"Subscription created for company {company.name}, status: {subscription['status']}")
 
 
 async def handle_subscription_updated(subscription: dict, db: Session):
@@ -351,10 +368,9 @@ async def handle_subscription_deleted(subscription: dict, db: Session):
         logger.warning(f"Company not found for subscription: {subscription_id}")
         return
     
-    # Downgrade to starter
-    company.subscription_plan = SubscriptionPlan.starter
-    company.max_ai_workers = 1
-    company.subscription_status = "cancelled"
+    # Set status to canceled (Stripe spelling)
+    # Keep the current plan but mark as canceled - they lose access
+    company.subscription_status = "canceled"
     company.stripe_subscription_id = None
     
     db.commit()
