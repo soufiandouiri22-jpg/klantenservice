@@ -1,7 +1,7 @@
 """Add Stripe fields to companies
 
-Revision ID: 011_add_stripe_fields
-Revises: 010_set_superadmin
+Revision ID: 012_add_stripe_fields
+Revises: 011
 Create Date: 2026-02-03
 
 """
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '011_add_stripe_fields'
-down_revision = '010_set_superadmin'
+revision = '012_add_stripe_fields'
+down_revision = '011'
 branch_labels = None
 depends_on = None
 
