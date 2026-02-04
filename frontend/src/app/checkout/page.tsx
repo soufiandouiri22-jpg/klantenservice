@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Headphones, ArrowLeft, Loader2, CreditCard } from 'lucide-react'
@@ -8,10 +8,7 @@ import toast from 'react-hot-toast'
 import { paymentsApi } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 
-// Force dynamic rendering - this page uses searchParams and localStorage
-export const dynamic = 'force-dynamic'
-
-export default function CheckoutPage() {
+function CheckoutContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user, company } = useAuthStore()
@@ -142,5 +139,20 @@ export default function CheckoutPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function CheckoutPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary-600 mx-auto mb-4" />
+          <p className="text-gray-600">Laden...</p>
+        </div>
+      </div>
+    }>
+      <CheckoutContent />
+    </Suspense>
   )
 }
