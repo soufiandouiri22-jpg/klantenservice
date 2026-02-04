@@ -691,3 +691,21 @@ export const adminApi = {
     return response.data
   },
 }
+
+// Payments API (Stripe)
+export const paymentsApi = {
+  createCheckoutSession: async (plan: string, interval: 'monthly' | 'yearly' = 'monthly') => {
+    const response = await api.post('/payments/create-checkout-session', { plan, interval })
+    return response.data
+  },
+  
+  createPortalSession: async () => {
+    const response = await api.post('/payments/create-portal-session', {})
+    return response.data
+  },
+  
+  getSubscription: async () => {
+    const response = await api.get('/payments/subscription')
+    return response.data
+  },
+}

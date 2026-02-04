@@ -37,9 +37,13 @@ class Settings(BaseSettings):
     # Hugging Face (for PersonaPlex model)
     HUGGINGFACE_TOKEN: str = ""
     
-    # RunPod (for GPU inference)
+    # PersonaPlex Dedicated Pod
+    PERSONAPLEX_POD_URL: str = ""  # URL of the dedicated GPU pod (e.g., https://pod-id.runpod.net)
+    PERSONAPLEX_POD_TOKEN: str = ""  # Authentication token for the pod
+    
+    # RunPod (legacy - for serverless fallback)
     RUNPOD_API_KEY: str = ""
-    RUNPOD_ENDPOINT_ID: str = ""  # Your PersonaPlex endpoint ID from RunPod
+    RUNPOD_ENDPOINT_ID: str = ""  # Deprecated: use PERSONAPLEX_POD_URL instead
     
     # Twilio
     TWILIO_ACCOUNT_SID: str = ""
@@ -76,6 +80,18 @@ class Settings(BaseSettings):
     # Resend (Email)
     RESEND_API_KEY: str = ""
     RESEND_FROM_EMAIL: str = "noreply@klantenservice.ai"
+    
+    # Stripe
+    STRIPE_SECRET_KEY: str = ""
+    STRIPE_PUBLISHABLE_KEY: str = ""
+    STRIPE_WEBHOOK_SECRET: str = ""
+    # Price IDs (monthly and yearly)
+    STRIPE_PRICE_STARTER_MONTHLY: str = ""
+    STRIPE_PRICE_STARTER_YEARLY: str = ""
+    STRIPE_PRICE_BUSINESS_MONTHLY: str = ""
+    STRIPE_PRICE_BUSINESS_YEARLY: str = ""
+    STRIPE_PRICE_ENTERPRISE_MONTHLY: str = ""
+    STRIPE_PRICE_ENTERPRISE_YEARLY: str = ""
     
     # Frontend URL (for invite links)
     FRONTEND_URL: str = "http://localhost:3000"

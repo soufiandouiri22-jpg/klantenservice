@@ -7,6 +7,9 @@ Twilio Media Streams:
 - Send audio as base64-encoded mulaw (8kHz, mono)
 - Receive audio as base64-encoded mulaw to play back
 
+The PersonaPlex service now uses a persistent WebSocket connection to a
+dedicated GPU pod, eliminating the need for audio buffering workarounds.
+
 Reference: https://www.twilio.com/docs/voice/media-streams
 """
 import asyncio
@@ -14,13 +17,11 @@ import base64
 import json
 import logging
 from datetime import datetime
-from uuid import UUID
 from typing import Optional
 
 from fastapi import WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 
-from app.core.database import get_db
 from app.models.ai_worker import AIWorker, AIWorkerStatus
 from app.models.company import Company
 from app.models.call_log import CallLog, CallStatus, CallOutcome
@@ -41,7 +42,7 @@ class VoiceCallHandler:
     This class manages:
     - The WebSocket connection with Twilio
     - Audio conversion (mulaw <-> PCM)
-    - Communication with PersonaPlex
+    - Communication with PersonaPlex via WebSocket
     - Call logging and transcription
     """
     
@@ -69,12 +70,6 @@ class VoiceCallHandler:
         
         # Queue for sending audio back to Twilio
         self.send_queue: asyncio.Queue[bytes] = asyncio.Queue()
-        
-        # Audio buffer for collecting enough samples before sending to PersonaPlex
-        # Moshi/PersonaPlex needs at least 80ms (1920 samples at 24kHz) per frame
-        self.audio_buffer = bytearray()
-        self.MIN_AUDIO_SAMPLES = 1920  # 80ms at 24kHz
-        self.MIN_AUDIO_BYTES = self.MIN_AUDIO_SAMPLES * 2  # 16-bit = 2 bytes per sample
         
         # Running flag
         self.is_running = False
@@ -231,7 +226,7 @@ class VoiceCallHandler:
         # Get system-wide prompts (from /admin)
         system_prompts = personaplex_service.get_system_prompts(self.db)
         
-        # Create PersonaPlex session
+        # Create PersonaPlex session (establishes WebSocket to pod)
         await personaplex_service.create_session(
             session_id=self.session_id,
             worker=self.ai_worker,
@@ -262,7 +257,10 @@ class VoiceCallHandler:
     
     async def _receive_audio_loop(self):
         """
-        Receive audio from Twilio and process through PersonaPlex.
+        Receive audio from Twilio and stream to PersonaPlex.
+        
+        With the dedicated pod and WebSocket connection, we can stream
+        audio directly without buffering.
         """
         while self.is_running:
             try:
@@ -280,24 +278,13 @@ class VoiceCallHandler:
                     # Convert mulaw to PCM for PersonaPlex
                     pcm_audio = self.audio_converter.mulaw_to_pcm(mulaw_audio)
                     
-                    # Buffer audio until we have enough for PersonaPlex (80ms minimum)
-                    # Moshi needs at least 1920 samples (80ms at 24kHz) per frame
-                    self.audio_buffer.extend(pcm_audio)
-                    
-                    # Only send when we have enough samples
-                    if len(self.audio_buffer) >= self.MIN_AUDIO_BYTES:
-                        # Take the buffered audio
-                        audio_to_process = bytes(self.audio_buffer)
-                        self.audio_buffer.clear()
-                        
-                        logger.debug(f"Sending {len(audio_to_process)} bytes ({len(audio_to_process)//2} samples) to PersonaPlex")
-                        
-                        # Process through PersonaPlex and queue responses
-                        async for response_audio in personaplex_service.process_audio(
-                            self.session_id, 
-                            audio_to_process
-                        ):
-                            await self.send_queue.put(response_audio)
+                    # Stream directly to PersonaPlex (no buffering needed)
+                    # The WebSocket connection handles the streaming efficiently
+                    async for response_audio in personaplex_service.process_audio(
+                        self.session_id, 
+                        pcm_audio
+                    ):
+                        await self.send_queue.put(response_audio)
                 
                 elif event_type == "stop":
                     logger.info(f"Received stop event for call {self.call_sid}")
@@ -305,8 +292,9 @@ class VoiceCallHandler:
                     break
                 
                 elif event_type == "mark":
-                    # Playback marker (optional handling)
-                    pass
+                    # Playback marker - can be used for interrupt handling
+                    mark_name = data.get("mark", {}).get("name", "")
+                    logger.debug(f"Mark received: {mark_name}")
                 
             except WebSocketDisconnect:
                 self.is_running = False
@@ -319,8 +307,6 @@ class VoiceCallHandler:
         """
         Send audio from PersonaPlex back to Twilio.
         """
-        sequence_number = 0
-        
         while self.is_running:
             try:
                 # Get audio from queue (with timeout)
@@ -345,7 +331,6 @@ class VoiceCallHandler:
                 }
                 
                 await self.websocket.send_text(json.dumps(media_message))
-                sequence_number += 1
                 
             except WebSocketDisconnect:
                 self.is_running = False
@@ -360,18 +345,7 @@ class VoiceCallHandler:
         """
         self.is_running = False
         
-        # Process any remaining buffered audio
-        if len(self.audio_buffer) > 0:
-            logger.info(f"Processing remaining {len(self.audio_buffer)} bytes from audio buffer")
-            audio_to_process = bytes(self.audio_buffer)
-            self.audio_buffer.clear()
-            async for response_audio in personaplex_service.process_audio(
-                self.session_id, 
-                audio_to_process
-            ):
-                pass  # Don't send at cleanup, call is ending
-        
-        # Get transcript from PersonaPlex
+        # Get transcript from PersonaPlex and close session
         transcript = await personaplex_service.end_session(self.session_id)
         
         # Update call log

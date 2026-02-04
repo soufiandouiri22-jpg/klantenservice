@@ -18,6 +18,7 @@ from app.api.v1.endpoints import (
     dashboard,
     webhooks,
     admin,
+    payments,
 )
 
 api_router = APIRouter()
@@ -118,4 +119,11 @@ api_router.include_router(
     admin.router,
     prefix="/admin",
     tags=["Admin"]
+)
+
+# Payments (Stripe)
+api_router.include_router(
+    payments.router,
+    prefix="/payments",
+    tags=["Betalingen"]
 )

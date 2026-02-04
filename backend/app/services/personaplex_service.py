@@ -2,8 +2,8 @@
 klantenservice.ai - PersonaPlex-7B Integration Service
 Real-time speech-to-speech conversational AI for phone calls
 
-This service connects to PersonaPlex-7B running on RunPod Serverless.
-For local development without RunPod, it operates in mock mode.
+This service connects to PersonaPlex-7B running on a dedicated RunPod GPU Pod
+via WebSocket for low-latency bidirectional audio streaming.
 
 PersonaPlex is NVIDIA's full-duplex speech-to-speech model that:
 - Handles audio input directly (no separate STT needed)
@@ -14,12 +14,14 @@ PersonaPlex is NVIDIA's full-duplex speech-to-speech model that:
 Reference: https://huggingface.co/nvidia/personaplex-7b-v1
 """
 import asyncio
-import aiohttp
-import base64
+import json
 import logging
-import os
-from typing import Optional, AsyncGenerator, Any
-from dataclasses import dataclass
+from typing import Optional, AsyncGenerator, Dict
+from dataclasses import dataclass, field
+
+import websockets
+from websockets.client import WebSocketClientProtocol
+import aiohttp
 
 from app.core.config import get_settings
 from app.models.ai_worker import AIWorker, AddressForm
@@ -37,61 +39,60 @@ class ConversationSession:
     worker_id: str
     company_id: str
     is_active: bool = True
-    conversation_history: list = None
-    
-    def __post_init__(self):
-        if self.conversation_history is None:
-            self.conversation_history = []
+    websocket: Optional[WebSocketClientProtocol] = None
+    conversation_history: list = field(default_factory=list)
+    _lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
 
 class PersonaPlexService:
     """
-    Service for managing PersonaPlex-7B conversations via RunPod Serverless.
+    Service for managing PersonaPlex-7B conversations via WebSocket.
     
     This service handles:
     - Building persona prompts from AI worker settings
-    - Managing conversation sessions
-    - Sending audio to RunPod and receiving responses
-    - Processing audio streams bidirectionally
+    - Managing WebSocket connections to the dedicated pod
+    - Bidirectional audio streaming
+    - Session lifecycle management
     """
     
     def __init__(self):
-        self.runpod_api_key = settings.RUNPOD_API_KEY
-        self.runpod_endpoint_id = settings.RUNPOD_ENDPOINT_ID
-        self.mock_mode = not self.runpod_api_key or not self.runpod_endpoint_id
-        self.active_sessions: dict[str, ConversationSession] = {}
+        self.pod_url = settings.PERSONAPLEX_POD_URL
+        self.pod_token = settings.PERSONAPLEX_POD_TOKEN
+        self.mock_mode = not self.pod_url
+        self.active_sessions: Dict[str, ConversationSession] = {}
         
         if self.mock_mode:
             logger.warning(
-                "PersonaPlex running in MOCK MODE (no RunPod endpoint configured). "
-                "Set RUNPOD_API_KEY and RUNPOD_ENDPOINT_ID for production use."
+                "PersonaPlex running in MOCK MODE (no pod URL configured). "
+                "Set PERSONAPLEX_POD_URL for production use."
             )
         else:
-            logger.info(f"PersonaPlex configured with RunPod endpoint: {self.runpod_endpoint_id}")
+            logger.info(f"PersonaPlex configured with pod URL: {self.pod_url}")
     
     @property
-    def runpod_url(self) -> str:
-        """Get the RunPod API URL for the endpoint."""
-        return f"https://api.runpod.ai/v2/{self.runpod_endpoint_id}"
+    def ws_url(self) -> str:
+        """Get the WebSocket URL for audio streaming."""
+        # Convert http(s) to ws(s)
+        url = self.pod_url.replace("https://", "wss://").replace("http://", "ws://")
+        return url.rstrip("/")
+    
+    @property
+    def http_url(self) -> str:
+        """Get the HTTP URL for REST endpoints."""
+        return self.pod_url.rstrip("/")
     
     @property
     def headers(self) -> dict:
-        """Get headers for RunPod API requests."""
-        return {
-            "Authorization": f"Bearer {self.runpod_api_key}",
-            "Content-Type": "application/json"
-        }
+        """Get headers for HTTP requests."""
+        headers = {"Content-Type": "application/json"}
+        if self.pod_token:
+            headers["Authorization"] = f"Bearer {self.pod_token}"
+        return headers
     
     def get_system_prompts(self, db) -> str:
         """
         Get combined system prompts from the database.
         These are platform-wide prompts that apply to ALL AI workers.
-        
-        Args:
-            db: Database session
-            
-        Returns:
-            Combined system prompt string
         """
         try:
             prompts = db.query(SystemPrompt).filter(
@@ -101,7 +102,6 @@ class PersonaPlexService:
             if not prompts:
                 return ""
             
-            # Combine all active prompts
             combined_parts = []
             for prompt in prompts:
                 combined_parts.append(f"## {prompt.name}\n{prompt.content}")
@@ -122,20 +122,6 @@ class PersonaPlexService:
     ) -> str:
         """
         Build a persona prompt for PersonaPlex from AI worker settings.
-        
-        This prompt defines the AI's personality, behavior rules, and permissions
-        that will guide the conversation.
-        
-        Args:
-            worker: The AI worker configuration
-            company_name: Name of the company for context
-            knowledge_context: Optional RAG context from website knowledge
-            training_rules: Optional list of enabled training rules
-            example_answers: Optional list of Q&A pairs for common questions
-            system_prompts: Optional pre-fetched system prompts string
-            
-        Returns:
-            Formatted persona prompt string
         """
         # Determine address form
         address = "u" if worker.address_form == AddressForm.FORMAL else "jij"
@@ -143,16 +129,14 @@ class PersonaPlexService:
         # Get behavior settings with defaults
         behavior = worker.behavior_settings or {}
         
-        # Build behavior rules from training_rules if provided, otherwise use defaults
+        # Build behavior rules from training_rules if provided
         behavior_rules = []
         
         if training_rules:
-            # Use the company's custom training rules
             for rule in training_rules:
                 if rule.get("description"):
                     behavior_rules.append(f"- {rule['description']}")
         else:
-            # Fallback to default behavior settings
             if behavior.get("apologize_on_complaints", True):
                 behavior_rules.append("- Bied oprecht excuses aan wanneer een klant een klacht heeft")
             if behavior.get("always_offer_alternatives", True):
@@ -188,7 +172,7 @@ class PersonaPlexService:
         example_qa_section = ""
         if example_answers and len(example_answers) > 0:
             qa_items = []
-            for ex in example_answers[:20]:  # Limit to 20 examples
+            for ex in example_answers[:20]:
                 qa_items.append(f"V: {ex['question']}\nA: {ex['answer']}")
             example_qa_section = f"""
 ## Voorbeeldantwoorden
@@ -197,15 +181,13 @@ Als de klant een van deze vragen stelt, gebruik dan het bijbehorende antwoord al
 {chr(10).join(qa_items)}
 """
         
-        # Build the complete prompt with system prompts first
+        # Build the complete prompt
         prompt_parts = []
         
-        # 1. System-wide base prompts (from /admin)
         if system_prompts:
             prompt_parts.append(f"""# BASISINSTRUCTIES (klantenservice.ai)
 {system_prompts}""")
         
-        # 2. Company/Worker specific configuration
         worker_prompt = f"""# BEDRIJFSCONFIGURATIE
 
 Je bent {worker.name}, een {worker.role_title} bij {company_name}.
@@ -227,89 +209,41 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
         
         return "\n\n---\n\n".join(prompt_parts).strip()
     
-    async def _call_runpod(self, payload: dict, timeout: int = 30) -> dict:
-        """
-        Make a synchronous call to RunPod endpoint.
-        
-        Args:
-            payload: The request payload
-            timeout: Request timeout in seconds
-            
-        Returns:
-            Response from RunPod
-        """
-        async with aiohttp.ClientSession() as session:
-            # Use /runsync for synchronous execution (waits for result)
-            url = f"{self.runpod_url}/runsync"
-            
-            async with session.post(
-                url,
-                json={"input": payload},
-                headers=self.headers,
-                timeout=aiohttp.ClientTimeout(total=timeout)
-            ) as response:
-                if response.status != 200:
-                    error_text = await response.text()
-                    logger.error(f"RunPod API error: {response.status} - {error_text}")
-                    return {"error": f"RunPod API error: {response.status}"}
-                
-                result = await response.json()
-                logger.info(f"RunPod raw response: status={result.get('status')}, id={result.get('id')}")
-                
-                # Check job status
-                if result.get("status") == "COMPLETED":
-                    output = result.get("output", {})
-                    logger.info(f"RunPod COMPLETED: has_audio={bool(output.get('audio'))}, has_error={bool(output.get('error'))}, keys={list(output.keys())}")
-                    return output
-                elif result.get("status") == "FAILED":
-                    logger.error(f"RunPod FAILED: {result.get('error')}")
-                    return {"error": result.get("error", "Unknown error")}
-                else:
-                    # Job might be queued or in progress
-                    logger.warning(f"RunPod job not completed: status={result.get('status')}, id={result.get('id')}")
-                    return {"status": result.get("status"), "id": result.get("id")}
+    async def _check_pod_health(self) -> bool:
+        """Check if the pod is healthy and ready."""
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    f"{self.http_url}/health",
+                    headers=self.headers,
+                    timeout=aiohttp.ClientTimeout(total=5)
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        return data.get("model_loaded", False)
+                    return False
+        except Exception as e:
+            logger.error(f"Health check failed: {e}")
+            return False
     
-    async def _call_runpod_async(self, payload: dict) -> str:
-        """
-        Start an async job on RunPod.
+    async def _connect_websocket(self, session_id: str) -> WebSocketClientProtocol:
+        """Establish WebSocket connection to the pod."""
+        url = f"{self.ws_url}/stream/{session_id}"
+        if self.pod_token:
+            url += f"?token={self.pod_token}"
         
-        Returns:
-            Job ID for polling
-        """
-        async with aiohttp.ClientSession() as session:
-            url = f"{self.runpod_url}/run"
-            
-            async with session.post(
-                url,
-                json={"input": payload},
-                headers=self.headers
-            ) as response:
-                result = await response.json()
-                return result.get("id")
-    
-    async def _poll_job_status(self, job_id: str, timeout: int = 120) -> dict:
-        """Poll for job completion."""
-        async with aiohttp.ClientSession() as session:
-            url = f"{self.runpod_url}/status/{job_id}"
-            
-            start_time = asyncio.get_event_loop().time()
-            
-            while True:
-                async with session.get(url, headers=self.headers) as response:
-                    result = await response.json()
-                    
-                    status = result.get("status")
-                    if status == "COMPLETED":
-                        return result.get("output", {})
-                    elif status == "FAILED":
-                        return {"error": result.get("error", "Job failed")}
-                    
-                    # Check timeout
-                    if asyncio.get_event_loop().time() - start_time > timeout:
-                        return {"error": "Job timeout"}
-                    
-                    # Wait before polling again
-                    await asyncio.sleep(0.5)
+        logger.info(f"Connecting WebSocket to {url}")
+        
+        ws = await websockets.connect(
+            url,
+            ping_interval=20,
+            ping_timeout=10,
+            close_timeout=5,
+            max_size=10 * 1024 * 1024,  # 10MB max message size
+        )
+        
+        logger.info(f"WebSocket connected for session {session_id}")
+        return ws
     
     async def create_session(
         self,
@@ -323,20 +257,7 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
         system_prompts: Optional[str] = None
     ) -> ConversationSession:
         """
-        Create a new conversation session.
-        
-        Args:
-            session_id: Unique identifier for this session (usually call_log.id)
-            worker: The AI worker handling this call
-            company_name: Name of the company
-            voice_prompt_path: Optional path to voice prompt audio for voice cloning
-            knowledge_context: Optional RAG context from website knowledge
-            training_rules: Optional list of enabled training rules
-            example_answers: Optional list of Q&A pairs for common questions
-            system_prompts: Optional pre-fetched system prompts string
-            
-        Returns:
-            ConversationSession object
+        Create a new conversation session with WebSocket connection.
         """
         # Build persona prompt
         persona_prompt = self.build_persona_prompt(
@@ -360,26 +281,37 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
         
         self.active_sessions[session_id] = session
         
-        # Initialize session on RunPod (warm up)
-        # Note: Cold start can take 2-3 min (worker spin-up + model loading)
-        if not self.mock_mode:
-            try:
-                logger.info(f"Initializing RunPod session {session_id} (may take up to 4 min for cold start)...")
-                result = await self._call_runpod({
-                    "action": "init",
-                    "session_id": session_id,
-                    "persona_prompt": persona_prompt
-                }, timeout=240)  # 4 minutes for cold start + model loading
-                logger.info(f"RunPod session init result: {result}")
-                if result.get("error"):
-                    logger.error(f"RunPod init returned error: {result['error']}")
-                elif result.get("status") == "initialized":
-                    logger.info(f"RunPod session {session_id} successfully initialized!")
-            except asyncio.TimeoutError:
-                logger.error(f"RunPod session init timeout after 240s - cold start too long, worker may not be ready")
-                # Don't raise - try to continue anyway, process will auto-init
-            except Exception as e:
-                logger.error(f"Failed to initialize RunPod session: {e}", exc_info=True)
+        if self.mock_mode:
+            logger.info(f"Mock mode: session {session_id} created (no real connection)")
+            return session
+        
+        try:
+            # Connect WebSocket
+            ws = await self._connect_websocket(session_id)
+            session.websocket = ws
+            
+            # Send initialization message
+            init_message = {
+                "persona_prompt": persona_prompt,
+                "voice_prompt": voice_prompt_path or "NATF2.pt"
+            }
+            await ws.send(json.dumps(init_message))
+            
+            # Wait for confirmation
+            response = await asyncio.wait_for(ws.recv(), timeout=120)
+            response_data = json.loads(response)
+            
+            if response_data.get("status") == "initialized":
+                logger.info(f"Session {session_id} initialized successfully")
+            else:
+                logger.warning(f"Unexpected init response: {response_data}")
+            
+        except asyncio.TimeoutError:
+            logger.error(f"Session init timeout for {session_id}")
+            raise
+        except Exception as e:
+            logger.error(f"Failed to create session {session_id}: {e}", exc_info=True)
+            raise
         
         return session
     
@@ -391,17 +323,7 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
         """
         Process incoming audio and yield response audio chunks.
         
-        This is the main processing loop that:
-        1. Receives audio from the caller
-        2. Sends it to RunPod
-        3. Yields response audio chunks
-        
-        Args:
-            session_id: The session identifier
-            audio_chunk: PCM audio bytes at 24kHz
-            
-        Yields:
-            Response audio chunks (PCM at 24kHz)
+        Uses WebSocket for bidirectional streaming.
         """
         session = self.active_sessions.get(session_id)
         
@@ -409,70 +331,64 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
             logger.warning(f"Session {session_id} not found or inactive")
             return
         
-        # Mock mode: just log that we received audio (no response)
         if self.mock_mode:
             logger.debug(f"Mock mode: received {len(audio_chunk)} bytes for session {session_id}")
             return
         
+        ws = session.websocket
+        if not ws:
+            logger.error(f"No WebSocket connection for session {session_id}")
+            return
+        
         try:
-            # Encode audio as base64
-            audio_b64 = base64.b64encode(audio_chunk).decode("utf-8")
-            logger.debug(f"Sending {len(audio_chunk)} bytes audio to RunPod for session {session_id}")
-            
-            # Send to RunPod
-            # Note: First few requests may be slower while model warms up
-            result = await self._call_runpod({
-                "action": "process",
-                "session_id": session_id,
-                "audio": audio_b64,
-                "persona_prompt": session.persona_prompt
-            }, timeout=30)  # Increased from 10s for cold start scenarios
-            
-            logger.info(f"RunPod process result for {session_id}: has_audio={bool(result.get('audio'))}, error={result.get('error')}, status={result.get('status')}")
-            
-            if "error" in result:
-                logger.error(f"RunPod processing error: {result['error']}")
-                return
-            
-            # Check for non-completed status (job queued/in_progress)
-            if result.get("status") and result.get("status") not in ["COMPLETED", "initialized"]:
-                logger.warning(f"RunPod job not ready: {result.get('status')}")
-                return
-            
-            # Get response audio
-            response_audio_b64 = result.get("audio")
-            if response_audio_b64:
-                response_bytes = base64.b64decode(response_audio_b64)
-                logger.info(f"Got {len(response_bytes)} bytes audio response from RunPod")
+            async with session._lock:
+                # Send audio bytes directly
+                await ws.send(audio_chunk)
                 
-                # Yield in chunks for streaming
-                chunk_size = 4800  # 100ms at 24kHz
-                for i in range(0, len(response_bytes), chunk_size):
-                    yield response_bytes[i:i+chunk_size]
-            else:
-                logger.warning(f"RunPod returned no audio for session {session_id}")
-            
-            # Store transcript if available
-            transcript = result.get("transcript", {})
-            if transcript:
-                session.conversation_history.append(transcript)
-                logger.debug(f"Transcript: {transcript}")
+                # Receive response with timeout
+                try:
+                    response = await asyncio.wait_for(ws.recv(), timeout=5.0)
                     
-        except asyncio.TimeoutError:
-            logger.warning(
-                f"RunPod request timeout for session {session_id} after 30s. "
-                f"This may indicate a cold start - consider setting Min Workers >= 1"
-            )
+                    if isinstance(response, bytes):
+                        # Audio response
+                        logger.debug(f"Received {len(response)} bytes audio response")
+                        
+                        # Yield in chunks for streaming
+                        chunk_size = 4800  # 100ms at 24kHz
+                        for i in range(0, len(response), chunk_size):
+                            yield response[i:i+chunk_size]
+                    
+                    elif isinstance(response, str):
+                        # JSON response (possibly error or transcript)
+                        data = json.loads(response)
+                        if "error" in data:
+                            logger.error(f"Pod error: {data['error']}")
+                        elif "transcript" in data:
+                            session.conversation_history.append(data["transcript"])
+                
+                except asyncio.TimeoutError:
+                    # No response yet, that's okay for streaming
+                    pass
+                    
+        except websockets.exceptions.ConnectionClosed as e:
+            logger.warning(f"WebSocket closed for session {session_id}: {e}")
+            session.websocket = None
+            # Try to reconnect
+            try:
+                ws = await self._connect_websocket(session_id)
+                session.websocket = ws
+                # Re-init session
+                await ws.send(json.dumps({
+                    "persona_prompt": session.persona_prompt
+                }))
+                logger.info(f"Reconnected WebSocket for session {session_id}")
+            except Exception as reconnect_error:
+                logger.error(f"Failed to reconnect: {reconnect_error}")
         except Exception as e:
             logger.error(f"Error processing audio for session {session_id}: {e}")
     
     async def get_transcript(self, session_id: str) -> Optional[dict]:
-        """
-        Get the transcript from the session.
-        
-        Returns:
-            Dictionary with 'user' and 'assistant' transcript texts
-        """
+        """Get the transcript from the session."""
         session = self.active_sessions.get(session_id)
         
         if not session:
@@ -500,15 +416,7 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
         }
     
     async def end_session(self, session_id: str) -> Optional[dict]:
-        """
-        End a conversation session and cleanup resources.
-        
-        Args:
-            session_id: The session identifier
-            
-        Returns:
-            Final transcript if available
-        """
+        """End a conversation session and cleanup resources."""
         session = self.active_sessions.get(session_id)
         
         if not session:
@@ -517,20 +425,29 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
         
         logger.info(f"Ending PersonaPlex session {session_id}")
         
-        # Get final transcript before closing
+        # Get final transcript
         transcript = await self.get_transcript(session_id)
         
-        # Notify RunPod to end session
-        if not self.mock_mode:
+        # Close WebSocket
+        if session.websocket:
             try:
-                await self._call_runpod({
-                    "action": "end",
-                    "session_id": session_id
-                }, timeout=5)
+                # Send end message
+                await session.websocket.send(json.dumps({"action": "end"}))
+                
+                # Wait for transcript response
+                try:
+                    response = await asyncio.wait_for(session.websocket.recv(), timeout=5)
+                    data = json.loads(response)
+                    if "transcript" in data:
+                        transcript = data["transcript"]
+                except asyncio.TimeoutError:
+                    pass
+                
+                await session.websocket.close()
             except Exception as e:
-                logger.error(f"Error ending RunPod session: {e}")
+                logger.error(f"Error closing WebSocket: {e}")
         
-        # Mark as inactive and remove
+        # Cleanup
         session.is_active = False
         if session_id in self.active_sessions:
             del self.active_sessions[session_id]
@@ -538,7 +455,7 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
         return transcript
     
     def get_active_session_count(self) -> int:
-        """Get the number of active sessions"""
+        """Get the number of active sessions."""
         return len(self.active_sessions)
 
 

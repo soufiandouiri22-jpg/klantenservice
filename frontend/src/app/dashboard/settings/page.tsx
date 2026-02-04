@@ -14,7 +14,7 @@ import { Toggle } from '@/components/ui/Toggle'
 import { Badge } from '@/components/ui/Badge'
 import { PageLoader } from '@/components/ui/Spinner'
 import { Modal } from '@/components/ui/Modal'
-import { companyApi, usersApi, authApi } from '@/lib/api'
+import { companyApi, usersApi, authApi, paymentsApi } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 
 const tabs = [
@@ -128,6 +128,42 @@ export default function SettingsPage() {
       toast.error(message)
     },
   })
+
+  const checkoutMutation = useMutation({
+    mutationFn: paymentsApi.createCheckoutSession,
+    onSuccess: (data) => {
+      // Redirect to Stripe Checkout
+      if (data.checkout_url) {
+        window.location.href = data.checkout_url
+      }
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.detail || 'Er ging iets mis bij het starten van de betaling'
+      toast.error(message)
+    },
+  })
+
+  const portalMutation = useMutation({
+    mutationFn: paymentsApi.createPortalSession,
+    onSuccess: (data) => {
+      // Redirect to Stripe Customer Portal
+      if (data.portal_url) {
+        window.location.href = data.portal_url
+      }
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.detail || 'Er ging iets mis bij het openen van het klantportaal'
+      toast.error(message)
+    },
+  })
+
+  const handleUpgrade = (plan: string) => {
+    checkoutMutation.mutate(plan)
+  }
+
+  const handleManageSubscription = () => {
+    portalMutation.mutate()
+  }
 
   const handleInviteUser = () => {
     inviteUserMutation.mutate(newUserData)
@@ -358,20 +394,38 @@ export default function SettingsPage() {
                         >
                           <h4 className="font-medium text-gray-900 capitalize">{plan}</h4>
                           <p className="text-sm text-gray-500">
-                            {plan === 'starter' ? '1' : plan === 'business' ? '5' : '7+'} AI-medewerkers
+                            {plan === 'starter' ? '1' : plan === 'business' ? '5' : '5+'} AI-medewerkers
                           </p>
                           {subscription?.plan !== plan && (
                             <Button
                               variant="outline"
                               size="sm"
                               className="mt-3 w-full"
+                              onClick={() => handleUpgrade(plan)}
+                              disabled={checkoutMutation.isPending}
                             >
-                              {subscription?.plan === 'starter' ? 'Upgraden' : 'Wijzigen'}
+                              {checkoutMutation.isPending ? 'Laden...' : (subscription?.plan === 'starter' ? 'Upgraden' : 'Wijzigen')}
                             </Button>
                           )}
                         </div>
                       ))}
                     </div>
+
+                    {/* Manage subscription button for existing Stripe customers */}
+                    {subscription?.has_stripe && (
+                      <div className="mt-6 pt-6 border-t border-gray-200">
+                        <Button
+                          variant="outline"
+                          onClick={handleManageSubscription}
+                          disabled={portalMutation.isPending}
+                        >
+                          {portalMutation.isPending ? 'Laden...' : 'Beheer abonnement & facturen'}
+                        </Button>
+                        <p className="mt-2 text-sm text-gray-500">
+                          Wijzig je betaalmethode, bekijk facturen of annuleer je abonnement.
+                        </p>
+                      </div>
+                    )}
                   </CardBody>
                 </Card>
               </motion.div>

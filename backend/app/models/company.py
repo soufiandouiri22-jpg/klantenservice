@@ -52,6 +52,10 @@ class Company(Base):
     subscription_started_at = Column(DateTime, nullable=True)
     subscription_ends_at = Column(DateTime, nullable=True)
     
+    # Stripe
+    stripe_customer_id = Column(String(255), nullable=True, unique=True)
+    stripe_subscription_id = Column(String(255), nullable=True)
+    
     # AI Worker limits based on plan
     max_ai_workers = Column(Integer, default=1)
     

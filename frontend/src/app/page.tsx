@@ -61,7 +61,7 @@ const plans = [
     price: 'Op aanvraag',
     workers: 7,
     description: 'Voor grote organisaties',
-    features: ['7+ AI-medewerkers', 'Alles van Business', 'Dedicated support', 'Onbeperkte logs', 'Custom integraties'],
+    features: ['5+ AI-medewerkers', 'Alles van Business', 'Dedicated support', 'Onbeperkte logs', 'Custom integraties'],
   },
 ]
 
