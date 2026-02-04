@@ -372,6 +372,10 @@ class HealthResponse(BaseModel):
     device: str
 
 
+class VoicesResponse(BaseModel):
+    voices: list
+
+
 # REST Endpoints
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
@@ -382,6 +386,50 @@ async def health_check():
         active_sessions=len(sessions),
         device=device
     )
+
+
+@app.get("/voices", response_model=VoicesResponse)
+async def list_voices():
+    """
+    List available PersonaPlex voice presets.
+    
+    Returns voice IDs (without .pt extension) that can be used
+    in session creation as voice_prompt parameter.
+    
+    This endpoint does not require authentication so the admin UI
+    can easily fetch the available voices.
+    """
+    from huggingface_hub import hf_hub_download
+    import tarfile
+    
+    hf_repo = "nvidia/personaplex-7b-v1"
+    
+    try:
+        # Ensure voices are downloaded and extracted
+        voices_tgz = hf_hub_download(hf_repo, "voices.tgz")
+        voices_dir = Path(voices_tgz).parent / "voices"
+        
+        if not voices_dir.exists():
+            logger.info("Extracting voice prompts for /voices endpoint...")
+            with tarfile.open(voices_tgz, "r:gz") as tar:
+                tar.extractall(path=Path(voices_tgz).parent)
+        
+        # List .pt files and return without extension
+        voices = sorted([f.stem for f in voices_dir.glob("*.pt")])
+        
+        if not voices:
+            # Fallback if directory is empty
+            voices = ["NATF0", "NATF1", "NATF2", "NATF3", "NATF4", "NATF5"]
+        
+        logger.info(f"Available voices: {voices}")
+        return VoicesResponse(voices=voices)
+        
+    except Exception as e:
+        logger.error(f"Error listing voices: {e}")
+        # Return hardcoded fallback
+        return VoicesResponse(
+            voices=["NATF0", "NATF1", "NATF2", "NATF3", "NATF4", "NATF5"]
+        )
 
 
 @app.post("/session", response_model=SessionResponse, dependencies=[Depends(verify_token)])

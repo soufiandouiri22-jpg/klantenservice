@@ -38,6 +38,9 @@ from app.models.call_log import CallLog, CallStatus, CallOutcome
 from app.models.phone_number import PhoneNumber
 from app.models.website_knowledge import WebsiteKnowledge
 from app.models.training import TrainingRule, ExampleAnswer
+from app.models.latency_log import LatencyLog
+from app.models.usage_log import UsageLog
+from app.models.global_config import GlobalConfig
 from app.services.personaplex_service import personaplex_service
 from app.services.question_detector import analyze_call_transcript
 from app.services.audio_utils import AudioConverter
@@ -104,6 +107,9 @@ class VoiceCallHandler:
         
         # Calendar ID (if known from availability check)
         self._calendar_id: Optional[str] = None
+        
+        # Auto-respond setting (from GlobalConfig, set in initialize)
+        self._auto_respond: bool = True
     
     async def initialize_from_phone_number(self, to_number: str, from_number: str):
         """
@@ -166,9 +172,16 @@ class VoiceCallHandler:
         
         self.session_id = str(self.call_log.id)
         
+        # Get auto-respond setting from GlobalConfig (platform-wide)
+        auto_respond_config = self.db.query(GlobalConfig).filter(
+            GlobalConfig.key == "voice_auto_respond"
+        ).first()
+        self._auto_respond = auto_respond_config.value if auto_respond_config else True
+        
         logger.info(
             f"Call initialized: {from_number} -> {to_number}, "
-            f"AI Worker: {self.ai_worker.name}, Company: {self.company.name}"
+            f"AI Worker: {self.ai_worker.name}, Company: {self.company.name}, "
+            f"Auto-respond: {self._auto_respond}"
         )
     
     async def get_knowledge_context(self) -> Optional[str]:
@@ -258,11 +271,13 @@ class VoiceCallHandler:
         system_prompts = personaplex_service.get_system_prompts(self.db)
         
         # Create PersonaPlex session (establishes WebSocket to pod)
+        # Company and db are passed for voice preset lookup (company override > platform default)
         await personaplex_service.create_session(
             session_id=self.session_id,
             worker=self.ai_worker,
-            company_name=self.company.name,
-            voice_prompt_path=None,  # Voice cloning not yet implemented
+            company=self.company,
+            db=self.db,
+            voice_prompt_path=None,  # Can be overridden by company admin_overrides
             knowledge_context=knowledge_context,
             training_rules=training_rules,
             example_answers=example_answers,
@@ -321,9 +336,14 @@ class VoiceCallHandler:
                     segment_ready = False
                     elapsed = now - self._buffer_start_time
                     
-                    # Ready if: duration exceeded OR detected silence
-                    if elapsed >= SEGMENT_DURATION_SECONDS:
-                        segment_ready = True
+                    if self._auto_respond:
+                        # VAD mode: automatically detect when to process based on duration
+                        # Ready if: duration exceeded (voice activity detection)
+                        if elapsed >= SEGMENT_DURATION_SECONDS:
+                            segment_ready = True
+                    # When auto_respond is False, we only process on:
+                    # - "stop" event (call ending)
+                    # - "mark" event with specific trigger (manual mode)
                     
                     # Process segment if ready
                     if segment_ready and elapsed >= MIN_SEGMENT_DURATION_SECONDS:
@@ -341,9 +361,16 @@ class VoiceCallHandler:
                     break
                 
                 elif event_type == "mark":
-                    # Playback marker - can be used for interrupt handling
+                    # Playback marker - can be used for interrupt handling or manual trigger
                     mark_name = data.get("mark", {}).get("name", "")
                     logger.debug(f"Mark received: {mark_name}")
+                    
+                    # In manual mode (auto_respond=False), a specific mark can trigger processing
+                    if not self._auto_respond and mark_name == "process_segment":
+                        if self._audio_buffer and self._buffer_start_time:
+                            elapsed = time.time() - self._buffer_start_time
+                            if elapsed >= MIN_SEGMENT_DURATION_SECONDS:
+                                await self._process_segment()
                 
             except WebSocketDisconnect:
                 self.is_running = False
@@ -362,6 +389,7 @@ class VoiceCallHandler:
         5. Run orchestrator (LLM + tools) -> get facts + instructions
         6. Send update_context to pod
         7. Queue response audio for Twilio
+        8. Log latencies
         """
         if not self._audio_buffer:
             return
@@ -377,35 +405,48 @@ class VoiceCallHandler:
         
         logger.info(f"Processing segment for turn {turn_id} ({len(segment)} bytes)")
         
+        # Track latencies
+        total_start = time.time()
+        stt_latency_ms = 0
+        orchestrator_latency_ms = 0
+        pod_latency_ms = 0
+        
         try:
             # 1. Start turn on pod
             await personaplex_service.start_turn(self.session_id, turn_id)
             
-            # 2. Send segment to pod and get response
+            # 2. Send segment to pod and get response (timed)
+            pod_start = time.time()
             response_audio, assistant_text, recv_turn_id = await personaplex_service.process_audio_segment(
                 self.session_id,
                 segment,
                 turn_id
             )
+            pod_latency_ms = int((time.time() - pod_start) * 1000)
             
             # Store assistant transcript
             if assistant_text:
                 self._assistant_transcripts.append(assistant_text)
             
-            # 3. Run STT on user segment to get user_transcript
-            user_transcript = await self._transcribe_audio(segment)
+            # 3. Run STT on user segment to get user_transcript (timed)
+            stt_start = time.time()
+            user_transcript, stt_seconds = await self._transcribe_audio(segment)
+            stt_latency_ms = int((time.time() - stt_start) * 1000)
+            
             if user_transcript:
                 self._user_transcripts.append(user_transcript)
             
             logger.debug(f"Turn {turn_id} - User: {user_transcript[:50] if user_transcript else '(none)'}...")
             logger.debug(f"Turn {turn_id} - Assistant: {assistant_text[:50] if assistant_text else '(none)'}...")
             
-            # 4. Run orchestrator to get context injection
+            # 4. Run orchestrator to get context injection (timed)
+            orchestrator_start = time.time()
             facts, instructions = await self._run_orchestrator(
                 user_transcript or "",
                 " ".join(self._assistant_transcripts),
                 turn_id
             )
+            orchestrator_latency_ms = int((time.time() - orchestrator_start) * 1000)
             
             # 5. Send context update to pod (for next turn)
             if facts or instructions:
@@ -424,11 +465,45 @@ class VoiceCallHandler:
                 for i in range(0, len(response_audio), chunk_size):
                     chunk = response_audio[i:i+chunk_size]
                     await self.send_queue.put(chunk)
+            
+            # 7. Log latencies and STT usage
+            total_latency_ms = int((time.time() - total_start) * 1000)
+            
+            try:
+                if self.call_log:
+                    # Log latency
+                    latency_log = LatencyLog(
+                        call_log_id=self.call_log.id,
+                        turn_id=turn_id,
+                        stt_latency_ms=stt_latency_ms,
+                        orchestrator_latency_ms=orchestrator_latency_ms,
+                        pod_latency_ms=pod_latency_ms,
+                        total_latency_ms=total_latency_ms,
+                    )
+                    self.db.add(latency_log)
+                    
+                    # Log STT usage
+                    if stt_seconds > 0:
+                        usage_log = UsageLog(
+                            company_id=self.company.id,
+                            call_log_id=self.call_log.id,
+                            turn_id=turn_id,
+                            stt_seconds=stt_seconds,
+                            stt_model="whisper-1",
+                        )
+                        usage_log.calculate_costs()
+                        self.db.add(usage_log)
+                    
+                    self.db.commit()
+            except Exception as log_err:
+                logger.warning(f"Failed to log latency/usage: {log_err}")
+            
+            logger.info(f"Turn {turn_id} completed: STT={stt_latency_ms}ms, Orch={orchestrator_latency_ms}ms, Pod={pod_latency_ms}ms, Total={total_latency_ms}ms")
                     
         except Exception as e:
             logger.error(f"Error processing segment for turn {turn_id}: {e}", exc_info=True)
     
-    async def _transcribe_audio(self, pcm_audio: bytes) -> str:
+    async def _transcribe_audio(self, pcm_audio: bytes) -> Tuple[str, float]:
         """
         Transcribe PCM audio using OpenAI Whisper API.
         
@@ -436,15 +511,18 @@ class VoiceCallHandler:
             pcm_audio: Raw PCM audio bytes (24kHz, 16-bit, mono)
             
         Returns:
-            Transcribed text (Dutch)
+            Tuple of (transcribed_text, audio_seconds)
         """
         if not settings.OPENAI_API_KEY:
             logger.warning("OPENAI_API_KEY not configured - STT disabled")
-            return ""
+            return "", 0.0
         
         try:
             from openai import OpenAI
             import wave
+            
+            # Calculate audio duration (24kHz, 16-bit mono = 48000 bytes/second)
+            audio_seconds = len(pcm_audio) / 48000
             
             # Convert PCM to WAV format for Whisper
             wav_buffer = io.BytesIO()
@@ -465,11 +543,11 @@ class VoiceCallHandler:
                 response_format="text"
             )
             
-            return transcript.strip() if transcript else ""
+            return (transcript.strip() if transcript else ""), audio_seconds
             
         except Exception as e:
             logger.error(f"STT error: {e}")
-            return ""
+            return "", 0.0
     
     async def _run_orchestrator(
         self,

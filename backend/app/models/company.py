@@ -3,7 +3,7 @@ klantenservice.ai - Company (Tenant) Model
 """
 from datetime import datetime
 from enum import Enum
-from sqlalchemy import Column, String, DateTime, Boolean, Integer, Text, Enum as SQLEnum
+from sqlalchemy import Column, String, DateTime, Boolean, Integer, Text, Enum as SQLEnum, JSON
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 import uuid
@@ -75,6 +75,16 @@ class Company(Base):
     # Status
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)
+    
+    # Admin Controls (platform admin only)
+    is_kill_switched = Column(Boolean, default=False)  # Stop all calls immediately
+    feature_flags = Column(JSON, default=dict)  # Feature toggles per company
+    
+    # Hidden Admin Overrides (only visible to platform admin)
+    # Contains: force_language, force_u_form, orchestrator_model_override,
+    # rag_threshold_override, audio_segment_ms_override, max_calls_per_minute,
+    # disable_auto_booking, etc.
+    admin_overrides = Column(JSON, default=dict)
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)

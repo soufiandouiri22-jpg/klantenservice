@@ -690,6 +690,70 @@ export const adminApi = {
     const response = await api.get('/admin/categories')
     return response.data
   },
+  
+  // Metrics
+  getMetricsOverview: async () => {
+    const response = await api.get('/admin/metrics/overview')
+    return response.data
+  },
+  
+  getLatencyMetrics: async (hours: number = 24) => {
+    const response = await api.get('/admin/metrics/latency', { params: { hours } })
+    return response.data
+  },
+  
+  getCostMetrics: async () => {
+    const response = await api.get('/admin/metrics/costs')
+    return response.data
+  },
+  
+  // Customers
+  getCustomers: async () => {
+    const response = await api.get('/admin/customers')
+    return response.data
+  },
+  
+  getCustomerDetail: async (customerId: string) => {
+    const response = await api.get(`/admin/customers/${customerId}`)
+    return response.data
+  },
+  
+  updateCustomerOverrides: async (customerId: string, overrides: any) => {
+    const response = await api.put(`/admin/customers/${customerId}/overrides`, overrides)
+    return response.data
+  },
+  
+  toggleKillSwitch: async (customerId: string, enabled: boolean, reason?: string) => {
+    const response = await api.post(`/admin/customers/${customerId}/kill-switch`, { enabled, reason })
+    return response.data
+  },
+  
+  // Global Config
+  getGlobalConfigs: async () => {
+    const response = await api.get('/admin/config')
+    return response.data
+  },
+  
+  updateGlobalConfig: async (key: string, data: { value?: any; description?: string }) => {
+    const response = await api.put(`/admin/config/${key}`, data)
+    return response.data
+  },
+  
+  seedGlobalConfigs: async () => {
+    const response = await api.post('/admin/config/seed')
+    return response.data
+  },
+  
+  // Logs
+  getRecentCalls: async (limit: number = 50, companyId?: string) => {
+    const response = await api.get('/admin/calls/recent', { params: { limit, company_id: companyId } })
+    return response.data
+  },
+  
+  getCallTrace: async (callId: string) => {
+    const response = await api.get(`/admin/calls/${callId}/trace`)
+    return response.data
+  },
 }
 
 // Payments API (Stripe)

@@ -22,6 +22,7 @@ from app.models.user import User, UserRole, OAuthProvider
 from app.models.company import Company, SubscriptionPlan
 from app.models.training import TrainingRule
 from app.models.training import DEFAULT_TRAINING_RULES
+from app.models.global_config import GlobalConfig
 from app.schemas.user import (
     UserCreate,
     UserLogin,
@@ -52,6 +53,37 @@ def generate_slug(name: str) -> str:
     return slug.strip('-')
 
 
+def get_platform_voice_defaults(db: Session) -> dict:
+    """
+    Get platform-wide voice defaults for new companies.
+    These are stored in GlobalConfig and applied to admin_overrides.
+    """
+    defaults = {}
+    
+    # Get voice-related global configs
+    voice_configs = db.query(GlobalConfig).filter(
+        GlobalConfig.category == "voice"
+    ).all()
+    
+    for config in voice_configs:
+        if config.key == "voice_default_preset":
+            defaults["voice_preset"] = config.value
+        elif config.key == "voice_auto_respond":
+            defaults["auto_respond"] = config.value
+        elif config.key == "voice_vad_sensitivity":
+            defaults["vad_sensitivity"] = config.value
+        elif config.key == "voice_segment_ms":
+            defaults["audio_segment_ms"] = config.value
+    
+    # Fallback defaults if GlobalConfig not seeded
+    if "voice_preset" not in defaults:
+        defaults["voice_preset"] = "NATF2.pt"
+    if "auto_respond" not in defaults:
+        defaults["auto_respond"] = True
+    
+    return defaults
+
+
 @router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED)
 async def register(
     company_data: CompanyCreate,
@@ -77,7 +109,10 @@ async def register(
         slug = f"{base_slug}-{counter}"
         counter += 1
     
-    # Create company
+    # Get platform voice defaults for new company
+    voice_defaults = get_platform_voice_defaults(db)
+    
+    # Create company with platform defaults
     company = Company(
         id=uuid4(),
         name=company_data.name,
@@ -91,6 +126,7 @@ async def register(
         btw_number=company_data.btw_number,
         subscription_plan=SubscriptionPlan.starter,
         max_ai_workers=1,
+        admin_overrides=voice_defaults,  # Apply platform defaults
     )
     db.add(company)
     db.flush()
@@ -577,7 +613,10 @@ async def google_oauth_callback(
                 slug = f"{base_slug}-{counter}"
                 counter += 1
             
-            # Create company
+            # Get platform voice defaults for new company
+            voice_defaults = get_platform_voice_defaults(db)
+            
+            # Create company with platform defaults
             company = Company(
                 id=uuid4(),
                 name=company_name,
@@ -585,6 +624,7 @@ async def google_oauth_callback(
                 email=email,
                 subscription_plan=SubscriptionPlan.starter,
                 max_ai_workers=1,
+                admin_overrides=voice_defaults,  # Apply platform defaults
             )
             db.add(company)
             db.flush()

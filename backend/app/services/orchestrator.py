@@ -29,6 +29,8 @@ from app.services.call_tools import (
     tool_create_note,
     tool_flag_unknown,
 )
+from app.models.context_log import ContextLog
+from app.models.usage_log import UsageLog
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
@@ -277,6 +279,9 @@ def build_context_payload(
     Returns:
         Tuple of (facts, instructions) to inject into PersonaPlex
     """
+    import time
+    from uuid import UUID
+    
     # Check if OpenAI is configured
     if not settings.OPENAI_API_KEY:
         logger.warning("OPENAI_API_KEY not configured - orchestrator disabled")
@@ -317,10 +322,19 @@ Bepaal welke tools nodig zijn en geef daarna facts + instructions als JSON."""
         },
     ]
     
+    # Track for logging
+    tool_calls_log: List[Dict[str, Any]] = []
+    detected_intent = None
+    intent_confidence = None
+    was_escalated = 0
+    total_input_tokens = 0
+    total_output_tokens = 0
+    model_used = settings.ORCHESTRATOR_MODEL
+    
     try:
         # First call: let LLM decide which tools to call
         response = client.chat.completions.create(
-            model=settings.ORCHESTRATOR_MODEL,
+            model=model_used,
             messages=messages,
             tools=TOOLS_OPENAI,
             tool_choice="auto",
@@ -328,6 +342,11 @@ Bepaal welke tools nodig zijn en geef daarna facts + instructions als JSON."""
         )
         
         choice = response.choices[0]
+        
+        # Track token usage
+        if response.usage:
+            total_input_tokens += response.usage.prompt_tokens
+            total_output_tokens += response.usage.completion_tokens
         
         # If tools were called, execute them
         if choice.message.tool_calls:
@@ -341,10 +360,34 @@ Bepaal welke tools nodig zijn en geef daarna facts + instructions als JSON."""
                 except json.JSONDecodeError:
                     args = {}
                 
+                # Detect intent from first tool call
+                if detected_intent is None:
+                    detected_intent = name
+                    intent_confidence = 85  # Assume high confidence if LLM called a tool
+                
                 logger.info(f"Orchestrator calling tool: {name} with {args}")
+                
+                # Time the tool call
+                tool_start = time.time()
                 result = _run_tool(name, args, tool_context)
+                tool_latency_ms = int((time.time() - tool_start) * 1000)
+                
                 result_str = json.dumps(result, ensure_ascii=False)
                 tool_results.append(result_str)
+                
+                # Log tool call
+                tool_calls_log.append({
+                    "name": name,
+                    "arguments": args,
+                    "result": result,
+                    "latency_ms": tool_latency_ms,
+                })
+                
+                # Check if escalated
+                if name == "flag_unknown":
+                    was_escalated = 1
+                elif name == "create_note" and args.get("priority") in ["high", "urgent"]:
+                    was_escalated = 2
                 
                 tool_messages.append({
                     "role": "tool",
@@ -354,18 +397,62 @@ Bepaal welke tools nodig zijn en geef daarna facts + instructions als JSON."""
             
             # Second call: get facts + instructions based on tool results
             followup = client.chat.completions.create(
-                model=settings.ORCHESTRATOR_MODEL,
+                model=model_used,
                 messages=messages + tool_messages,
                 max_tokens=512,
             )
+            
+            # Track token usage
+            if followup.usage:
+                total_input_tokens += followup.usage.prompt_tokens
+                total_output_tokens += followup.usage.completion_tokens
             
             text = followup.choices[0].message.content or ""
         else:
             # No tools called - use direct response
             text = choice.message.content or ""
+            detected_intent = "direct_response"
+            intent_confidence = 70
         
         # Parse facts and instructions from response
-        return _parse_context_response(text)
+        facts, instructions = _parse_context_response(text)
+        
+        # Log to ContextLog
+        try:
+            if call_log_id:
+                context_log = ContextLog(
+                    call_log_id=UUID(call_log_id),
+                    turn_id=turn_id,
+                    user_transcript=user_transcript,
+                    assistant_transcript=assistant_transcript_so_far,
+                    detected_intent=detected_intent,
+                    intent_confidence=intent_confidence,
+                    tool_calls=tool_calls_log,
+                    facts=facts,
+                    instructions=instructions,
+                    model_used=model_used,
+                    was_escalated=was_escalated,
+                )
+                db.add(context_log)
+                
+                # Log to UsageLog
+                usage_log = UsageLog(
+                    company_id=UUID(company_id),
+                    call_log_id=UUID(call_log_id),
+                    turn_id=turn_id,
+                    llm_input_tokens=total_input_tokens,
+                    llm_output_tokens=total_output_tokens,
+                    llm_model=model_used,
+                )
+                usage_log.calculate_costs()
+                db.add(usage_log)
+                
+                db.commit()
+        except Exception as log_err:
+            logger.warning(f"Failed to save context/usage log: {log_err}")
+            # Don't fail the whole operation if logging fails
+        
+        return facts, instructions
         
     except Exception as e:
         logger.error(f"Orchestrator error: {e}", exc_info=True)

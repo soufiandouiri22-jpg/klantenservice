@@ -12,6 +12,10 @@ from app.models.system_prompt import SystemPrompt
 from app.models.call_log import CallLog, CallTranscript
 from app.models.appointment import Appointment
 from app.models.internal_note import InternalNote
+from app.models.global_config import GlobalConfig
+from app.models.usage_log import UsageLog
+from app.models.latency_log import LatencyLog
+from app.models.context_log import ContextLog
 
 __all__ = [
     "Company",
@@ -29,4 +33,8 @@ __all__ = [
     "CallTranscript",
     "Appointment",
     "InternalNote",
+    "GlobalConfig",
+    "UsageLog",
+    "LatencyLog",
+    "ContextLog",
 ]

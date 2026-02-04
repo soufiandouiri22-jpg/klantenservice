@@ -26,6 +26,8 @@ import aiohttp
 from app.core.config import get_settings
 from app.models.ai_worker import AIWorker, AddressForm
 from app.models.system_prompt import SystemPrompt
+from app.models.company import Company
+from app.models.global_config import GlobalConfig
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
@@ -246,11 +248,46 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
         logger.info(f"WebSocket connected for session {session_id}")
         return ws
     
+    def _get_voice_preset(self, company: Optional[Company], db) -> str:
+        """
+        Get voice preset: company override > platform default > hardcoded fallback.
+        
+        Args:
+            company: The company (may have admin_overrides)
+            db: Database session
+            
+        Returns:
+            Voice preset filename (e.g., "NATF2.pt")
+        """
+        # 1. Check company-level override
+        if company and company.admin_overrides:
+            preset = company.admin_overrides.get("voice_preset")
+            if preset:
+                logger.debug(f"Using company voice preset: {preset}")
+                return preset
+        
+        # 2. Check platform-wide default
+        if db:
+            try:
+                config = db.query(GlobalConfig).filter(
+                    GlobalConfig.key == "voice_default_preset"
+                ).first()
+                if config and config.value:
+                    logger.debug(f"Using platform voice preset: {config.value}")
+                    return config.value
+            except Exception as e:
+                logger.warning(f"Could not get platform voice preset: {e}")
+        
+        # 3. Hardcoded fallback
+        logger.debug("Using hardcoded fallback voice preset: NATF2.pt")
+        return "NATF2.pt"
+
     async def create_session(
         self,
         session_id: str,
         worker: AIWorker,
-        company_name: str,
+        company: Company,
+        db,
         voice_prompt_path: Optional[str] = None,
         knowledge_context: Optional[str] = None,
         training_rules: Optional[list] = None,
@@ -259,11 +296,22 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
     ) -> ConversationSession:
         """
         Create a new conversation session with WebSocket connection.
+        
+        Args:
+            session_id: Unique session identifier
+            worker: The AI worker handling this call
+            company: The company (for name + admin_overrides)
+            db: Database session (for platform defaults lookup)
+            voice_prompt_path: Override voice preset (optional)
+            knowledge_context: RAG context from website scraping
+            training_rules: Company-specific training rules
+            example_answers: Company-specific example Q&A
+            system_prompts: Platform-wide system prompts
         """
         # Build persona prompt
         persona_prompt = self.build_persona_prompt(
             worker=worker,
-            company_name=company_name,
+            company_name=company.name,
             knowledge_context=knowledge_context,
             training_rules=training_rules,
             example_answers=example_answers,
@@ -286,6 +334,9 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
             logger.info(f"Mock mode: session {session_id} created (no real connection)")
             return session
         
+        # Get voice preset: explicit param > company override > platform default
+        voice_preset = voice_prompt_path or self._get_voice_preset(company, db)
+        
         try:
             # Connect WebSocket
             ws = await self._connect_websocket(session_id)
@@ -294,9 +345,11 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
             # Send initialization message
             init_message = {
                 "persona_prompt": persona_prompt,
-                "voice_prompt": voice_prompt_path or "NATF2.pt"
+                "voice_prompt": voice_preset
             }
             await ws.send(json.dumps(init_message))
+            
+            logger.info(f"Session {session_id} using voice preset: {voice_preset}")
             
             # Wait for confirmation
             response = await asyncio.wait_for(ws.recv(), timeout=120)
