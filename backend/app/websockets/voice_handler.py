@@ -2,26 +2,36 @@
 klantenservice.ai - Voice WebSocket Handler
 Handles Twilio Media Streams and routes audio through PersonaPlex-7B
 
-Twilio Media Streams:
-- Connect via WebSocket when a call is answered
-- Send audio as base64-encoded mulaw (8kHz, mono)
-- Receive audio as base64-encoded mulaw to play back
+Architecture (Orchestrator Integration):
+1. Twilio sends audio chunks (20ms each)
+2. We buffer chunks into "utterance segments" (2-3 seconds)
+3. Each segment gets a turn_id
+4. When segment is ready:
+   a. Send start_turn(turn_id) to pod
+   b. Send audio segment to pod -> receive transcript_final + audio
+   c. Run STT (Whisper) on user audio to get user_transcript
+   d. Run orchestrator (LLM + tools) -> get facts + instructions
+   e. Send update_context(turn_id, facts, instructions) to pod
+   f. Send audio response to Twilio
 
-The PersonaPlex service now uses a persistent WebSocket connection to a
-dedicated GPU pod, eliminating the need for audio buffering workarounds.
+Goal: PersonaPlex NEVER hallucinates. Prices, availability, policies
+come ONLY from orchestrator tool results.
 
 Reference: https://www.twilio.com/docs/voice/media-streams
 """
 import asyncio
 import base64
+import io
 import json
 import logging
+import time
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List, Tuple
 
 from fastapi import WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.models.ai_worker import AIWorker, AIWorkerStatus
 from app.models.company import Company
 from app.models.call_log import CallLog, CallStatus, CallOutcome
@@ -32,7 +42,13 @@ from app.services.personaplex_service import personaplex_service
 from app.services.question_detector import analyze_call_transcript
 from app.services.audio_utils import AudioConverter
 
+settings = get_settings()
 logger = logging.getLogger(__name__)
+
+# Configuration for audio buffering
+SEGMENT_DURATION_SECONDS = 2.5  # Buffer audio for this long before processing
+SILENCE_THRESHOLD_SECONDS = 0.8  # Detect end of utterance after this silence
+MIN_SEGMENT_DURATION_SECONDS = 0.5  # Minimum segment to process
 
 
 class VoiceCallHandler:
@@ -42,7 +58,9 @@ class VoiceCallHandler:
     This class manages:
     - The WebSocket connection with Twilio
     - Audio conversion (mulaw <-> PCM)
-    - Communication with PersonaPlex via WebSocket
+    - Audio buffering into utterance segments
+    - Turn-based communication with PersonaPlex
+    - STT + Orchestrator integration for context injection
     - Call logging and transcription
     """
     
@@ -73,6 +91,19 @@ class VoiceCallHandler:
         
         # Running flag
         self.is_running = False
+        
+        # Turn-based processing
+        self._turn_id: int = 0
+        self._audio_buffer: List[bytes] = []
+        self._buffer_start_time: Optional[float] = None
+        self._last_audio_time: Optional[float] = None
+        
+        # Conversation history for orchestrator
+        self._user_transcripts: List[str] = []
+        self._assistant_transcripts: List[str] = []
+        
+        # Calendar ID (if known from availability check)
+        self._calendar_id: Optional[str] = None
     
     async def initialize_from_phone_number(self, to_number: str, from_number: str):
         """
@@ -257,10 +288,10 @@ class VoiceCallHandler:
     
     async def _receive_audio_loop(self):
         """
-        Receive audio from Twilio and stream to PersonaPlex.
+        Receive audio from Twilio and buffer into utterance segments.
         
-        With the dedicated pod and WebSocket connection, we can stream
-        audio directly without buffering.
+        When a segment is ready (based on duration or silence detection),
+        process it through PersonaPlex + STT + Orchestrator.
         """
         while self.is_running:
             try:
@@ -278,15 +309,33 @@ class VoiceCallHandler:
                     # Convert mulaw to PCM for PersonaPlex
                     pcm_audio = self.audio_converter.mulaw_to_pcm(mulaw_audio)
                     
-                    # Stream directly to PersonaPlex (no buffering needed)
-                    # The WebSocket connection handles the streaming efficiently
-                    async for response_audio in personaplex_service.process_audio(
-                        self.session_id, 
-                        pcm_audio
-                    ):
-                        await self.send_queue.put(response_audio)
+                    # Buffer the audio
+                    now = time.time()
+                    self._audio_buffer.append(pcm_audio)
+                    self._last_audio_time = now
+                    
+                    if self._buffer_start_time is None:
+                        self._buffer_start_time = now
+                    
+                    # Check if segment is ready
+                    segment_ready = False
+                    elapsed = now - self._buffer_start_time
+                    
+                    # Ready if: duration exceeded OR detected silence
+                    if elapsed >= SEGMENT_DURATION_SECONDS:
+                        segment_ready = True
+                    
+                    # Process segment if ready
+                    if segment_ready and elapsed >= MIN_SEGMENT_DURATION_SECONDS:
+                        await self._process_segment()
                 
                 elif event_type == "stop":
+                    # Process any remaining buffer before stopping
+                    if self._audio_buffer and self._buffer_start_time:
+                        elapsed = time.time() - self._buffer_start_time
+                        if elapsed >= MIN_SEGMENT_DURATION_SECONDS:
+                            await self._process_segment()
+                    
                     logger.info(f"Received stop event for call {self.call_sid}")
                     self.is_running = False
                     break
@@ -302,6 +351,173 @@ class VoiceCallHandler:
             except Exception as e:
                 logger.error(f"Error receiving audio: {e}")
                 continue
+    
+    async def _process_segment(self):
+        """
+        Process a buffered audio segment through the full pipeline:
+        1. Increment turn_id
+        2. Send start_turn to pod
+        3. Send audio segment to pod -> get transcript_final + response audio
+        4. Run STT on user audio -> get user_transcript
+        5. Run orchestrator (LLM + tools) -> get facts + instructions
+        6. Send update_context to pod
+        7. Queue response audio for Twilio
+        """
+        if not self._audio_buffer:
+            return
+        
+        # Combine buffered chunks into one segment
+        segment = b"".join(self._audio_buffer)
+        self._audio_buffer = []
+        self._buffer_start_time = None
+        
+        # Increment turn_id
+        self._turn_id += 1
+        turn_id = self._turn_id
+        
+        logger.info(f"Processing segment for turn {turn_id} ({len(segment)} bytes)")
+        
+        try:
+            # 1. Start turn on pod
+            await personaplex_service.start_turn(self.session_id, turn_id)
+            
+            # 2. Send segment to pod and get response
+            response_audio, assistant_text, recv_turn_id = await personaplex_service.process_audio_segment(
+                self.session_id,
+                segment,
+                turn_id
+            )
+            
+            # Store assistant transcript
+            if assistant_text:
+                self._assistant_transcripts.append(assistant_text)
+            
+            # 3. Run STT on user segment to get user_transcript
+            user_transcript = await self._transcribe_audio(segment)
+            if user_transcript:
+                self._user_transcripts.append(user_transcript)
+            
+            logger.debug(f"Turn {turn_id} - User: {user_transcript[:50] if user_transcript else '(none)'}...")
+            logger.debug(f"Turn {turn_id} - Assistant: {assistant_text[:50] if assistant_text else '(none)'}...")
+            
+            # 4. Run orchestrator to get context injection
+            facts, instructions = await self._run_orchestrator(
+                user_transcript or "",
+                " ".join(self._assistant_transcripts),
+                turn_id
+            )
+            
+            # 5. Send context update to pod (for next turn)
+            if facts or instructions:
+                await personaplex_service.update_context(
+                    self.session_id,
+                    turn_id,
+                    facts,
+                    instructions
+                )
+                logger.debug(f"Turn {turn_id} - Context: facts={facts[:50] if facts else ''}...")
+            
+            # 6. Queue response audio for Twilio
+            if response_audio:
+                # Send in chunks for smoother playback
+                chunk_size = 4800  # 100ms at 24kHz (will be resampled)
+                for i in range(0, len(response_audio), chunk_size):
+                    chunk = response_audio[i:i+chunk_size]
+                    await self.send_queue.put(chunk)
+                    
+        except Exception as e:
+            logger.error(f"Error processing segment for turn {turn_id}: {e}", exc_info=True)
+    
+    async def _transcribe_audio(self, pcm_audio: bytes) -> str:
+        """
+        Transcribe PCM audio using OpenAI Whisper API.
+        
+        Args:
+            pcm_audio: Raw PCM audio bytes (24kHz, 16-bit, mono)
+            
+        Returns:
+            Transcribed text (Dutch)
+        """
+        if not settings.OPENAI_API_KEY:
+            logger.warning("OPENAI_API_KEY not configured - STT disabled")
+            return ""
+        
+        try:
+            from openai import OpenAI
+            import wave
+            
+            # Convert PCM to WAV format for Whisper
+            wav_buffer = io.BytesIO()
+            with wave.open(wav_buffer, 'wb') as wav:
+                wav.setnchannels(1)
+                wav.setsampwidth(2)  # 16-bit
+                wav.setframerate(24000)  # PersonaPlex uses 24kHz
+                wav.writeframes(pcm_audio)
+            wav_buffer.seek(0)
+            wav_buffer.name = "audio.wav"
+            
+            # Call Whisper API
+            client = OpenAI(api_key=settings.OPENAI_API_KEY)
+            transcript = client.audio.transcriptions.create(
+                model="whisper-1",
+                file=wav_buffer,
+                language="nl",  # Dutch
+                response_format="text"
+            )
+            
+            return transcript.strip() if transcript else ""
+            
+        except Exception as e:
+            logger.error(f"STT error: {e}")
+            return ""
+    
+    async def _run_orchestrator(
+        self,
+        user_transcript: str,
+        assistant_transcript_so_far: str,
+        turn_id: int
+    ) -> Tuple[str, str]:
+        """
+        Run the orchestrator to get context injection.
+        
+        Args:
+            user_transcript: What the user said this turn
+            assistant_transcript_so_far: Full assistant transcript
+            turn_id: Current turn ID
+            
+        Returns:
+            Tuple of (facts, instructions)
+        """
+        if not user_transcript.strip():
+            return "", ""
+        
+        try:
+            from app.services.orchestrator import build_context_payload
+            import asyncio
+            
+            # Get caller phone from call log
+            customer_phone = self.call_log.caller_number if self.call_log else None
+            
+            # Run orchestrator in thread pool (it's sync + does LLM calls)
+            loop = asyncio.get_event_loop()
+            facts, instructions = await loop.run_in_executor(
+                None,
+                build_context_payload,
+                self.db,
+                str(self.company.id),
+                str(self.call_log.id) if self.call_log else None,
+                self._calendar_id,
+                user_transcript,
+                assistant_transcript_so_far,
+                customer_phone,
+                turn_id,
+            )
+            
+            return facts, instructions
+            
+        except Exception as e:
+            logger.error(f"Orchestrator error: {e}", exc_info=True)
+            return "", ""
     
     async def _send_audio_loop(self):
         """

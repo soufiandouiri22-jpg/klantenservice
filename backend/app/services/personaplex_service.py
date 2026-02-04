@@ -16,7 +16,7 @@ Reference: https://huggingface.co/nvidia/personaplex-7b-v1
 import asyncio
 import json
 import logging
-from typing import Optional, AsyncGenerator, Dict
+from typing import Optional, AsyncGenerator, Dict, Tuple
 from dataclasses import dataclass, field
 
 import websockets
@@ -40,8 +40,9 @@ class ConversationSession:
     company_id: str
     is_active: bool = True
     websocket: Optional[WebSocketClientProtocol] = None
-    conversation_history: list = field(default_factory=list)
+    conversation_history: list = field(default_factory=list)  # List of {turn_id, user, assistant}
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    current_turn: int = 0
 
 
 class PersonaPlexService:
@@ -315,15 +316,219 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
         
         return session
     
+    async def start_turn(self, session_id: str, turn_id: int) -> bool:
+        """
+        Start a new turn before sending audio segment.
+        Must be called before process_audio_segment.
+        """
+        session = self.active_sessions.get(session_id)
+        
+        if not session or not session.is_active:
+            logger.warning(f"Session {session_id} not found or inactive")
+            return False
+        
+        session.current_turn = turn_id
+        
+        if self.mock_mode:
+            logger.debug(f"Mock mode: started turn {turn_id}")
+            return True
+        
+        ws = session.websocket
+        if not ws:
+            logger.error(f"No WebSocket connection for session {session_id}")
+            return False
+        
+        try:
+            await ws.send(json.dumps({
+                "action": "start_turn",
+                "turn_id": turn_id
+            }))
+            
+            # Wait for confirmation
+            response = await asyncio.wait_for(ws.recv(), timeout=5.0)
+            data = json.loads(response)
+            
+            if data.get("status") == "turn_started":
+                logger.debug(f"Session {session_id}: turn {turn_id} started")
+                return True
+            else:
+                logger.warning(f"Unexpected start_turn response: {data}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Error starting turn: {e}")
+            return False
+    
+    async def process_audio_segment(
+        self,
+        session_id: str,
+        audio_segment: bytes,
+        turn_id: int
+    ) -> Tuple[Optional[bytes], str, int]:
+        """
+        Process a complete audio segment (one utterance) and return response.
+        
+        This is called once per utterance-segment (not per Twilio chunk).
+        Returns: (audio_bytes, assistant_transcript, turn_id)
+        
+        Protocol:
+        1. start_turn must have been called first
+        2. Send audio bytes
+        3. Receive JSON (transcript_final) first
+        4. Receive audio bytes second
+        """
+        session = self.active_sessions.get(session_id)
+        
+        if not session or not session.is_active:
+            logger.warning(f"Session {session_id} not found or inactive")
+            return None, "", turn_id
+        
+        if self.mock_mode:
+            logger.debug(f"Mock mode: received {len(audio_segment)} bytes segment for turn {turn_id}")
+            return None, "[Mock mode - no transcript]", turn_id
+        
+        ws = session.websocket
+        if not ws:
+            logger.error(f"No WebSocket connection for session {session_id}")
+            return None, "", turn_id
+        
+        try:
+            async with session._lock:
+                # Send audio segment bytes
+                await ws.send(audio_segment)
+                
+                assistant_text = ""
+                audio_response = None
+                received_turn_id = turn_id
+                
+                # First: receive JSON (transcript_final)
+                try:
+                    response = await asyncio.wait_for(ws.recv(), timeout=30.0)
+                    
+                    if isinstance(response, str):
+                        data = json.loads(response)
+                        if data.get("event") == "transcript_final":
+                            assistant_text = data.get("assistant", "")
+                            received_turn_id = data.get("turn_id", turn_id)
+                            logger.debug(f"Received transcript_final for turn {received_turn_id}")
+                            
+                            # Store in conversation history
+                            session.conversation_history.append({
+                                "turn_id": received_turn_id,
+                                "user": data.get("user", ""),
+                                "assistant": assistant_text
+                            })
+                        elif "error" in data:
+                            logger.error(f"Pod error: {data['error']}")
+                            return None, "", turn_id
+                    elif isinstance(response, bytes):
+                        # Unexpected: bytes first (shouldn't happen with new protocol)
+                        logger.warning("Received bytes before JSON - old protocol?")
+                        audio_response = response
+                
+                except asyncio.TimeoutError:
+                    logger.warning(f"Timeout waiting for transcript_final")
+                    return None, "", turn_id
+                
+                # Second: receive audio bytes (if not already received)
+                if audio_response is None:
+                    try:
+                        response = await asyncio.wait_for(ws.recv(), timeout=30.0)
+                        
+                        if isinstance(response, bytes):
+                            audio_response = response
+                            logger.debug(f"Received {len(audio_response)} bytes audio for turn {received_turn_id}")
+                        elif isinstance(response, str):
+                            # Might be an error
+                            data = json.loads(response)
+                            if "error" in data:
+                                logger.error(f"Pod error during audio recv: {data['error']}")
+                    
+                    except asyncio.TimeoutError:
+                        logger.warning(f"Timeout waiting for audio response")
+                
+                return audio_response, assistant_text, received_turn_id
+                    
+        except websockets.exceptions.ConnectionClosed as e:
+            logger.warning(f"WebSocket closed for session {session_id}: {e}")
+            session.websocket = None
+            # Try to reconnect
+            try:
+                ws = await self._connect_websocket(session_id)
+                session.websocket = ws
+                # Re-init session
+                await ws.send(json.dumps({
+                    "persona_prompt": session.persona_prompt
+                }))
+                logger.info(f"Reconnected WebSocket for session {session_id}")
+            except Exception as reconnect_error:
+                logger.error(f"Failed to reconnect: {reconnect_error}")
+            return None, "", turn_id
+        except Exception as e:
+            logger.error(f"Error processing audio segment for session {session_id}: {e}")
+            return None, "", turn_id
+    
+    async def update_context(
+        self,
+        session_id: str,
+        turn_id: int,
+        facts: str,
+        instructions: str
+    ) -> bool:
+        """
+        Send context update to the pod for a specific turn.
+        
+        This does NOT reset streaming - the pod stores it and applies
+        at the start of the next process_audio call.
+        """
+        session = self.active_sessions.get(session_id)
+        
+        if not session or not session.is_active:
+            logger.warning(f"Session {session_id} not found or inactive")
+            return False
+        
+        if self.mock_mode:
+            logger.debug(f"Mock mode: update_context for turn {turn_id}")
+            return True
+        
+        ws = session.websocket
+        if not ws:
+            logger.error(f"No WebSocket connection for session {session_id}")
+            return False
+        
+        try:
+            await ws.send(json.dumps({
+                "action": "update_context",
+                "turn_id": turn_id,
+                "facts": facts or "",
+                "instructions": instructions or ""
+            }))
+            
+            # Wait for confirmation
+            response = await asyncio.wait_for(ws.recv(), timeout=5.0)
+            data = json.loads(response)
+            
+            if data.get("status") == "context_updated":
+                logger.debug(f"Session {session_id}: context updated for turn {turn_id}")
+                return True
+            else:
+                logger.warning(f"Unexpected update_context response: {data}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Error updating context: {e}")
+            return False
+    
     async def process_audio(
         self,
         session_id: str,
         audio_chunk: bytes
     ) -> AsyncGenerator[bytes, None]:
         """
-        Process incoming audio and yield response audio chunks.
+        DEPRECATED: Use start_turn + process_audio_segment instead.
         
-        Uses WebSocket for bidirectional streaming.
+        This method is kept for backwards compatibility but should not be used
+        with the new turn-based protocol.
         """
         session = self.active_sessions.get(session_id)
         
@@ -363,8 +568,21 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
                         data = json.loads(response)
                         if "error" in data:
                             logger.error(f"Pod error: {data['error']}")
-                        elif "transcript" in data:
-                            session.conversation_history.append(data["transcript"])
+                        elif data.get("event") == "transcript_final":
+                            session.conversation_history.append({
+                                "turn_id": data.get("turn_id", 0),
+                                "user": data.get("user", ""),
+                                "assistant": data.get("assistant", "")
+                            })
+                            # Now wait for audio
+                            try:
+                                audio_response = await asyncio.wait_for(ws.recv(), timeout=5.0)
+                                if isinstance(audio_response, bytes):
+                                    chunk_size = 4800
+                                    for i in range(0, len(audio_response), chunk_size):
+                                        yield audio_response[i:i+chunk_size]
+                            except asyncio.TimeoutError:
+                                pass
                 
                 except asyncio.TimeoutError:
                     # No response yet, that's okay for streaming

@@ -15,7 +15,7 @@ import asyncio
 import base64
 import logging
 import json
-from typing import Optional, Dict
+from typing import Optional, Dict, Tuple
 from pathlib import Path
 from contextlib import asynccontextmanager
 
@@ -39,12 +39,15 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 # Session storage - persistent in memory
 sessions: Dict[str, "MoshiSession"] = {}
 
+# Global lock: one process_audio at a time (prompt state is global in lm_gen)
+_process_audio_lock = asyncio.Lock()
+
 # Authentication token (set via environment)
 API_TOKEN = os.getenv("PERSONAPLEX_API_TOKEN", "")
 
 
 class MoshiSession:
-    """Represents an active Moshi conversation session."""
+    """Represents an active Moshi conversation session with turn-based context."""
     
     def __init__(self, session_id: str, persona_prompt: str, voice_prompt: str = "NATF2.pt"):
         self.session_id = session_id
@@ -53,16 +56,66 @@ class MoshiSession:
         self.transcript_user: list = []
         self.transcript_assistant: list = []
         self.is_active = True
-        self._lock = asyncio.Lock()
+        
+        # Turn-based context management
+        self.current_turn: int = 0
+        self.context_by_turn: Dict[int, Tuple[str, str]] = {}  # turn_id -> (facts, instructions)
     
-    async def process_audio(self, audio_bytes: bytes) -> bytes:
-        """Process audio input and return response audio."""
-        global mimi, other_mimi, lm_gen, text_tokenizer, frame_size
+    def start_turn(self, turn_id: int):
+        """Start a new turn (called before process_audio for this segment)."""
+        self.current_turn = turn_id
+        logger.debug(f"Session {self.session_id}: started turn {turn_id}")
+    
+    def update_context(self, turn_id: int, facts: str = "", instructions: str = ""):
+        """Store context for a turn. Does NOT reset streaming - that happens in process_audio."""
+        self.context_by_turn[turn_id] = (facts.strip(), instructions.strip())
+        logger.debug(f"Session {self.session_id}: stored context for turn {turn_id}")
+        # Clean up old turns (keep last 10)
+        if len(self.context_by_turn) > 10:
+            old_turns = sorted(self.context_by_turn.keys())[:-10]
+            for t in old_turns:
+                del self.context_by_turn[t]
+    
+    def _get_effective_prompt(self) -> str:
+        """Build effective prompt: persona + context for current turn."""
+        parts = [self.persona_prompt]
+        
+        # Get context for current turn (or most recent applicable turn)
+        facts, instructions = "", ""
+        if self.current_turn in self.context_by_turn:
+            facts, instructions = self.context_by_turn[self.current_turn]
+        elif self.context_by_turn:
+            # Fallback: use most recent turn <= current_turn
+            applicable = [t for t in self.context_by_turn.keys() if t <= self.current_turn]
+            if applicable:
+                facts, instructions = self.context_by_turn[max(applicable)]
+        
+        if facts:
+            parts.append("\n\n[ACTUELE FEITEN - ALLEEN DEZE GEBRUIKEN]\n" + facts)
+        if instructions:
+            parts.append("\n\n[INSTRUCTIES]\n" + instructions)
+        
+        return "".join(parts)
+    
+    async def process_audio(self, audio_bytes: bytes) -> Tuple[bytes, str]:
+        """
+        Process audio input and return (response_audio, assistant_text).
+        
+        This is called once per utterance-segment (not per Twilio chunk).
+        step_system_prompts + reset_streaming happen ONLY here, per segment.
+        """
+        global mimi, other_mimi, lm_gen, text_tokenizer, frame_size, _process_audio_lock
         
         from moshi.models.lm import _iterate_audio as lm_iterate_audio
         from moshi.models.lm import encode_from_sphn as lm_encode_from_sphn
         
-        async with self._lock:
+        async with _process_audio_lock:
+            # Apply this session's prompt + context (safe boundary: start of utterance segment)
+            effective_prompt = self._get_effective_prompt()
+            lm_gen.text_prompt_tokens = text_tokenizer.encode(wrap_with_system_tags(effective_prompt))
+            lm_gen.step_system_prompts(mimi)
+            mimi.reset_streaming()
+            
             # Convert bytes to tensor
             audio_np = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
             user_audio = torch.from_numpy(audio_np).unsqueeze(0)
@@ -98,7 +151,7 @@ class MoshiSession:
                         generated_text.append(text)
             
             if len(generated_frames) == 0:
-                return b""
+                return b"", ""
             
             # Concatenate and convert to bytes
             output_pcm = np.concatenate(generated_frames, axis=-1)
@@ -109,7 +162,7 @@ class MoshiSession:
             if assistant_text:
                 self.transcript_assistant.append(assistant_text)
             
-            return output_bytes
+            return output_bytes, assistant_text
 
 
 def load_models():
@@ -396,12 +449,14 @@ async def get_session_status(session_id: str):
 @app.websocket("/stream/{session_id}")
 async def audio_stream(websocket: WebSocket, session_id: str):
     """
-    Bidirectional audio streaming endpoint.
+    Bidirectional audio streaming endpoint with turn-based context injection.
     
     Protocol:
-    - Client sends raw PCM audio bytes (24kHz, 16-bit, mono)
-    - Server responds with raw PCM audio bytes
-    - First message can be JSON with session init if session doesn't exist
+    - Client sends JSON: {"action": "start_turn", "turn_id": N} before each audio segment
+    - Client sends raw PCM audio bytes (24kHz, 16-bit, mono) - one segment per turn
+    - Server responds with JSON: {"event": "transcript_final", "turn_id": N, "assistant": "..."}
+    - Server then sends raw PCM audio bytes
+    - Client can send: {"action": "update_context", "turn_id": N, "facts": "...", "instructions": "..."}
     """
     await websocket.accept()
     
@@ -421,7 +476,7 @@ async def audio_stream(websocket: WebSocket, session_id: str):
             message = await websocket.receive()
             
             if "bytes" in message:
-                # Audio data
+                # Audio data (one segment per turn)
                 audio_bytes = message["bytes"]
                 
                 if not session:
@@ -431,14 +486,25 @@ async def audio_stream(websocket: WebSocket, session_id: str):
                     })
                     continue
                 
-                # Process audio
+                # Process audio (step_system_prompts + reset happens here, once per segment)
                 try:
-                    response_audio = await session.process_audio(audio_bytes)
+                    response_audio, assistant_text = await session.process_audio(audio_bytes)
+                    
+                    # Always send transcript_final JSON first (with turn_id)
+                    await websocket.send_json({
+                        "event": "transcript_final",
+                        "turn_id": session.current_turn,
+                        "user": "",  # Pod has no ASR; backend provides via STT
+                        "assistant": assistant_text or ""
+                    })
+                    
+                    # Then send audio bytes
                     if response_audio:
                         await websocket.send_bytes(response_audio)
+                        
                 except Exception as e:
                     logger.error(f"Error processing audio: {e}")
-                    await websocket.send_json({"error": str(e)})
+                    await websocket.send_json({"error": str(e), "turn_id": session.current_turn if session else 0})
             
             elif "text" in message:
                 # JSON command
@@ -455,6 +521,38 @@ async def audio_stream(websocket: WebSocket, session_id: str):
                             "status": "initialized",
                             "session_id": session_id
                         })
+                    
+                    elif data.get("action") == "start_turn":
+                        # Start a new turn (must be called before sending audio segment)
+                        turn_id = data.get("turn_id", 0)
+                        if session:
+                            session.start_turn(turn_id)
+                            await websocket.send_json({
+                                "status": "turn_started",
+                                "turn_id": turn_id
+                            })
+                        else:
+                            await websocket.send_json({
+                                "error": "Session not initialized",
+                                "turn_id": turn_id
+                            })
+                    
+                    elif data.get("action") == "update_context":
+                        # Store context for a turn (does NOT reset streaming)
+                        turn_id = data.get("turn_id", 0)
+                        facts = data.get("facts", "")
+                        instructions = data.get("instructions", "")
+                        if session:
+                            session.update_context(turn_id, facts, instructions)
+                            await websocket.send_json({
+                                "status": "context_updated",
+                                "turn_id": turn_id
+                            })
+                        else:
+                            await websocket.send_json({
+                                "error": "Session not initialized",
+                                "turn_id": turn_id
+                            })
                     
                     elif data.get("action") == "ping":
                         await websocket.send_json({"action": "pong"})
