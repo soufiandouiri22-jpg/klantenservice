@@ -765,6 +765,42 @@ async def toggle_kill_switch(
     }
 
 
+@router.delete("/customers/{customer_id}")
+async def delete_customer(
+    customer_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_superadmin),
+):
+    """
+    Permanently delete a customer and all associated data.
+    This action cannot be undone.
+    """
+    company = db.query(Company).filter(Company.id == customer_id).first()
+    
+    if not company:
+        raise HTTPException(status_code=404, detail="Klant niet gevonden")
+    
+    company_name = company.name
+    company_email = company.email
+    
+    # Delete all related data (cascades should handle most, but be explicit)
+    # The database should have CASCADE delete set up, but we log for audit
+    logger.warning(
+        f"DELETING CUSTOMER: {company_name} ({company_email}) by {current_user.email}"
+    )
+    
+    db.delete(company)
+    db.commit()
+    
+    logger.info(f"Customer {company_name} deleted successfully")
+    
+    return {
+        "status": "deleted",
+        "customer_id": str(customer_id),
+        "customer_name": company_name,
+    }
+
+
 # ==================== GLOBAL CONFIG ENDPOINTS ====================
 
 @router.get("/config", response_model=GlobalConfigByCategoryResponse)

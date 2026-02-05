@@ -728,6 +728,11 @@ export const adminApi = {
     return response.data
   },
   
+  deleteCustomer: async (customerId: string) => {
+    const response = await api.delete(`/admin/customers/${customerId}`)
+    return response.data
+  },
+  
   // Global Config
   getGlobalConfigs: async () => {
     const response = await api.get('/admin/config')

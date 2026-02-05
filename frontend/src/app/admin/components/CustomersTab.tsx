@@ -9,7 +9,8 @@ import {
   Settings,
   ExternalLink,
   Phone,
-  DollarSign
+  DollarSign,
+  Trash2
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card'
@@ -90,6 +91,18 @@ export function CustomersTab() {
     },
     onError: () => {
       toast.error('Kon overrides niet opslaan')
+    },
+  })
+
+  const deleteCustomerMutation = useMutation({
+    mutationFn: (customerId: string) => adminApi.deleteCustomer(customerId),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-customers'] })
+      setSelectedCustomer(null)
+      toast.success(`Klant "${data.customer_name}" verwijderd`)
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Kon klant niet verwijderen')
     },
   })
 
@@ -233,6 +246,7 @@ export function CustomersTab() {
                           variant="ghost"
                           size="sm"
                           onClick={() => setSelectedCustomer(customer.id)}
+                          title="Instellingen"
                         >
                           <Settings className="h-4 w-4" />
                         </Button>
@@ -244,8 +258,22 @@ export function CustomersTab() {
                             enabled: !customer.is_kill_switched
                           })}
                           className={customer.is_kill_switched ? '' : 'text-red-600 hover:bg-red-50'}
+                          title={customer.is_kill_switched ? 'Kill switch uitschakelen' : 'Kill switch inschakelen'}
                         >
                           <Power className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            if (confirm(`Weet je zeker dat je "${customer.name}" wilt verwijderen? Dit kan niet ongedaan worden gemaakt.`)) {
+                              deleteCustomerMutation.mutate(customer.id)
+                            }
+                          }}
+                          className="text-red-600 hover:bg-red-50"
+                          title="Klant verwijderen"
+                        >
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </td>
@@ -277,7 +305,13 @@ export function CustomersTab() {
                 overrides
               })
             }}
+            onDelete={() => {
+              if (confirm(`Weet je zeker dat je "${customerDetail.name}" wilt verwijderen? Dit kan niet ongedaan worden gemaakt.`)) {
+                deleteCustomerMutation.mutate(customerDetail.id)
+              }
+            }}
             isSaving={updateOverridesMutation.isPending}
+            isDeleting={deleteCustomerMutation.isPending}
           />
         ) : null}
       </Modal>
@@ -288,10 +322,12 @@ export function CustomersTab() {
 interface CustomerDetailContentProps {
   customer: CustomerDetail
   onSave: (overrides: any) => void
+  onDelete: () => void
   isSaving: boolean
+  isDeleting: boolean
 }
 
-function CustomerDetailContent({ customer, onSave, isSaving }: CustomerDetailContentProps) {
+function CustomerDetailContent({ customer, onSave, onDelete, isSaving, isDeleting }: CustomerDetailContentProps) {
   const [overrides, setOverrides] = useState(customer.admin_overrides || {})
 
   const handleChange = (key: string, value: any) => {
@@ -302,21 +338,21 @@ function CustomerDetailContent({ customer, onSave, isSaving }: CustomerDetailCon
     <div className="space-y-6">
       {/* Basic Info */}
       <div className="grid grid-cols-2 gap-4">
-        <div>
+        <div className="min-w-0">
           <p className="text-sm text-gray-500">Email</p>
-          <p className="font-medium">{customer.email}</p>
+          <p className="font-medium truncate" title={customer.email}>{customer.email}</p>
         </div>
-        <div>
+        <div className="min-w-0">
           <p className="text-sm text-gray-500">Plan</p>
           <p className="font-medium capitalize">{customer.subscription_plan}</p>
         </div>
-        <div>
+        <div className="min-w-0">
           <p className="text-sm text-gray-500">Status</p>
           <p className="font-medium">{customer.subscription_status}</p>
         </div>
-        <div>
+        <div className="min-w-0">
           <p className="text-sm text-gray-500">Stripe Customer</p>
-          <p className="font-medium text-sm">{customer.stripe_customer_id || '-'}</p>
+          <p className="font-medium text-sm truncate" title={customer.stripe_customer_id || '-'}>{customer.stripe_customer_id || '-'}</p>
         </div>
       </div>
 
@@ -406,7 +442,16 @@ function CustomerDetailContent({ customer, onSave, isSaving }: CustomerDetailCon
         </div>
       </div>
 
-      <div className="flex justify-end gap-3 pt-4">
+      <div className="flex justify-between gap-3 pt-4 border-t mt-6">
+        <Button
+          variant="outline"
+          onClick={onDelete}
+          disabled={isDeleting}
+          className="text-red-600 hover:bg-red-50"
+        >
+          <Trash2 className="h-4 w-4 mr-2" />
+          {isDeleting ? 'Verwijderen...' : 'Klant Verwijderen'}
+        </Button>
         <Button
           onClick={() => onSave({ admin_overrides: overrides })}
           disabled={isSaving}
