@@ -2,13 +2,13 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Mic, Save, RefreshCw, Volume2, ToggleLeft } from 'lucide-react'
+import { Mic, Save, RefreshCw, Volume2, ToggleLeft, Play, Square, Loader2 } from 'lucide-react'
 import { Card, CardBody, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Spinner } from '@/components/ui/Spinner'
 import { adminApi } from '@/lib/api'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 // Pod URL for fetching available voices
 const POD_URL = process.env.NEXT_PUBLIC_PERSONAPLEX_POD_URL || ''
@@ -26,6 +26,85 @@ export function VoiceTab() {
   // State for available voices from pod
   const [availableVoices, setAvailableVoices] = useState<string[]>(['NATF0', 'NATF1', 'NATF2', 'NATF3', 'NATF4', 'NATF5'])
   const [voicesLoading, setVoicesLoading] = useState(false)
+  
+  // Voice preview state
+  const [previewLoading, setPreviewLoading] = useState<string | null>(null)
+  const [playingVoice, setPlayingVoice] = useState<string | null>(null)
+  const audioContextRef = useRef<AudioContext | null>(null)
+  const audioSourceRef = useRef<AudioBufferSourceNode | null>(null)
+
+  // Play voice sample
+  const playVoiceSample = async (voiceId: string) => {
+    if (!POD_URL) {
+      toast.error('Pod URL niet geconfigureerd')
+      return
+    }
+    
+    // Stop current playback if any
+    if (audioSourceRef.current) {
+      audioSourceRef.current.stop()
+      audioSourceRef.current = null
+    }
+    
+    if (playingVoice === voiceId) {
+      setPlayingVoice(null)
+      return
+    }
+    
+    setPreviewLoading(voiceId)
+    
+    try {
+      const response = await fetch(`${POD_URL}/voice-sample/${voiceId}`)
+      
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.detail || 'Kon sample niet laden')
+      }
+      
+      const data = await response.json()
+      
+      // Decode base64 to ArrayBuffer
+      const binaryString = atob(data.audio_base64)
+      const bytes = new Uint8Array(binaryString.length)
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i)
+      }
+      
+      // Convert Int16 PCM to Float32
+      const int16Data = new Int16Array(bytes.buffer)
+      const floatData = new Float32Array(int16Data.length)
+      for (let i = 0; i < int16Data.length; i++) {
+        floatData[i] = int16Data[i] / 32768.0
+      }
+      
+      // Create audio context and play
+      if (!audioContextRef.current) {
+        audioContextRef.current = new AudioContext({ sampleRate: data.sample_rate })
+      }
+      
+      const audioBuffer = audioContextRef.current.createBuffer(1, floatData.length, data.sample_rate)
+      audioBuffer.getChannelData(0).set(floatData)
+      
+      const source = audioContextRef.current.createBufferSource()
+      source.buffer = audioBuffer
+      source.connect(audioContextRef.current.destination)
+      
+      source.onended = () => {
+        setPlayingVoice(null)
+        audioSourceRef.current = null
+      }
+      
+      audioSourceRef.current = source
+      source.start()
+      setPlayingVoice(voiceId)
+      
+    } catch (error: any) {
+      console.error('Voice preview error:', error)
+      toast.error(error.message || 'Kon voice sample niet afspelen')
+    } finally {
+      setPreviewLoading(null)
+    }
+  }
 
   // Fetch available voices from pod
   useEffect(() => {
@@ -151,15 +230,61 @@ export function VoiceTab() {
                     <span className="ml-2 text-sm text-gray-500">Voices laden...</span>
                   </div>
                 ) : (
-                  <select
-                    value={values['voice_default_preset'] || 'NATF0'}
-                    onChange={(e) => setValues({ ...values, voice_default_preset: e.target.value })}
-                    className="w-full max-w-xs rounded-lg border border-gray-200 px-4 py-2.5 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
-                  >
-                    {availableVoices.map((voice) => (
-                      <option key={voice} value={voice}>{voice}</option>
-                    ))}
-                  </select>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={values['voice_default_preset'] || 'NATF0'}
+                        onChange={(e) => setValues({ ...values, voice_default_preset: e.target.value })}
+                        className="flex-1 max-w-xs rounded-lg border border-gray-200 px-4 py-2.5 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+                      >
+                        {availableVoices.map((voice) => (
+                          <option key={voice} value={voice}>{voice}</option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={() => playVoiceSample(values['voice_default_preset'] || 'NATF0')}
+                        disabled={previewLoading !== null}
+                        className="flex items-center justify-center h-10 w-10 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        title={playingVoice === (values['voice_default_preset'] || 'NATF0') ? 'Stop' : 'Afspelen'}
+                      >
+                        {previewLoading === (values['voice_default_preset'] || 'NATF0') ? (
+                          <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
+                        ) : playingVoice === (values['voice_default_preset'] || 'NATF0') ? (
+                          <Square className="h-4 w-4 text-red-500" />
+                        ) : (
+                          <Play className="h-4 w-4 text-primary-600" />
+                        )}
+                      </button>
+                    </div>
+                    
+                    {/* Voice preview buttons for all voices */}
+                    <div className="pt-2 border-t border-gray-100">
+                      <p className="text-xs text-gray-500 mb-2">Alle stemmen beluisteren:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {availableVoices.map((voice) => (
+                          <button
+                            key={voice}
+                            onClick={() => playVoiceSample(voice)}
+                            disabled={previewLoading !== null}
+                            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                              playingVoice === voice 
+                                ? 'bg-primary-100 text-primary-700 border border-primary-300' 
+                                : 'bg-gray-50 text-gray-600 border border-gray-200 hover:bg-gray-100'
+                            } disabled:opacity-50 disabled:cursor-not-allowed`}
+                          >
+                            {previewLoading === voice ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : playingVoice === voice ? (
+                              <Square className="h-3 w-3" />
+                            ) : (
+                              <Play className="h-3 w-3" />
+                            )}
+                            {voice}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                 )}
                 <p className="text-xs text-gray-500">
                   Voice IDs worden opgehaald van de PersonaPlex pod. 

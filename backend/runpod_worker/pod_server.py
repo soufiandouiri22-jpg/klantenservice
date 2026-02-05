@@ -432,6 +432,122 @@ async def list_voices():
         )
 
 
+class VoiceSampleResponse(BaseModel):
+    voice_id: str
+    audio_base64: str
+    sample_rate: int = 24000
+    duration_ms: int
+
+
+@app.get("/voice-sample/{voice_id}")
+async def get_voice_sample(voice_id: str):
+    """
+    Generate a voice sample for preview.
+    
+    Creates a short audio sample using the selected voice.
+    Uses a simple prompt to trigger the model to speak.
+    
+    This endpoint does not require authentication for admin UI access.
+    """
+    global mimi, other_mimi, lm_gen, text_tokenizer, frame_size, _process_audio_lock
+    
+    if mimi is None:
+        raise HTTPException(status_code=503, detail="Model not loaded yet")
+    
+    from moshi.models.lm import _iterate_audio as lm_iterate_audio
+    from moshi.models.lm import encode_from_sphn as lm_encode_from_sphn
+    from huggingface_hub import hf_hub_download
+    import tarfile
+    
+    # Validate voice_id
+    hf_repo = "nvidia/personaplex-7b-v1"
+    voices_tgz = hf_hub_download(hf_repo, "voices.tgz")
+    voices_dir = Path(voices_tgz).parent / "voices"
+    
+    if not voices_dir.exists():
+        with tarfile.open(voices_tgz, "r:gz") as tar:
+            tar.extractall(path=Path(voices_tgz).parent)
+    
+    voice_file = voices_dir / f"{voice_id}.pt"
+    if not voice_file.exists():
+        raise HTTPException(status_code=404, detail=f"Voice '{voice_id}' not found")
+    
+    try:
+        async with _process_audio_lock:
+            # Load voice prompt
+            voice_prompt = torch.load(voice_file, map_location=device, weights_only=True)
+            lm_gen.voice_prompt_tokens = voice_prompt
+            
+            # Set a simple greeting prompt
+            sample_prompt = "Je bent een vriendelijke AI assistent. Zeg: Hallo, dit is een voorbeeld van mijn stem."
+            lm_gen.text_prompt_tokens = text_tokenizer.encode(wrap_with_system_tags(sample_prompt))
+            lm_gen.step_system_prompts(mimi)
+            mimi.reset_streaming()
+            
+            # Generate audio by feeding short silence and capturing response
+            # Create 0.5 seconds of near-silence (very quiet audio triggers the model to speak)
+            silence_duration = 0.5  # seconds
+            sample_rate = 24000
+            silence_samples = int(silence_duration * sample_rate)
+            
+            # Very quiet noise (not complete silence, to trigger response)
+            silence_audio = torch.randn(1, 1, silence_samples, device=device) * 0.001
+            
+            generated_frames = []
+            
+            # Process through model
+            for user_encoded in lm_encode_from_sphn(
+                mimi,
+                lm_iterate_audio(silence_audio, sample_interval_size=frame_size, pad=True),
+                max_batch=1,
+            ):
+                steps = user_encoded.shape[-1]
+                for c in range(steps):
+                    step_in = user_encoded[:, :, c : c + 1]
+                    tokens = lm_gen.step(step_in)
+                    
+                    if tokens is None:
+                        continue
+                    
+                    # Decode audio
+                    pcm = mimi.decode(tokens[:, 1:9])
+                    _ = other_mimi.decode(tokens[:, 1:9])
+                    pcm_np = pcm.detach().cpu().numpy()[0, 0]
+                    generated_frames.append(pcm_np)
+            
+            if len(generated_frames) == 0:
+                raise HTTPException(status_code=500, detail="No audio generated")
+            
+            # Concatenate and convert to bytes
+            output_pcm = np.concatenate(generated_frames, axis=-1)
+            
+            # Limit to max 3 seconds
+            max_samples = sample_rate * 3
+            if len(output_pcm) > max_samples:
+                output_pcm = output_pcm[:max_samples]
+            
+            # Convert to int16 bytes
+            output_bytes = (output_pcm * 32768).astype(np.int16).tobytes()
+            
+            # Encode as base64
+            audio_base64 = base64.b64encode(output_bytes).decode('utf-8')
+            
+            duration_ms = int(len(output_pcm) / sample_rate * 1000)
+            
+            logger.info(f"Generated voice sample for {voice_id}: {duration_ms}ms")
+            
+            return VoiceSampleResponse(
+                voice_id=voice_id,
+                audio_base64=audio_base64,
+                sample_rate=sample_rate,
+                duration_ms=duration_ms
+            )
+            
+    except Exception as e:
+        logger.error(f"Error generating voice sample: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate sample: {str(e)}")
+
+
 @app.post("/session", response_model=SessionResponse, dependencies=[Depends(verify_token)])
 async def create_session(request: SessionCreateRequest):
     """Create a new conversation session."""
