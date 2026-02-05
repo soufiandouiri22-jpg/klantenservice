@@ -20,6 +20,7 @@ import { PageLoader } from '@/components/ui/Spinner'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { phoneNumbersApi, aiWorkersApi } from '@/lib/api'
 import { formatPhoneNumber } from '@/lib/utils'
+import { useAuthStore } from '@/lib/store'
 
 // Provider data for forwarding codes
 const providers = [
@@ -43,6 +44,7 @@ const days = [
 
 export default function PhonePage() {
   const queryClient = useQueryClient()
+  const { company } = useAuthStore()
   
   // Wizard state
   const [isWizardOpen, setIsWizardOpen] = useState(false)
@@ -259,6 +261,10 @@ export default function PhonePage() {
     return worker?.name || null
   }
 
+  // Check phone number limit (same as AI workers limit)
+  const maxPhoneNumbers = company?.max_ai_workers || 1
+  const canAddPhone = (phoneNumbers?.length || 0) < maxPhoneNumbers
+
   if (isLoading) {
     return (
       <DashboardLayout>
@@ -271,10 +277,10 @@ export default function PhonePage() {
     <DashboardLayout>
       <Header
         title="Telefonie"
-        description="Laat de AI uw telefoontjes beantwoorden."
+        description={`${phoneNumbers?.length || 0} van ${maxPhoneNumbers} nummers gekoppeld`}
         actions={
           phoneNumbers?.length > 0 ? (
-            <Button onClick={openWizard}>
+            <Button onClick={openWizard} disabled={!canAddPhone}>
               Nog een nummer koppelen
             </Button>
           ) : null
@@ -397,6 +403,19 @@ export default function PhonePage() {
                 </Card>
               </motion.div>
             ))}
+          </div>
+        )}
+
+        {/* Upgrade Banner - shown when limit reached */}
+        {!canAddPhone && phoneNumbers && phoneNumbers.length > 0 && (
+          <div className="mt-6 rounded-lg bg-amber-50 border border-amber-200 p-4">
+            <p className="text-sm text-amber-800">
+              U heeft het maximum aantal telefoonnummers voor uw abonnement bereikt. 
+              <a href="/dashboard/settings?tab=subscription" className="font-medium underline ml-1">
+                Upgrade uw abonnement
+              </a>
+              {' '}voor meer nummers.
+            </p>
           </div>
         )}
       </div>

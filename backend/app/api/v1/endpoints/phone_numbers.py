@@ -342,14 +342,26 @@ async def search_available_numbers(
 async def purchase_phone_number(
     data: PurchaseNumberRequest,
     current_user: User = Depends(require_admin),
-    company: Company = Depends(get_current_company),
+    company: Company = Depends(get_current_company_with_subscription),  # Requires active subscription
     db: Session = Depends(get_db)
 ):
     """
     Purchase a phone number from Twilio and add it to the company.
     The webhook is automatically configured for AI voice handling.
     Requires admin or owner role.
+    Requires active subscription or trial.
     """
+    # Check phone number limit based on subscription plan (same as AI workers limit)
+    current_count = db.query(PhoneNumber).filter(
+        PhoneNumber.company_id == company.id
+    ).count()
+    
+    if current_count >= company.ai_worker_limit:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"U heeft het maximum aantal telefoonnummers ({company.ai_worker_limit}) bereikt. Upgrade uw abonnement voor meer nummers.",
+        )
+    
     client = get_twilio_client()
     
     # Check if number already exists in our system
