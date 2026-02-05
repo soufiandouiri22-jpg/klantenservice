@@ -412,7 +412,7 @@ function CustomerDetailContent({ customer, onSave, onSubscriptionSave, onDelete,
           <div className="mt-4 flex justify-end">
             <Button
               onClick={() => onSubscriptionSave({ subscription_plan: selectedPlan, subscription_status: selectedStatus })}
-              loading={isSubscriptionSaving}
+              isLoading={isSubscriptionSaving}
               size="sm"
             >
               Abonnement Opslaan
