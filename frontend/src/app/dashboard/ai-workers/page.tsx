@@ -221,7 +221,7 @@ export default function AIWorkersPage() {
           <div className="mt-6 rounded-lg bg-amber-50 border border-amber-200 p-4">
             <p className="text-sm text-amber-800">
               U heeft het maximum aantal AI-medewerkers voor uw abonnement bereikt. 
-              <a href="/dashboard/settings" className="font-medium underline ml-1">
+              <a href="/dashboard/settings?tab=subscription" className="font-medium underline ml-1">
                 Upgrade uw abonnement
               </a>
               {' '}voor meer medewerkers.
