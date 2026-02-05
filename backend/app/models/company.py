@@ -62,7 +62,7 @@ class Company(Base):
     # Settings
     disclosure_message = Column(
         Text,
-        default="U spreekt met de digitale assistent van {company_name}"
+        default="U spreekt met {ai_worker_name}, de digitale assistent van {company_name}"
     )
     default_language = Column(String(10), default="nl-NL")
     timezone = Column(String(50), default="Europe/Amsterdam")

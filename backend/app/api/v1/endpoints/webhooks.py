@@ -132,7 +132,10 @@ async def twilio_voice_webhook(
     db.commit()
     
     # Return TwiML to connect to the AI via PersonaPlex
-    disclosure = company.disclosure_message.format(company_name=company.name)
+    disclosure = company.disclosure_message.format(
+        company_name=company.name,
+        ai_worker_name=available_worker.name
+    )
     
     # Get the WebSocket URL from settings or use default
     ws_url = settings.WEBSOCKET_URL or "wss://api.klantenservice.ai/ws/voice"
