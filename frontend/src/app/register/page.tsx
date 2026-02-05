@@ -10,7 +10,7 @@ import toast from 'react-hot-toast'
 import { Headphones, ArrowLeft, Check, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { api, authApi } from '@/lib/api'
+import { api, authApi, companyApi } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 
 // Google icon SVG component
@@ -111,6 +111,13 @@ function RegisterContent() {
       // Store tokens
       localStorage.setItem('access_token', response.data.access_token)
       localStorage.setItem('refresh_token', response.data.refresh_token)
+      
+      // Fetch user and company info to update the store
+      const [user, company] = await Promise.all([
+        authApi.getMe(),
+        companyApi.get(),
+      ])
+      setAuth(user, company)
       
       toast.success('Account aangemaakt! Welkom bij klantenservice.ai')
       router.push(redirectUrl)
