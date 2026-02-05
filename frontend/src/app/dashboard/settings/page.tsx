@@ -434,7 +434,7 @@ function SettingsContent() {
                         <h4 className="text-xl font-bold text-gray-900">Starter</h4>
                         <p className="text-sm text-gray-500 mt-1">Perfect voor kleine ondernemers</p>
                         <div className="mt-4">
-                          <span className="text-3xl font-bold text-gray-900">€49</span>
+                          <span className="text-3xl font-bold text-gray-900">€149</span>
                           <span className="text-gray-500">/maand</span>
                         </div>
                         <ul className="mt-4 space-y-2">
@@ -488,7 +488,7 @@ function SettingsContent() {
                         <h4 className="text-xl font-bold text-gray-900">Business</h4>
                         <p className="text-sm text-gray-500 mt-1">Ideaal voor groeiende bedrijven</p>
                         <div className="mt-4">
-                          <span className="text-3xl font-bold text-gray-900">€149</span>
+                          <span className="text-3xl font-bold text-gray-900">€299</span>
                           <span className="text-gray-500">/maand</span>
                         </div>
                         <ul className="mt-4 space-y-2">
@@ -536,8 +536,7 @@ function SettingsContent() {
                         <h4 className="text-xl font-bold text-gray-900">Enterprise</h4>
                         <p className="text-sm text-gray-500 mt-1">Voor grote organisaties</p>
                         <div className="mt-4">
-                          <span className="text-3xl font-bold text-gray-900">€499</span>
-                          <span className="text-gray-500">/maand</span>
+                          <span className="text-3xl font-bold text-gray-900">Op aanvraag</span>
                         </div>
                         <ul className="mt-4 space-y-2">
                           <li className="flex items-center text-sm text-gray-600">
@@ -565,13 +564,9 @@ function SettingsContent() {
                           <Button
                             className="mt-6 w-full"
                             variant="outline"
-                            onClick={() => handleUpgrade('enterprise')}
-                            disabled={checkoutMutation.isPending}
+                            onClick={() => window.location.href = '/contact'}
                           >
-                            {checkoutMutation.isPending ? 'Laden...' : 
-                              subscription?.status !== 'active' && subscription?.status !== 'trialing' 
-                                ? 'Start gratis proefperiode' 
-                                : 'Upgraden'}
+                            Aanvragen
                           </Button>
                         )}
                       </div>
