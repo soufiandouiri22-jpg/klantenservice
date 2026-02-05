@@ -55,10 +55,12 @@ async def get_subscription_info(
     """
     return {
         "plan": company.subscription_plan.value,
-        "status": company.subscription_status,
+        "status": company.subscription_status or "pending",
         "max_ai_workers": company.ai_worker_limit,
         "started_at": company.subscription_started_at,
         "ends_at": company.subscription_ends_at,
+        "has_stripe": bool(company.stripe_customer_id),
+        "stripe_subscription_id": company.stripe_subscription_id,
     }
 
 

@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { Building2, Shield, CreditCard, Users, Bell, Key, Trash2, Mail, Clock } from 'lucide-react'
+import { Building2, Shield, CreditCard, Users, Bell, Key, Trash2, Mail, Clock, Check } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { Header } from '@/components/layout/Header'
@@ -379,55 +379,207 @@ function SettingsContent() {
 
             {activeTab === 'subscription' && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+                {/* Current Status */}
                 <Card>
                   <CardHeader>
                     <CardTitle>Huidig abonnement</CardTitle>
                   </CardHeader>
                   <CardBody>
-                    <div className="flex items-center justify-between p-4 rounded-lg bg-primary-50 border border-primary-100">
-                      <div>
-                        <h3 className="text-lg font-semibold text-primary-900 capitalize">
-                          {subscription?.plan} Plan
-                        </h3>
-                        <p className="text-sm text-primary-700">
-                          {subscription?.max_ai_workers} AI-medewerker(s)
-                        </p>
-                      </div>
-                      <Badge variant="success">Actief</Badge>
-                    </div>
-
-                    <div className="mt-6 grid grid-cols-3 gap-4">
-                      {['starter', 'business', 'enterprise'].map((plan) => (
-                        <div
-                          key={plan}
-                          className={`p-4 rounded-lg border-2 ${
-                            subscription?.plan === plan
-                              ? 'border-primary-500 bg-primary-50'
-                              : 'border-gray-200'
-                          }`}
-                        >
-                          <h4 className="font-medium text-gray-900 capitalize">{plan}</h4>
-                          <p className="text-sm text-gray-500">
-                            {plan === 'starter' ? '1' : plan === 'business' ? '5' : '5+'} AI-medewerkers
+                    {subscription?.status === 'active' || subscription?.status === 'trialing' ? (
+                      <div className="flex items-center justify-between p-4 rounded-lg bg-primary-50 border border-primary-100">
+                        <div>
+                          <h3 className="text-lg font-semibold text-primary-900 capitalize">
+                            {subscription?.plan} Plan
+                          </h3>
+                          <p className="text-sm text-primary-700">
+                            {subscription?.max_ai_workers} AI-medewerker(s)
                           </p>
-                          {subscription?.plan !== plan && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="mt-3 w-full"
-                              onClick={() => handleUpgrade(plan)}
-                              disabled={checkoutMutation.isPending}
-                            >
-                              {checkoutMutation.isPending ? 'Laden...' : (subscription?.plan === 'starter' ? 'Upgraden' : 'Wijzigen')}
-                            </Button>
-                          )}
                         </div>
-                      ))}
+                        <Badge variant={subscription?.status === 'trialing' ? 'warning' : 'success'}>
+                          {subscription?.status === 'trialing' ? 'Proefperiode' : 'Actief'}
+                        </Badge>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between p-4 rounded-lg bg-amber-50 border border-amber-200">
+                        <div>
+                          <h3 className="text-lg font-semibold text-amber-900">
+                            Geen actief abonnement
+                          </h3>
+                          <p className="text-sm text-amber-700">
+                            Kies hieronder een abonnement om te starten met uw 14-dagen gratis proefperiode.
+                          </p>
+                        </div>
+                        <Badge variant="warning">Niet actief</Badge>
+                      </div>
+                    )}
+                  </CardBody>
+                </Card>
+
+                {/* Plans */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Kies uw abonnement</CardTitle>
+                    <CardDescription>
+                      Start met 14 dagen gratis proefperiode. Geen creditcard vereist om te beginnen.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardBody>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      {/* Starter Plan */}
+                      <div className={`relative p-6 rounded-xl border-2 transition-all ${
+                        subscription?.status === 'active' && subscription?.plan === 'starter'
+                          ? 'border-primary-500 bg-primary-50'
+                          : 'border-gray-200 hover:border-primary-300'
+                      }`}>
+                        <h4 className="text-xl font-bold text-gray-900">Starter</h4>
+                        <p className="text-sm text-gray-500 mt-1">Perfect voor kleine ondernemers</p>
+                        <div className="mt-4">
+                          <span className="text-3xl font-bold text-gray-900">€49</span>
+                          <span className="text-gray-500">/maand</span>
+                        </div>
+                        <ul className="mt-4 space-y-2">
+                          <li className="flex items-center text-sm text-gray-600">
+                            <Check className="h-4 w-4 text-green-500 mr-2" />
+                            1 AI-medewerker
+                          </li>
+                          <li className="flex items-center text-sm text-gray-600">
+                            <Check className="h-4 w-4 text-green-500 mr-2" />
+                            500 belminuten/maand
+                          </li>
+                          <li className="flex items-center text-sm text-gray-600">
+                            <Check className="h-4 w-4 text-green-500 mr-2" />
+                            Agenda integratie
+                          </li>
+                          <li className="flex items-center text-sm text-gray-600">
+                            <Check className="h-4 w-4 text-green-500 mr-2" />
+                            Website kennis
+                          </li>
+                        </ul>
+                        {subscription?.status === 'active' && subscription?.plan === 'starter' ? (
+                          <div className="mt-6 py-2 text-center text-sm font-medium text-primary-600">
+                            Uw huidige plan
+                          </div>
+                        ) : (
+                          <Button
+                            className="mt-6 w-full"
+                            variant={subscription?.status !== 'active' && subscription?.status !== 'trialing' ? 'primary' : 'outline'}
+                            onClick={() => handleUpgrade('starter')}
+                            disabled={checkoutMutation.isPending}
+                          >
+                            {checkoutMutation.isPending ? 'Laden...' : 
+                              subscription?.status !== 'active' && subscription?.status !== 'trialing' 
+                                ? 'Start gratis proefperiode' 
+                                : 'Downgraden'}
+                          </Button>
+                        )}
+                      </div>
+
+                      {/* Business Plan */}
+                      <div className={`relative p-6 rounded-xl border-2 transition-all ${
+                        subscription?.status === 'active' && subscription?.plan === 'business'
+                          ? 'border-primary-500 bg-primary-50'
+                          : 'border-primary-500 shadow-lg'
+                      }`}>
+                        <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                          <span className="bg-primary-500 text-white text-xs font-semibold px-3 py-1 rounded-full">
+                            Populair
+                          </span>
+                        </div>
+                        <h4 className="text-xl font-bold text-gray-900">Business</h4>
+                        <p className="text-sm text-gray-500 mt-1">Ideaal voor groeiende bedrijven</p>
+                        <div className="mt-4">
+                          <span className="text-3xl font-bold text-gray-900">€149</span>
+                          <span className="text-gray-500">/maand</span>
+                        </div>
+                        <ul className="mt-4 space-y-2">
+                          <li className="flex items-center text-sm text-gray-600">
+                            <Check className="h-4 w-4 text-green-500 mr-2" />
+                            5 AI-medewerkers
+                          </li>
+                          <li className="flex items-center text-sm text-gray-600">
+                            <Check className="h-4 w-4 text-green-500 mr-2" />
+                            2000 belminuten/maand
+                          </li>
+                          <li className="flex items-center text-sm text-gray-600">
+                            <Check className="h-4 w-4 text-green-500 mr-2" />
+                            Prioriteit support
+                          </li>
+                          <li className="flex items-center text-sm text-gray-600">
+                            <Check className="h-4 w-4 text-green-500 mr-2" />
+                            API toegang
+                          </li>
+                        </ul>
+                        {subscription?.status === 'active' && subscription?.plan === 'business' ? (
+                          <div className="mt-6 py-2 text-center text-sm font-medium text-primary-600">
+                            Uw huidige plan
+                          </div>
+                        ) : (
+                          <Button
+                            className="mt-6 w-full"
+                            onClick={() => handleUpgrade('business')}
+                            disabled={checkoutMutation.isPending}
+                          >
+                            {checkoutMutation.isPending ? 'Laden...' : 
+                              subscription?.status !== 'active' && subscription?.status !== 'trialing' 
+                                ? 'Start gratis proefperiode' 
+                                : 'Upgraden'}
+                          </Button>
+                        )}
+                      </div>
+
+                      {/* Enterprise Plan */}
+                      <div className={`relative p-6 rounded-xl border-2 transition-all ${
+                        subscription?.status === 'active' && subscription?.plan === 'enterprise'
+                          ? 'border-primary-500 bg-primary-50'
+                          : 'border-gray-200 hover:border-primary-300'
+                      }`}>
+                        <h4 className="text-xl font-bold text-gray-900">Enterprise</h4>
+                        <p className="text-sm text-gray-500 mt-1">Voor grote organisaties</p>
+                        <div className="mt-4">
+                          <span className="text-3xl font-bold text-gray-900">€499</span>
+                          <span className="text-gray-500">/maand</span>
+                        </div>
+                        <ul className="mt-4 space-y-2">
+                          <li className="flex items-center text-sm text-gray-600">
+                            <Check className="h-4 w-4 text-green-500 mr-2" />
+                            7+ AI-medewerkers
+                          </li>
+                          <li className="flex items-center text-sm text-gray-600">
+                            <Check className="h-4 w-4 text-green-500 mr-2" />
+                            Onbeperkte belminuten
+                          </li>
+                          <li className="flex items-center text-sm text-gray-600">
+                            <Check className="h-4 w-4 text-green-500 mr-2" />
+                            Dedicated support
+                          </li>
+                          <li className="flex items-center text-sm text-gray-600">
+                            <Check className="h-4 w-4 text-green-500 mr-2" />
+                            Custom integraties
+                          </li>
+                        </ul>
+                        {subscription?.status === 'active' && subscription?.plan === 'enterprise' ? (
+                          <div className="mt-6 py-2 text-center text-sm font-medium text-primary-600">
+                            Uw huidige plan
+                          </div>
+                        ) : (
+                          <Button
+                            className="mt-6 w-full"
+                            variant="outline"
+                            onClick={() => handleUpgrade('enterprise')}
+                            disabled={checkoutMutation.isPending}
+                          >
+                            {checkoutMutation.isPending ? 'Laden...' : 
+                              subscription?.status !== 'active' && subscription?.status !== 'trialing' 
+                                ? 'Start gratis proefperiode' 
+                                : 'Upgraden'}
+                          </Button>
+                        )}
+                      </div>
                     </div>
 
                     {/* Manage subscription button for existing Stripe customers */}
-                    {subscription?.has_stripe && (
-                      <div className="mt-6 pt-6 border-t border-gray-200">
+                    {subscription?.has_stripe && (subscription?.status === 'active' || subscription?.status === 'trialing') && (
+                      <div className="mt-8 pt-6 border-t border-gray-200">
                         <Button
                           variant="outline"
                           onClick={handleManageSubscription}
