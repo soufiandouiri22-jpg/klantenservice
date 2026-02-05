@@ -96,10 +96,11 @@ function RegisterContent() {
     setIsLoading(true)
     try {
       const response = await api.post('/auth/register', {
-        name: data.company_name,
-        email: data.company_email,
-      }, {
-        params: {
+        company_data: {
+          name: data.company_name,
+          email: data.company_email,
+        },
+        user_data: {
           email: data.email,
           password: data.password,
           first_name: data.first_name,
