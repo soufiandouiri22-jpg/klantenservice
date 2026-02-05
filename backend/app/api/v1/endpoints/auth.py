@@ -33,12 +33,21 @@ from app.schemas.user import (
     PasswordReset,
     PasswordResetConfirm,
     AcceptInvite,
+    RegisterResponse,
+    EmailVerifyCode,
+    EmailResendCode,
 )
 from app.schemas.company import CompanyCreate
 from app.api.deps import get_current_user
-from app.core.email import send_welcome_email
+from app.core.email import send_welcome_email, send_verification_code_email
+import random
 
 router = APIRouter()
+
+
+def generate_verification_code() -> str:
+    """Generate a random 6-digit verification code."""
+    return str(random.randint(100000, 999999))
 
 # Store OAuth state tokens temporarily (in production, use Redis)
 oauth_states: dict[str, datetime] = {}
@@ -84,7 +93,7 @@ def get_platform_voice_defaults(db: Session) -> dict:
     return defaults
 
 
-@router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED)
+@router.post("/register", response_model=RegisterResponse, status_code=status.HTTP_201_CREATED)
 async def register(
     company_data: CompanyCreate,
     user_data: UserCreate,
@@ -92,6 +101,8 @@ async def register(
 ):
     """
     Register a new company and owner account.
+    
+    Returns email address (no tokens). User must verify email before logging in.
     """
     # Check if email already exists
     existing_user = db.query(User).filter(User.email == user_data.email).first()
@@ -134,7 +145,10 @@ async def register(
     db.add(company)
     db.flush()
     
-    # Create owner user
+    # Generate verification code
+    verification_code = generate_verification_code()
+    
+    # Create owner user (unverified)
     user = User(
         id=uuid4(),
         company_id=company.id,
@@ -145,6 +159,9 @@ async def register(
         phone=user_data.phone,
         role=UserRole.owner,
         is_active=True,
+        is_verified=False,
+        verification_token=verification_code,
+        verification_sent_at=datetime.utcnow(),
     )
     db.add(user)
     
@@ -159,21 +176,132 @@ async def register(
     
     db.commit()
     
+    # Send verification email
+    send_verification_code_email(
+        to_email=user.email,
+        first_name=user.first_name,
+        code=verification_code,
+    )
+    
+    # Return email only (no tokens - user must verify first)
+    return RegisterResponse(
+        message="Account aangemaakt. Controleer uw e-mail voor de verificatiecode.",
+        email=user.email
+    )
+
+
+@router.post("/verify-code", response_model=Token)
+async def verify_code(
+    data: EmailVerifyCode,
+    db: Session = Depends(get_db)
+):
+    """
+    Verify email with 6-digit code (no authentication required).
+    
+    Returns tokens after successful verification.
+    """
+    # Find user by email
+    user = db.query(User).filter(User.email == data.email).first()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Gebruiker niet gevonden",
+        )
+    
+    # Already verified
+    if user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="E-mail is al geverifieerd",
+        )
+    
+    # Check if code is expired (10 minutes)
+    if user.verification_sent_at:
+        expires_at = user.verification_sent_at + timedelta(minutes=10)
+        if datetime.utcnow() > expires_at:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Verificatiecode is verlopen. Vraag een nieuwe code aan.",
+            )
+    
+    # Check code
+    if user.verification_token != data.code:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ongeldige verificatiecode",
+        )
+    
+    # Mark as verified
+    user.is_verified = True
+    user.verified_at = datetime.utcnow()
+    user.verification_token = None
+    user.last_login_at = datetime.utcnow()
+    db.commit()
+    
     # Generate tokens
     access_token = create_access_token(
         subject=str(user.id),
-        company_id=str(company.id),
+        company_id=str(user.company_id),
         role=user.role.value,
     )
     refresh_token = create_refresh_token(
         subject=str(user.id),
-        company_id=str(company.id),
+        company_id=str(user.company_id),
     )
     
     return Token(
         access_token=access_token,
         refresh_token=refresh_token,
     )
+
+
+@router.post("/resend-code")
+async def resend_verification_code(
+    data: EmailResendCode,
+    db: Session = Depends(get_db)
+):
+    """
+    Resend verification code email (no authentication required).
+    """
+    # Find user by email
+    user = db.query(User).filter(User.email == data.email).first()
+    
+    if not user:
+        # Don't reveal if email exists (security)
+        return {"message": "Als dit e-mailadres bij ons bekend is, ontvangt u een nieuwe verificatiecode."}
+    
+    # Already verified
+    if user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="E-mail is al geverifieerd",
+        )
+    
+    # Rate limit: minimum 60 seconds between resends
+    if user.verification_sent_at:
+        cooldown = user.verification_sent_at + timedelta(seconds=60)
+        if datetime.utcnow() < cooldown:
+            seconds_left = int((cooldown - datetime.utcnow()).total_seconds())
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Wacht nog {seconds_left} seconden voordat u een nieuwe code aanvraagt",
+            )
+    
+    # Generate new code
+    new_code = generate_verification_code()
+    user.verification_token = new_code
+    user.verification_sent_at = datetime.utcnow()
+    db.commit()
+    
+    # Send email
+    send_verification_code_email(
+        to_email=user.email,
+        first_name=user.first_name,
+        code=new_code,
+    )
+    
+    return {"message": "Nieuwe verificatiecode verzonden"}
 
 
 @router.post("/login", response_model=Token)
@@ -601,6 +729,8 @@ async def google_oauth_callback(
             # Link existing account to Google
             user.google_id = google_id
             user.oauth_provider = OAuthProvider.google
+            user.is_verified = True  # Google verified the email
+            user.verified_at = datetime.utcnow()
             db.commit()
         else:
             # Create new user and company

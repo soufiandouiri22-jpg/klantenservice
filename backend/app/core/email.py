@@ -13,6 +13,86 @@ def init_resend():
         resend.api_key = settings.RESEND_API_KEY
 
 
+def send_verification_code_email(
+    to_email: str,
+    first_name: str,
+    code: str
+) -> bool:
+    """
+    Send a 6-digit verification code to verify email address.
+    
+    Returns True if successful, False otherwise.
+    """
+    if not settings.RESEND_API_KEY:
+        print(f"[DEV] Would send verification code to {to_email}")
+        print(f"[DEV] Code: {code}")
+        return True
+    
+    try:
+        init_resend()
+        
+        # Format code with spaces for readability: "123 456"
+        formatted_code = f"{code[:3]} {code[3:]}"
+        
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Verifieer uw e-mailadres</title>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
+                <h1 style="color: white; margin: 0; font-size: 24px;">Verifieer uw e-mail</h1>
+            </div>
+            
+            <div style="background: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
+                <p style="font-size: 16px; margin-bottom: 20px;">
+                    Hoi {first_name},
+                </p>
+                
+                <p style="font-size: 16px; margin-bottom: 20px;">
+                    Gebruik de onderstaande code om uw e-mailadres te verifiëren:
+                </p>
+                
+                <div style="text-align: center; margin: 30px 0;">
+                    <div style="background: #ffffff; border: 2px solid #2563eb; border-radius: 12px; padding: 20px 40px; display: inline-block;">
+                        <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #1d4ed8; font-family: monospace;">
+                            {formatted_code}
+                        </span>
+                    </div>
+                </div>
+                
+                <p style="font-size: 14px; color: #6b7280; text-align: center;">
+                    Deze code is <strong>10 minuten</strong> geldig.
+                </p>
+                
+                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+                
+                <p style="font-size: 12px; color: #9ca3af; text-align: center;">
+                    Als u geen account heeft aangemaakt bij klantenservice.ai, kunt u deze email negeren.
+                </p>
+            </div>
+        </body>
+        </html>
+        """
+        
+        params = {
+            "from": f"klantenservice.ai <{settings.RESEND_FROM_EMAIL}>",
+            "to": [to_email],
+            "subject": f"Uw verificatiecode: {formatted_code}",
+            "html": html_content,
+        }
+        
+        resend.Emails.send(params)
+        return True
+        
+    except Exception as e:
+        print(f"Error sending verification code email: {e}")
+        return False
+
+
 def send_invite_email(
     to_email: str,
     first_name: str,

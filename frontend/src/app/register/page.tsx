@@ -10,8 +10,7 @@ import toast from 'react-hot-toast'
 import { Headphones, ArrowLeft, Check, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { api, authApi, companyApi } from '@/lib/api'
-import { useAuthStore } from '@/lib/store'
+import { api, authApi } from '@/lib/api'
 
 // Google icon SVG component
 function GoogleIcon({ className }: { className?: string }) {
@@ -67,7 +66,6 @@ const benefits = [
 function RegisterContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { setAuth } = useAuthStore()
   const [isLoading, setIsLoading] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
   const [step, setStep] = useState(1)
@@ -108,19 +106,10 @@ function RegisterContent() {
         },
       })
       
-      // Store tokens
-      localStorage.setItem('access_token', response.data.access_token)
-      localStorage.setItem('refresh_token', response.data.refresh_token)
-      
-      // Fetch user and company info to update the store
-      const [user, company] = await Promise.all([
-        authApi.getMe(),
-        companyApi.get(),
-      ])
-      setAuth(user, company)
-      
-      toast.success('Account aangemaakt! Welkom bij klantenservice.ai')
-      router.push(redirectUrl)
+      // Don't store tokens - user must verify email first
+      // Redirect to verify page with email as query parameter
+      toast.success(response.data.message || 'Account aangemaakt! Controleer uw e-mail voor de verificatiecode.')
+      router.push(`/verify?email=${encodeURIComponent(response.data.email)}`)
     } catch (error: any) {
       toast.error(error.response?.data?.detail || 'Registratie mislukt')
     } finally {

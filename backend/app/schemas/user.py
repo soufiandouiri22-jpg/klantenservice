@@ -49,6 +49,7 @@ class UserResponse(UserBase):
     is_active: bool
     is_verified: bool
     is_superadmin: bool = False
+    oauth_provider: str = "email"
     last_login_at: Optional[datetime]
     created_at: datetime
     
@@ -131,3 +132,20 @@ class InviteResponse(BaseModel):
     message: str
     user_id: UUID
     email: str
+
+
+class RegisterResponse(BaseModel):
+    """Response after registration (before email verification)."""
+    message: str
+    email: EmailStr
+
+
+class EmailVerifyCode(BaseModel):
+    """Schema for email verification with code (no auth required)."""
+    email: EmailStr
+    code: str = Field(..., min_length=6, max_length=6, description="6-digit verification code")
+
+
+class EmailResendCode(BaseModel):
+    """Schema for resending verification code (no auth required)."""
+    email: EmailStr
