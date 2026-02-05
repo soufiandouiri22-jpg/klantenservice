@@ -176,9 +176,9 @@ export function LogsTab() {
                       <div className="mt-2">
                         <Badge
                           variant={
-                            call.status === 'completed' ? 'green' :
-                            call.status === 'in_progress' ? 'blue' :
-                            call.status === 'failed' ? 'red' : 'gray'
+                            call.status === 'completed' ? 'success' :
+                            call.status === 'in_progress' ? 'primary' :
+                            call.status === 'failed' ? 'danger' : 'gray'
                           }
                         >
                           {call.status}
