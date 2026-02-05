@@ -274,10 +274,10 @@ export function LogsTab() {
                                   Turn {log.turn_id}
                                 </span>
                                 {log.detected_intent && (
-                                  <Badge variant="blue">{log.detected_intent}</Badge>
+                                  <Badge variant="primary">{log.detected_intent}</Badge>
                                 )}
                                 {log.was_escalated > 0 && (
-                                  <Badge variant="red">Escalated</Badge>
+                                  <Badge variant="danger">Escalated</Badge>
                                 )}
                               </div>
                               {latency?.total_latency_ms && (

@@ -220,9 +220,9 @@ export function CustomersTab() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       {customer.is_kill_switched ? (
-                        <Badge variant="red">Kill Switch</Badge>
+                        <Badge variant="danger">Kill Switch</Badge>
                       ) : customer.is_active ? (
-                        <Badge variant="green">Actief</Badge>
+                        <Badge variant="success">Actief</Badge>
                       ) : (
                         <Badge variant="gray">Inactief</Badge>
                       )}
