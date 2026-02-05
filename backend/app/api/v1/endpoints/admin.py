@@ -12,7 +12,7 @@ import aiohttp
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_
+from sqlalchemy import func, and_, case, or_
 
 from app.api.deps import get_db, get_current_user
 from app.core.config import get_settings
@@ -547,76 +547,79 @@ async def get_business_metrics(
 ):
     """
     Get business metrics including MRR, customer counts, and growth.
+    Optimized with SQL aggregation for better performance.
     """
     now = datetime.utcnow()
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     
-    # Plan prices in cents (monthly)
-    PLAN_PRICES = {
-        "starter": 4900,      # €49/month
-        "business": 14900,    # €149/month
-        "enterprise": 49900,  # €499/month (custom, placeholder)
-    }
+    # Total customers (single query)
+    total_customers = db.query(func.count(Company.id)).scalar() or 0
     
-    # Get all companies
-    companies = db.query(Company).all()
+    # Count by subscription status (single query with case statements)
+    status_counts = db.query(
+        func.count(case((Company.subscription_status == "active", 1))).label("active"),
+        func.count(case((Company.subscription_status == "trialing", 1))).label("trialing"),
+        func.count(case((
+            or_(
+                Company.subscription_status == "pending",
+                Company.subscription_status.is_(None),
+                Company.subscription_status == ""
+            ), 1
+        ))).label("pending"),
+        func.count(case((
+            and_(
+                Company.subscription_status == "canceled",
+                Company.updated_at >= month_start
+            ), 1
+        ))).label("churned_this_month"),
+    ).first()
     
-    # Count totals
-    total_customers = len(companies)
-    active_customers = 0
-    trialing_customers = 0
-    pending_customers = 0
+    active_only = status_counts.active or 0
+    trialing_customers = status_counts.trialing or 0
+    active_customers = active_only + trialing_customers  # trialing counts as active
+    pending_customers = status_counts.pending or 0
+    churned_this_month = status_counts.churned_this_month or 0
     
-    starter_customers = 0
-    business_customers = 0
-    enterprise_customers = 0
+    # Count by plan for active/trialing customers (single query)
+    plan_counts = db.query(
+        func.count(case((Company.subscription_plan == "starter", 1))).label("starter"),
+        func.count(case((Company.subscription_plan == "business", 1))).label("business"),
+        func.count(case((Company.subscription_plan == "enterprise", 1))).label("enterprise"),
+    ).filter(
+        Company.subscription_status.in_(["active", "trialing"])
+    ).first()
     
-    mrr_cents = 0
-    new_customers_this_month = 0
-    churned_this_month = 0
+    starter_customers = plan_counts.starter or 0
+    business_customers = plan_counts.business or 0
+    enterprise_customers = plan_counts.enterprise or 0
     
-    for company in companies:
-        # Count by status
-        if company.subscription_status == "trialing":
-            trialing_customers += 1
-            active_customers += 1
-        elif company.subscription_status == "active":
-            active_customers += 1
-        elif company.subscription_status in ["pending", None, ""]:
-            pending_customers += 1
-        elif company.subscription_status == "canceled":
-            # Check if cancelled this month
-            if company.updated_at and company.updated_at >= month_start:
-                churned_this_month += 1
-        
-        # Count by plan (only for paying customers)
-        if company.subscription_status in ["trialing", "active"]:
-            plan = company.subscription_plan.value if company.subscription_plan else "starter"
-            if plan == "starter":
-                starter_customers += 1
-            elif plan == "business":
-                business_customers += 1
-            elif plan == "enterprise":
-                enterprise_customers += 1
-            
-            # Add to MRR (only active, not trialing)
-            if company.subscription_status == "active":
-                mrr_cents += PLAN_PRICES.get(plan, 0)
-        
-        # New customers this month
-        if company.created_at and company.created_at >= month_start:
-            new_customers_this_month += 1
+    # Calculate MRR with SQL (only active, not trialing)
+    # Plan prices in cents: starter=4900, business=14900, enterprise=49900
+    mrr_cents = db.query(
+        func.sum(case(
+            (Company.subscription_plan == "starter", 4900),
+            (Company.subscription_plan == "business", 14900),
+            (Company.subscription_plan == "enterprise", 49900),
+            else_=0
+        ))
+    ).filter(
+        Company.subscription_status == "active"
+    ).scalar() or 0
     
-    # Calculate trial to paid conversion rate
-    # Count customers who were trialing and are now active
-    total_ever_trialed = db.query(Company).filter(
+    # New customers this month (single query)
+    new_customers_this_month = db.query(func.count(Company.id)).filter(
+        Company.created_at >= month_start
+    ).scalar() or 0
+    
+    # Trial to paid conversion rate (2 simple count queries)
+    total_ever_trialed = db.query(func.count(Company.id)).filter(
         Company.stripe_subscription_id.isnot(None)
-    ).count()
+    ).scalar() or 0
     
-    total_converted = db.query(Company).filter(
+    total_converted = db.query(func.count(Company.id)).filter(
         Company.subscription_status == "active",
         Company.stripe_subscription_id.isnot(None)
-    ).count()
+    ).scalar() or 0
     
     trial_to_paid_rate = (total_converted / total_ever_trialed * 100) if total_ever_trialed > 0 else 0.0
     
