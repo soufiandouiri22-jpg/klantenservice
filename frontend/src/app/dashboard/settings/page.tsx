@@ -427,7 +427,7 @@ function SettingsContent() {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                       {/* Starter Plan */}
                       <div className={`relative p-6 rounded-xl border-2 transition-all ${
-                        subscription?.status === 'active' && subscription?.plan === 'starter'
+                        (subscription?.status === 'active' || subscription?.status === 'trialing') && subscription?.plan === 'starter'
                           ? 'border-primary-500 bg-primary-50'
                           : 'border-gray-200 hover:border-primary-300'
                       }`}>
@@ -455,7 +455,7 @@ function SettingsContent() {
                             Website kennis
                           </li>
                         </ul>
-                        {subscription?.status === 'active' && subscription?.plan === 'starter' ? (
+                        {(subscription?.status === 'active' || subscription?.status === 'trialing') && subscription?.plan === 'starter' ? (
                           <div className="mt-6 py-2 text-center text-sm font-medium text-primary-600">
                             Uw huidige plan
                           </div>
@@ -469,14 +469,16 @@ function SettingsContent() {
                             {checkoutMutation.isPending ? 'Laden...' : 
                               subscription?.status !== 'active' && subscription?.status !== 'trialing' 
                                 ? 'Start gratis proefperiode' 
-                                : 'Downgraden'}
+                                : subscription?.plan === 'business' || subscription?.plan === 'enterprise'
+                                  ? 'Downgraden'
+                                  : 'Kiezen'}
                           </Button>
                         )}
                       </div>
 
                       {/* Business Plan */}
                       <div className={`relative p-6 rounded-xl border-2 transition-all ${
-                        subscription?.status === 'active' && subscription?.plan === 'business'
+                        (subscription?.status === 'active' || subscription?.status === 'trialing') && subscription?.plan === 'business'
                           ? 'border-primary-500 bg-primary-50'
                           : 'border-primary-500 shadow-lg'
                       }`}>
@@ -509,7 +511,7 @@ function SettingsContent() {
                             API toegang
                           </li>
                         </ul>
-                        {subscription?.status === 'active' && subscription?.plan === 'business' ? (
+                        {(subscription?.status === 'active' || subscription?.status === 'trialing') && subscription?.plan === 'business' ? (
                           <div className="mt-6 py-2 text-center text-sm font-medium text-primary-600">
                             Uw huidige plan
                           </div>
@@ -522,14 +524,18 @@ function SettingsContent() {
                             {checkoutMutation.isPending ? 'Laden...' : 
                               subscription?.status !== 'active' && subscription?.status !== 'trialing' 
                                 ? 'Start gratis proefperiode' 
-                                : 'Upgraden'}
+                                : subscription?.plan === 'starter'
+                                  ? 'Upgraden'
+                                  : subscription?.plan === 'enterprise'
+                                    ? 'Downgraden'
+                                    : 'Kiezen'}
                           </Button>
                         )}
                       </div>
 
                       {/* Enterprise Plan */}
                       <div className={`relative p-6 rounded-xl border-2 transition-all ${
-                        subscription?.status === 'active' && subscription?.plan === 'enterprise'
+                        (subscription?.status === 'active' || subscription?.status === 'trialing') && subscription?.plan === 'enterprise'
                           ? 'border-primary-500 bg-primary-50'
                           : 'border-gray-200 hover:border-primary-300'
                       }`}>
@@ -556,7 +562,7 @@ function SettingsContent() {
                             Custom integraties
                           </li>
                         </ul>
-                        {subscription?.status === 'active' && subscription?.plan === 'enterprise' ? (
+                        {(subscription?.status === 'active' || subscription?.status === 'trialing') && subscription?.plan === 'enterprise' ? (
                           <div className="mt-6 py-2 text-center text-sm font-medium text-primary-600">
                             Uw huidige plan
                           </div>
