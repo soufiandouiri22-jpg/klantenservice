@@ -253,8 +253,8 @@ export function LogsTab() {
                     </div>
                   ) : (
                     <div className="divide-y divide-gray-100">
-                      {callTrace.context_logs.map((log) => {
-                        const latency = callTrace.latency_logs.find(l => l.turn_id === log.turn_id)
+                      {callTrace.context_logs.map((log: ContextLog) => {
+                        const latency = callTrace.latency_logs.find((l: LatencyLog) => l.turn_id === log.turn_id)
                         const isExpanded = expandedTurns.has(log.turn_id)
 
                         return (
