@@ -105,10 +105,10 @@ export function CustomersTab() {
   const formatCurrency = (cents: number) => `€${(cents / 100).toFixed(2)}`
 
   const getPlanBadge = (plan: string) => {
-    const colors: Record<string, 'green' | 'blue' | 'purple' | 'gray'> = {
-      starter: 'green',
-      business: 'blue',
-      enterprise: 'purple',
+    const colors: Record<string, 'success' | 'primary' | 'warning' | 'gray'> = {
+      starter: 'success',
+      business: 'primary',
+      enterprise: 'warning',
     }
     return <Badge variant={colors[plan] || 'gray'}>{plan}</Badge>
   }
