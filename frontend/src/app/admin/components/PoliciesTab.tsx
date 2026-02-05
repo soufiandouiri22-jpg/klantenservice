@@ -221,7 +221,7 @@ export function PoliciesTab() {
           <select
             value={selectedCategory || ''}
             onChange={(e) => setSelectedCategory(e.target.value || null)}
-            className="rounded-lg border border-gray-200 px-4 py-2 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+            className="w-fit min-w-[180px] rounded-lg border border-gray-200 px-4 py-2 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
           >
             <option value="">Alle categorieën</option>
             {categories?.map((cat: Category) => (
@@ -473,7 +473,7 @@ export function PoliciesTab() {
             <select
               value={newPrompt.category}
               onChange={(e) => setNewPrompt({ ...newPrompt, category: e.target.value })}
-              className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+              className="w-fit min-w-[200px] rounded-lg border border-gray-200 px-4 py-2.5 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
             >
               {categories?.map((cat: Category) => (
                 <option key={cat.key} value={cat.key}>

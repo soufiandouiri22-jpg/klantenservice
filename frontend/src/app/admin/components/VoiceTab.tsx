@@ -154,7 +154,7 @@ export function VoiceTab() {
                   <select
                     value={values['voice_default_preset'] || 'NATF0'}
                     onChange={(e) => setValues({ ...values, voice_default_preset: e.target.value })}
-                    className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+                    className="w-fit min-w-[200px] rounded-lg border border-gray-200 px-4 py-2.5 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
                   >
                     {availableVoices.map((voice) => (
                       <option key={voice} value={voice}>{voice}</option>
@@ -332,7 +332,7 @@ export function VoiceTab() {
                 <select
                   value={values['voice_interrupt_policy'] || 'allow'}
                   onChange={(e) => setValues({ ...values, voice_interrupt_policy: e.target.value })}
-                  className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+                  className="w-fit min-w-[280px] rounded-lg border border-gray-200 px-4 py-2.5 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
                 >
                   <option value="allow">Toestaan - AI stopt meteen</option>
                   <option value="queue">Queue - AI maakt zin af</option>

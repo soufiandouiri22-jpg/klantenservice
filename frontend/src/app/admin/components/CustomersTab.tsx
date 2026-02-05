@@ -387,7 +387,7 @@ function CustomerDetailContent({ customer, onSave, onSubscriptionSave, onDelete,
             <select
               value={selectedPlan}
               onChange={(e) => setSelectedPlan(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="w-fit min-w-[180px] px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             >
               <option value="starter">Starter (1 AI-medewerker)</option>
               <option value="business">Business (5 AI-medewerkers)</option>
@@ -399,7 +399,7 @@ function CustomerDetailContent({ customer, onSave, onSubscriptionSave, onDelete,
             <select
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="w-fit min-w-[180px] px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             >
               <option value="active">Actief</option>
               <option value="trialing">Proefperiode</option>

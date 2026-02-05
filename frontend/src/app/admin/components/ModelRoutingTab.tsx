@@ -113,7 +113,7 @@ export function ModelRoutingTab() {
                 <select
                   value={values['model_default'] || 'gpt-4o-mini'}
                   onChange={(e) => setValues({ ...values, model_default: e.target.value })}
-                  className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+                  className="w-fit min-w-[260px] rounded-lg border border-gray-200 px-4 py-2.5 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
                 >
                   <option value="gpt-4o-mini">GPT-4o Mini (snel, goedkoop)</option>
                   <option value="gpt-4o">GPT-4o (slim, duurder)</option>
@@ -144,7 +144,7 @@ export function ModelRoutingTab() {
                 <select
                   value={values['model_fallback'] || 'gpt-3.5-turbo'}
                   onChange={(e) => setValues({ ...values, model_fallback: e.target.value })}
-                  className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+                  className="w-fit min-w-[180px] rounded-lg border border-gray-200 px-4 py-2.5 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
                 >
                   <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
                   <option value="gpt-4o-mini">GPT-4o Mini</option>
@@ -174,7 +174,7 @@ export function ModelRoutingTab() {
                 <select
                   value={values['model_big'] || 'gpt-4o'}
                   onChange={(e) => setValues({ ...values, model_big: e.target.value })}
-                  className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+                  className="w-fit min-w-[160px] rounded-lg border border-gray-200 px-4 py-2.5 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
                 >
                   <option value="gpt-4o">GPT-4o</option>
                   <option value="gpt-4-turbo">GPT-4 Turbo</option>
