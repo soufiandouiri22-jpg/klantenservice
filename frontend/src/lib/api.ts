@@ -738,6 +738,11 @@ export const adminApi = {
     return response.data
   },
   
+  updateSubscription: async (customerId: string, data: { subscription_plan?: string; subscription_status?: string }) => {
+    const response = await api.put(`/admin/customers/${customerId}/subscription`, data)
+    return response.data
+  },
+  
   // Global Config
   getGlobalConfigs: async () => {
     const response = await api.get('/admin/config')

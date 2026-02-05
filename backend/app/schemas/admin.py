@@ -223,6 +223,11 @@ class CustomerOverridesUpdate(BaseModel):
     feature_flags: Optional[Dict[str, Any]] = None
 
 
+class SubscriptionUpdate(BaseModel):
+    subscription_plan: Optional[str] = None  # starter, business, enterprise
+    subscription_status: Optional[str] = None  # active, trialing, pending, canceled
+
+
 class KillSwitchRequest(BaseModel):
     enabled: bool
     reason: Optional[str] = None

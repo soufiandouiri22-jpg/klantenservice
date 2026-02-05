@@ -46,6 +46,7 @@ from app.schemas.admin import (
     CustomerDetail,
     CustomerStats,
     CustomerOverridesUpdate,
+    SubscriptionUpdate,
     KillSwitchRequest,
     CallTraceResponse,
     ContextLogResponse,
@@ -835,6 +836,72 @@ async def update_customer_overrides(
     db.commit()
     
     return {"status": "updated", "customer_id": str(customer_id)}
+
+
+@router.put("/customers/{customer_id}/subscription")
+async def update_customer_subscription(
+    customer_id: UUID,
+    data: SubscriptionUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_superadmin),
+):
+    """
+    Update a customer's subscription plan and/or status.
+    """
+    from app.models.company import SubscriptionPlan
+    
+    company = db.query(Company).filter(Company.id == customer_id).first()
+    
+    if not company:
+        raise HTTPException(status_code=404, detail="Klant niet gevonden")
+    
+    old_plan = company.subscription_plan.value if company.subscription_plan else "starter"
+    old_status = company.subscription_status or "pending"
+    
+    # Update plan if provided
+    if data.subscription_plan:
+        valid_plans = ["starter", "business", "enterprise"]
+        if data.subscription_plan not in valid_plans:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Ongeldig plan. Kies uit: {', '.join(valid_plans)}"
+            )
+        company.subscription_plan = SubscriptionPlan(data.subscription_plan)
+        
+        # Update max_ai_workers based on plan
+        plan_limits = {
+            "starter": 1,
+            "business": 5,
+            "enterprise": 7,
+        }
+        company.max_ai_workers = plan_limits.get(data.subscription_plan, 1)
+    
+    # Update status if provided
+    if data.subscription_status:
+        valid_statuses = ["active", "trialing", "pending", "canceled"]
+        if data.subscription_status not in valid_statuses:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Ongeldige status. Kies uit: {', '.join(valid_statuses)}"
+            )
+        company.subscription_status = data.subscription_status
+    
+    db.commit()
+    db.refresh(company)
+    
+    logger.info(
+        f"Subscription updated for {company.name} by {current_user.email}: "
+        f"plan {old_plan} -> {company.subscription_plan.value}, "
+        f"status {old_status} -> {company.subscription_status}"
+    )
+    
+    return {
+        "status": "updated",
+        "customer_id": str(customer_id),
+        "subscription_plan": company.subscription_plan.value,
+        "subscription_status": company.subscription_status,
+        "max_ai_workers": company.max_ai_workers,
+    }
 
 
 @router.post("/customers/{customer_id}/kill-switch")

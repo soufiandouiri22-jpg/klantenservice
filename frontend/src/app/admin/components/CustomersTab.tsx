@@ -106,6 +106,19 @@ export function CustomersTab() {
     },
   })
 
+  const updateSubscriptionMutation = useMutation({
+    mutationFn: ({ customerId, data }: { customerId: string; data: { subscription_plan?: string; subscription_status?: string } }) =>
+      adminApi.updateSubscription(customerId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-customers'] })
+      queryClient.invalidateQueries({ queryKey: ['admin-customer-detail'] })
+      toast.success('Abonnement bijgewerkt')
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Kon abonnement niet bijwerken')
+    },
+  })
+
   const customers: Customer[] = customersData?.customers || []
 
   const filteredCustomers = customers.filter(
@@ -305,12 +318,19 @@ export function CustomersTab() {
                 overrides
               })
             }}
+            onSubscriptionSave={(data) => {
+              updateSubscriptionMutation.mutate({
+                customerId: customerDetail.id,
+                data
+              })
+            }}
             onDelete={() => {
               if (confirm(`Weet je zeker dat je "${customerDetail.name}" wilt verwijderen? Dit kan niet ongedaan worden gemaakt.`)) {
                 deleteCustomerMutation.mutate(customerDetail.id)
               }
             }}
             isSaving={updateOverridesMutation.isPending}
+            isSubscriptionSaving={updateSubscriptionMutation.isPending}
             isDeleting={deleteCustomerMutation.isPending}
           />
         ) : null}
@@ -322,17 +342,23 @@ export function CustomersTab() {
 interface CustomerDetailContentProps {
   customer: CustomerDetail
   onSave: (overrides: any) => void
+  onSubscriptionSave: (data: { subscription_plan?: string; subscription_status?: string }) => void
   onDelete: () => void
   isSaving: boolean
+  isSubscriptionSaving: boolean
   isDeleting: boolean
 }
 
-function CustomerDetailContent({ customer, onSave, onDelete, isSaving, isDeleting }: CustomerDetailContentProps) {
+function CustomerDetailContent({ customer, onSave, onSubscriptionSave, onDelete, isSaving, isSubscriptionSaving, isDeleting }: CustomerDetailContentProps) {
   const [overrides, setOverrides] = useState(customer.admin_overrides || {})
+  const [selectedPlan, setSelectedPlan] = useState(customer.subscription_plan)
+  const [selectedStatus, setSelectedStatus] = useState(customer.subscription_status)
 
   const handleChange = (key: string, value: any) => {
     setOverrides((prev: any) => ({ ...prev, [key]: value }))
   }
+
+  const hasSubscriptionChanges = selectedPlan !== customer.subscription_plan || selectedStatus !== customer.subscription_status
 
   return (
     <div className="space-y-6">
@@ -343,17 +369,56 @@ function CustomerDetailContent({ customer, onSave, onDelete, isSaving, isDeletin
           <p className="font-medium truncate" title={customer.email}>{customer.email}</p>
         </div>
         <div className="min-w-0">
-          <p className="text-sm text-gray-500">Plan</p>
-          <p className="font-medium capitalize">{customer.subscription_plan}</p>
-        </div>
-        <div className="min-w-0">
-          <p className="text-sm text-gray-500">Status</p>
-          <p className="font-medium">{customer.subscription_status}</p>
-        </div>
-        <div className="min-w-0">
           <p className="text-sm text-gray-500">Stripe Customer</p>
           <p className="font-medium text-sm truncate" title={customer.stripe_customer_id || '-'}>{customer.stripe_customer_id || '-'}</p>
         </div>
+      </div>
+
+      <hr />
+
+      {/* Subscription Management */}
+      <div>
+        <h4 className="text-sm font-semibold text-gray-900 mb-4">
+          Abonnement Beheren
+        </h4>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Plan</label>
+            <select
+              value={selectedPlan}
+              onChange={(e) => setSelectedPlan(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            >
+              <option value="starter">Starter (1 AI-medewerker)</option>
+              <option value="business">Business (5 AI-medewerkers)</option>
+              <option value="enterprise">Enterprise (7 AI-medewerkers)</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+            <select
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            >
+              <option value="active">Actief</option>
+              <option value="trialing">Proefperiode</option>
+              <option value="pending">Pending (geen toegang)</option>
+              <option value="canceled">Opgezegd (geen toegang)</option>
+            </select>
+          </div>
+        </div>
+        {hasSubscriptionChanges && (
+          <div className="mt-4 flex justify-end">
+            <Button
+              onClick={() => onSubscriptionSave({ subscription_plan: selectedPlan, subscription_status: selectedStatus })}
+              loading={isSubscriptionSaving}
+              size="sm"
+            >
+              Abonnement Opslaan
+            </Button>
+          </div>
+        )}
       </div>
 
       <hr />
