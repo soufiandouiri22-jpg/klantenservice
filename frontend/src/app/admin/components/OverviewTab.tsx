@@ -66,23 +66,30 @@ export function OverviewTab() {
     refetchInterval: 10000, // Refresh every 10 seconds
   })
 
-  const { data: latency, isLoading: latencyLoading } = useQuery({
+  const { data: latency, isLoading: latencyLoading, refetch: refetchLatency } = useQuery({
     queryKey: ['admin-metrics-latency'],
     queryFn: () => adminApi.getLatencyMetrics(24),
     refetchInterval: 30000, // Refresh every 30 seconds
   })
 
-  const { data: costs, isLoading: costsLoading } = useQuery({
+  const { data: costs, isLoading: costsLoading, refetch: refetchCosts } = useQuery({
     queryKey: ['admin-metrics-costs'],
     queryFn: adminApi.getCostMetrics,
     refetchInterval: 60000, // Refresh every minute
   })
 
-  const { data: business, isLoading: businessLoading } = useQuery({
+  const { data: business, isLoading: businessLoading, refetch: refetchBusiness } = useQuery({
     queryKey: ['admin-metrics-business'],
     queryFn: adminApi.getBusinessMetrics,
     refetchInterval: 60000, // Refresh every minute
   })
+
+  const refreshAll = () => {
+    refetchOverview()
+    refetchLatency()
+    refetchCosts()
+    refetchBusiness()
+  }
 
   const formatCurrency = (cents: number) => {
     return `€${(cents / 100).toFixed(2)}`
@@ -101,7 +108,7 @@ export function OverviewTab() {
       {/* Header with refresh */}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-gray-900">Real-time Overzicht</h2>
-        <Button variant="outline" size="sm" onClick={() => refetchOverview()}>
+        <Button variant="outline" size="sm" onClick={refreshAll}>
           <RefreshCw className="h-4 w-4 mr-2" />
           Vernieuwen
         </Button>
