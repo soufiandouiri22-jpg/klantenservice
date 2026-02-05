@@ -109,6 +109,30 @@ class CostMetrics(BaseModel):
     tokens_month: int = 0
 
 
+class BusinessMetrics(BaseModel):
+    # Customer counts
+    total_customers: int = 0
+    active_customers: int = 0  # trialing or active
+    trialing_customers: int = 0
+    pending_customers: int = 0  # registered but not subscribed
+    
+    # Customers by plan
+    starter_customers: int = 0
+    business_customers: int = 0
+    enterprise_customers: int = 0
+    
+    # Revenue metrics (in cents)
+    mrr_cents: int = 0  # Monthly Recurring Revenue
+    arr_cents: int = 0  # Annual Recurring Revenue (MRR * 12)
+    
+    # Growth metrics
+    new_customers_this_month: int = 0
+    churned_this_month: int = 0
+    
+    # Conversion
+    trial_to_paid_rate: float = 0.0  # percentage
+
+
 # ==================== Customer Schemas ====================
 
 class CustomerStats(BaseModel):

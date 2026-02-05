@@ -8,7 +8,12 @@ import {
   HelpCircle,
   DollarSign,
   Clock,
-  RefreshCw
+  RefreshCw,
+  Users,
+  TrendingUp,
+  UserPlus,
+  UserMinus,
+  CreditCard
 } from 'lucide-react'
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -71,6 +76,12 @@ export function OverviewTab() {
     refetchInterval: 60000, // Refresh every minute
   })
 
+  const { data: business, isLoading: businessLoading } = useQuery({
+    queryKey: ['admin-metrics-business'],
+    queryFn: adminApi.getBusinessMetrics,
+    refetchInterval: 60000, // Refresh every minute
+  })
+
   const formatCurrency = (cents: number) => {
     return `€${(cents / 100).toFixed(2)}`
   }
@@ -128,6 +139,149 @@ export function OverviewTab() {
           status={overview?.unknown_rate_today > 20 ? 'warning' : 'neutral'}
         />
       </div>
+
+      {/* Business Metrics */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <TrendingUp className="h-5 w-5 text-green-600" />
+            Business Metrics
+          </CardTitle>
+        </CardHeader>
+        <CardBody>
+          {businessLoading ? (
+            <Spinner />
+          ) : (
+            <div className="space-y-6">
+              {/* Revenue */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg p-4 border border-green-100">
+                  <div className="flex items-center gap-2 mb-2">
+                    <DollarSign className="h-5 w-5 text-green-600" />
+                    <p className="text-sm font-medium text-green-700">MRR</p>
+                  </div>
+                  <p className="text-3xl font-bold text-green-900">
+                    {formatCurrency(business?.mrr_cents || 0)}
+                  </p>
+                  <p className="text-xs text-green-600 mt-1">Monthly Recurring Revenue</p>
+                </div>
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-100">
+                  <div className="flex items-center gap-2 mb-2">
+                    <TrendingUp className="h-5 w-5 text-blue-600" />
+                    <p className="text-sm font-medium text-blue-700">ARR</p>
+                  </div>
+                  <p className="text-3xl font-bold text-blue-900">
+                    {formatCurrency(business?.arr_cents || 0)}
+                  </p>
+                  <p className="text-xs text-blue-600 mt-1">Annual Recurring Revenue</p>
+                </div>
+                <div className="bg-gradient-to-br from-purple-50 to-violet-50 rounded-lg p-4 border border-purple-100">
+                  <div className="flex items-center gap-2 mb-2">
+                    <CreditCard className="h-5 w-5 text-purple-600" />
+                    <p className="text-sm font-medium text-purple-700">Conversie Rate</p>
+                  </div>
+                  <p className="text-3xl font-bold text-purple-900">
+                    {business?.trial_to_paid_rate?.toFixed(1) || 0}%
+                  </p>
+                  <p className="text-xs text-purple-600 mt-1">Trial naar Betaald</p>
+                </div>
+              </div>
+
+              {/* Customer Counts */}
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                <div className="bg-gray-50 rounded-lg p-4 text-center">
+                  <div className="flex justify-center mb-2">
+                    <Users className="h-5 w-5 text-gray-600" />
+                  </div>
+                  <p className="text-2xl font-bold text-gray-900">{business?.total_customers || 0}</p>
+                  <p className="text-xs text-gray-500">Totaal</p>
+                </div>
+                <div className="bg-green-50 rounded-lg p-4 text-center">
+                  <p className="text-2xl font-bold text-green-700">{business?.active_customers || 0}</p>
+                  <p className="text-xs text-green-600">Actief</p>
+                </div>
+                <div className="bg-amber-50 rounded-lg p-4 text-center">
+                  <p className="text-2xl font-bold text-amber-700">{business?.trialing_customers || 0}</p>
+                  <p className="text-xs text-amber-600">Proefperiode</p>
+                </div>
+                <div className="bg-gray-100 rounded-lg p-4 text-center">
+                  <p className="text-2xl font-bold text-gray-600">{business?.pending_customers || 0}</p>
+                  <p className="text-xs text-gray-500">Pending</p>
+                </div>
+                <div className="bg-red-50 rounded-lg p-4 text-center">
+                  <p className="text-2xl font-bold text-red-600">{business?.churned_this_month || 0}</p>
+                  <p className="text-xs text-red-500">Churn deze maand</p>
+                </div>
+              </div>
+
+              {/* Plan Distribution */}
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-3">Klanten per Plan</p>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="border rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Starter</span>
+                      <span className="text-lg font-semibold">{business?.starter_customers || 0}</span>
+                    </div>
+                    <div className="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-blue-500 rounded-full"
+                        style={{ width: `${business?.active_customers ? (business.starter_customers / business.active_customers * 100) : 0}%` }}
+                      />
+                    </div>
+                  </div>
+                  <div className="border rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Business</span>
+                      <span className="text-lg font-semibold">{business?.business_customers || 0}</span>
+                    </div>
+                    <div className="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-purple-500 rounded-full"
+                        style={{ width: `${business?.active_customers ? (business.business_customers / business.active_customers * 100) : 0}%` }}
+                      />
+                    </div>
+                  </div>
+                  <div className="border rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Enterprise</span>
+                      <span className="text-lg font-semibold">{business?.enterprise_customers || 0}</span>
+                    </div>
+                    <div className="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-amber-500 rounded-full"
+                        style={{ width: `${business?.active_customers ? (business.enterprise_customers / business.active_customers * 100) : 0}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Growth */}
+              <div className="flex gap-4">
+                <div className="flex-1 border rounded-lg p-4 flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100">
+                    <UserPlus className="h-5 w-5 text-green-600" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-gray-900">{business?.new_customers_this_month || 0}</p>
+                    <p className="text-xs text-gray-500">Nieuwe klanten deze maand</p>
+                  </div>
+                </div>
+                <div className="flex-1 border rounded-lg p-4 flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100">
+                    <UserMinus className="h-5 w-5 text-red-600" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-gray-900">{business?.churned_this_month || 0}</p>
+                    <p className="text-xs text-gray-500">Opgezegd deze maand</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </CardBody>
+      </Card>
 
       {/* Latency Metrics */}
       <Card>
