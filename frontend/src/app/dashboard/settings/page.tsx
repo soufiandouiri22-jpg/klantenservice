@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import { Building2, Shield, CreditCard, Users, Bell, Key, Trash2, Mail, Clock } from 'lucide-react'
@@ -25,10 +26,22 @@ const tabs = [
   { id: 'security', label: 'Beveiliging', icon: Key },
 ]
 
-export default function SettingsPage() {
+function SettingsContent() {
+  const searchParams = useSearchParams()
   const queryClient = useQueryClient()
   const { company, user } = useAuthStore()
-  const [activeTab, setActiveTab] = useState('company')
+  
+  // Get initial tab from URL params or default to 'company'
+  const initialTab = searchParams.get('tab') || 'company'
+  const [activeTab, setActiveTab] = useState(initialTab)
+  
+  // Update tab when URL params change
+  useEffect(() => {
+    const tabParam = searchParams.get('tab')
+    if (tabParam && tabs.some(t => t.id === tabParam)) {
+      setActiveTab(tabParam)
+    }
+  }, [searchParams])
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false)
   const [newUserData, setNewUserData] = useState({
     email: '',
@@ -659,5 +672,19 @@ export default function SettingsPage() {
         </div>
       </div>
     </DashboardLayout>
+  )
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-primary-600" />
+        </div>
+      </DashboardLayout>
+    }>
+      <SettingsContent />
+    </Suspense>
   )
 }

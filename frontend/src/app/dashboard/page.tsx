@@ -13,13 +13,16 @@ import {
   Circle,
   ChevronRight,
   X,
+  CreditCard,
+  ArrowRight,
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { Header } from '@/components/layout/Header'
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { PageLoader } from '@/components/ui/Spinner'
-import { dashboardApi, aiWorkersApi, phoneNumbersApi, websitesApi } from '@/lib/api'
+import { Button } from '@/components/ui/Button'
+import { dashboardApi, aiWorkersApi, phoneNumbersApi, websitesApi, companyApi } from '@/lib/api'
 import { formatRelativeTime, formatDuration, getStatusColor, getStatusLabel } from '@/lib/utils'
 import Link from 'next/link'
 
@@ -82,6 +85,12 @@ export default function DashboardPage() {
     queryFn: websitesApi.list,
   })
 
+  // Check subscription status
+  const { data: subscription } = useQuery({
+    queryKey: ['subscription'],
+    queryFn: companyApi.getSubscription,
+  })
+
   // Calculate onboarding progress
   const hasAIWorker = (aiWorkers?.length || 0) > 0
   const hasPhoneNumber = (phoneNumbers?.length || 0) > 0
@@ -92,6 +101,10 @@ export default function DashboardPage() {
   const totalSteps = 3
   const progressPercent = Math.round((completedSteps / totalSteps) * 100)
   const showOnboarding = !hideOnboarding && completedSteps < totalSteps
+
+  // Check if user needs to activate subscription
+  const needsSubscription = subscription?.status === 'pending' || 
+    (subscription?.status !== 'trialing' && subscription?.status !== 'active' && !subscription?.has_stripe)
 
   const isLoading = statsLoading || callsLoading || appointmentsLoading || actionsLoading || workersLoading
 
@@ -143,6 +156,38 @@ export default function DashboardPage() {
         animate="show"
         className="p-6 space-y-6"
       >
+        {/* Subscription Activation Banner */}
+        {needsSubscription && (
+          <motion.div variants={item}>
+            <Card className="border-amber-300 bg-gradient-to-r from-amber-50 to-orange-50">
+              <CardBody className="p-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-100">
+                      <CreditCard className="h-6 w-6 text-amber-600" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-gray-900">
+                        Activeer uw abonnement
+                      </h3>
+                      <p className="text-sm text-gray-600 mt-1">
+                        Start vandaag nog met uw 14-dagen gratis proefperiode. 
+                        Na de proefperiode wordt uw abonnement automatisch geactiveerd.
+                      </p>
+                    </div>
+                  </div>
+                  <Link href="/dashboard/settings?tab=subscription">
+                    <Button size="lg" className="whitespace-nowrap">
+                      Abonnement kiezen
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </Link>
+                </div>
+              </CardBody>
+            </Card>
+          </motion.div>
+        )}
+
         {/* Onboarding Checklist */}
         {showOnboarding && (
           <motion.div variants={item}>

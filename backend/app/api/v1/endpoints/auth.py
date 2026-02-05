@@ -113,6 +113,8 @@ async def register(
     voice_defaults = get_platform_voice_defaults(db)
     
     # Create company with platform defaults
+    # New accounts start with "pending" status - they need to complete checkout
+    # to get "trialing" (14-day trial) or "active" status
     company = Company(
         id=uuid4(),
         name=company_data.name,
@@ -125,6 +127,7 @@ async def register(
         kvk_number=company_data.kvk_number,
         btw_number=company_data.btw_number,
         subscription_plan=SubscriptionPlan.starter,
+        subscription_status="pending",  # Must complete checkout to activate
         max_ai_workers=1,
         admin_overrides=voice_defaults,  # Apply platform defaults
     )
@@ -617,12 +620,15 @@ async def google_oauth_callback(
             voice_defaults = get_platform_voice_defaults(db)
             
             # Create company with platform defaults
+            # New accounts start with "pending" status - they need to complete checkout
+            # to get "trialing" (14-day trial) or "active" status
             company = Company(
                 id=uuid4(),
                 name=company_name,
                 slug=slug,
                 email=email,
                 subscription_plan=SubscriptionPlan.starter,
+                subscription_status="pending",  # Must complete checkout to activate
                 max_ai_workers=1,
                 admin_overrides=voice_defaults,  # Apply platform defaults
             )
