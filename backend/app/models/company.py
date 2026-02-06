@@ -71,6 +71,9 @@ class Company(Base):
     data_retention_days = Column(Integer, default=90)
     call_recording_enabled = Column(Boolean, default=False)
     call_recording_consent_required = Column(Boolean, default=True)
+    # Registration consents (set at signup)
+    terms_accepted_at = Column(DateTime, nullable=True)  # When user agreed to terms & privacy
+    marketing_consent = Column(Boolean, default=False)  # Opt-in for email marketing
     
     # Status
     is_active = Column(Boolean, default=True)

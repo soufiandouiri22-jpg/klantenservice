@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { Building2, Shield, CreditCard, Users, Bell, Key, Trash2, Mail, Clock, Check } from 'lucide-react'
+import { Building2, Shield, CreditCard, Users, User, Key, Trash2, Mail, Clock, Check } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { Header } from '@/components/layout/Header'
@@ -19,6 +19,7 @@ import { companyApi, usersApi, authApi, paymentsApi } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 
 const tabs = [
+  { id: 'profile', label: 'Persoonsgegevens', icon: User },
   { id: 'company', label: 'Bedrijf', icon: Building2 },
   { id: 'privacy', label: 'Privacy', icon: Shield },
   { id: 'subscription', label: 'Abonnement', icon: CreditCard },
@@ -31,8 +32,8 @@ function SettingsContent() {
   const queryClient = useQueryClient()
   const { company, user } = useAuthStore()
   
-  // Get initial tab from URL params or default to 'company'
-  const initialTab = searchParams.get('tab') || 'company'
+  // Get initial tab from URL params or default to 'profile' (Persoonsgegevens)
+  const initialTab = searchParams.get('tab') || 'profile'
   const [activeTab, setActiveTab] = useState(initialTab)
   
   // Update tab when URL params change
@@ -49,6 +50,11 @@ function SettingsContent() {
     last_name: '',
     phone: '',
     role: 'viewer' as 'owner' | 'admin' | 'user' | 'viewer',
+  })
+
+  const { data: currentUser, isLoading: profileLoading } = useQuery({
+    queryKey: ['auth-me'],
+    queryFn: authApi.getMe,
   })
 
   const { data: companyData, isLoading: companyLoading } = useQuery({
@@ -71,8 +77,32 @@ function SettingsContent() {
     queryFn: usersApi.list,
   })
 
-  const { setCompany } = useAuthStore()
+  const { setCompany, setUser } = useAuthStore()
   
+  const updateProfileMutation = useMutation({
+    mutationFn: authApi.updateMe,
+    onSuccess: (updatedUser) => {
+      queryClient.invalidateQueries({ queryKey: ['auth-me'] })
+      if (updatedUser) {
+        setUser({
+          id: updatedUser.id,
+          email: updatedUser.email,
+          first_name: updatedUser.first_name,
+          last_name: updatedUser.last_name,
+          role: updatedUser.role,
+          company_id: updatedUser.company_id,
+          oauth_provider: updatedUser.oauth_provider,
+          is_verified: updatedUser.is_verified,
+          is_superadmin: updatedUser.is_superadmin,
+        })
+      }
+      toast.success('Persoonsgegevens bijgewerkt')
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Kon gegevens niet opslaan')
+    },
+  })
+
   const updateCompanyMutation = useMutation({
     mutationFn: companyApi.update,
     onSuccess: (updatedCompany) => {
@@ -183,7 +213,7 @@ function SettingsContent() {
     inviteUserMutation.mutate(newUserData)
   }
 
-  const isLoading = companyLoading || privacyLoading || subscriptionLoading || usersLoading
+  const isLoading = profileLoading || companyLoading || privacyLoading || subscriptionLoading || usersLoading
 
   if (isLoading) {
     return (
@@ -221,6 +251,64 @@ function SettingsContent() {
 
           {/* Content */}
           <div className="flex-1 space-y-6">
+            {activeTab === 'profile' && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Persoonsgegevens</CardTitle>
+                    <CardDescription>
+                      Uw naam en e-mail. Bij inloggen met Google worden deze automatisch ingevuld.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardBody className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <Input
+                        label="Voornaam"
+                        defaultValue={currentUser?.first_name}
+                        onBlur={(e) => {
+                          const v = e.target.value.trim()
+                          if (v !== currentUser?.first_name) {
+                            updateProfileMutation.mutate({ first_name: v })
+                          }
+                        }}
+                      />
+                      <Input
+                        label="Achternaam"
+                        defaultValue={currentUser?.last_name}
+                        onBlur={(e) => {
+                          const v = e.target.value.trim()
+                          if (v !== currentUser?.last_name) {
+                            updateProfileMutation.mutate({ last_name: v })
+                          }
+                        }}
+                      />
+                    </div>
+                    <Input
+                      label="E-mailadres"
+                      type="email"
+                      defaultValue={currentUser?.email}
+                      onBlur={(e) => {
+                        const v = e.target.value.trim()
+                        if (v !== currentUser?.email) {
+                          updateProfileMutation.mutate({ email: v })
+                        }
+                      }}
+                    />
+                    <Input
+                      label="Telefoonnummer"
+                      defaultValue={currentUser?.phone ?? ''}
+                      onBlur={(e) => {
+                        const v = e.target.value.trim() || undefined
+                        if (v !== (currentUser?.phone ?? '')) {
+                          updateProfileMutation.mutate({ phone: v })
+                        }
+                      }}
+                    />
+                  </CardBody>
+                </Card>
+              </motion.div>
+            )}
+
             {activeTab === 'company' && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
                 <Card>
@@ -239,9 +327,10 @@ function SettingsContent() {
                       }}
                     />
                     <Input
-                      label="E-mailadres"
+                      label="E-mailadres voor facturatie"
                       type="email"
                       defaultValue={companyData?.email}
+                      helperText="Facturen en betalingsherinneringen worden naar dit adres gestuurd."
                       onBlur={(e) => {
                         if (e.target.value !== companyData?.email) {
                           updateCompanyMutation.mutate({ email: e.target.value })

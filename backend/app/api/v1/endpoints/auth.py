@@ -36,6 +36,7 @@ from app.schemas.user import (
     RegisterResponse,
     EmailVerifyCode,
     EmailResendCode,
+    ProfileUpdate,
 )
 from app.schemas.company import CompanyCreate
 from app.api.deps import get_current_user
@@ -97,13 +98,22 @@ def get_platform_voice_defaults(db: Session) -> dict:
 async def register(
     company_data: CompanyCreate,
     user_data: UserCreate,
+    terms_accepted: bool = False,
+    marketing_consent: bool = False,
     db: Session = Depends(get_db)
 ):
     """
     Register a new company and owner account.
     
+    terms_accepted must be True (user agreed to terms & privacy).
+    marketing_consent is optional (opt-in for email marketing).
     Returns email address (no tokens). User must verify email before logging in.
     """
+    if not terms_accepted:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="U dient akkoord te gaan met de algemene voorwaarden en het privacybeleid.",
+        )
     # Check if email already exists
     existing_user = db.query(User).filter(User.email == user_data.email).first()
     if existing_user:
@@ -141,6 +151,8 @@ async def register(
         subscription_status="pending",  # Must complete checkout to activate
         max_ai_workers=1,
         admin_overrides=voice_defaults,  # Apply platform defaults
+        terms_accepted_at=datetime.utcnow(),
+        marketing_consent=marketing_consent,
     )
     db.add(company)
     db.flush()
@@ -410,6 +422,35 @@ async def get_me(current_user: User = Depends(get_current_user)):
     """
     Get current user profile.
     """
+    return current_user
+
+
+@router.patch("/me", response_model=UserResponse)
+async def update_me(
+    data: ProfileUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Update current user profile (first_name, last_name, email, phone).
+    When logging in with Google, these are often pre-filled from Google.
+    """
+    if data.first_name is not None:
+        current_user.first_name = data.first_name
+    if data.last_name is not None:
+        current_user.last_name = data.last_name
+    if data.phone is not None:
+        current_user.phone = data.phone
+    if data.email is not None and data.email != current_user.email:
+        existing = db.query(User).filter(User.email == data.email, User.id != current_user.id).first()
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Dit e-mailadres is al in gebruik",
+            )
+        current_user.email = data.email
+    db.commit()
+    db.refresh(current_user)
     return current_user
 
 

@@ -75,6 +75,14 @@ class TokenRefresh(BaseModel):
     refresh_token: str
 
 
+class ProfileUpdate(BaseModel):
+    """Schema for current user profile update (first_name, last_name, email, phone)."""
+    first_name: Optional[str] = Field(None, min_length=1, max_length=100)
+    last_name: Optional[str] = Field(None, min_length=1, max_length=100)
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
+
+
 class PasswordChange(BaseModel):
     """Schema for password change."""
     current_password: str

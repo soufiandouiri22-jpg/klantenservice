@@ -49,6 +49,10 @@ const registerSchema = z.object({
     .regex(/[a-z]/, 'Wachtwoord moet minimaal één kleine letter bevatten')
     .regex(/[0-9]/, 'Wachtwoord moet minimaal één cijfer bevatten'),
   confirm_password: z.string(),
+  terms_accepted: z.boolean().refine((v) => v === true, {
+    message: 'U dient akkoord te gaan met de voorwaarden en het privacybeleid.',
+  }),
+  marketing_consent: z.boolean().optional().default(false),
 }).refine((data) => data.password === data.confirm_password, {
   message: 'Wachtwoorden komen niet overeen',
   path: ['confirm_password'],
@@ -81,6 +85,7 @@ function RegisterContent() {
     getValues,
   } = useForm<RegisterForm>({
     resolver: zodResolver(registerSchema),
+    defaultValues: { terms_accepted: false, marketing_consent: false },
   })
 
   const handleNextStep = async () => {
@@ -104,6 +109,8 @@ function RegisterContent() {
           first_name: data.first_name,
           last_name: data.last_name,
         },
+        terms_accepted: data.terms_accepted,
+        marketing_consent: data.marketing_consent ?? false,
       })
       
       // Don't store tokens - user must verify email first
@@ -269,6 +276,38 @@ function RegisterContent() {
                       error={errors.confirm_password?.message}
                       {...register('confirm_password')}
                     />
+                    <div className="space-y-4">
+                      <label className="flex items-start gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="mt-1 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                          {...register('terms_accepted')}
+                        />
+                        <span className="text-sm text-gray-700">
+                          Ik ga akkoord met de{' '}
+                          <Link href="/voorwaarden" target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:text-primary-700 underline">
+                            algemene voorwaarden
+                          </Link>
+                          {' '}en het{' '}
+                          <Link href="/avg" target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:text-primary-700 underline">
+                            privacybeleid
+                          </Link>.
+                        </span>
+                      </label>
+                      {errors.terms_accepted && (
+                        <p className="text-sm text-red-600">{errors.terms_accepted.message}</p>
+                      )}
+                      <label className="flex items-start gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="mt-1 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                          {...register('marketing_consent')}
+                        />
+                        <span className="text-sm text-gray-700">
+                          Ja, ik ontvang graag tips en aanbiedingen per e-mail.
+                        </span>
+                      </label>
+                    </div>
                     <div className="flex gap-4">
                       <Button
                         type="button"
