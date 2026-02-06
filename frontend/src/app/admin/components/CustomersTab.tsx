@@ -247,10 +247,14 @@ export function CustomersTab() {
                     <td className="px-6 py-4 whitespace-nowrap">
                       {customer.is_kill_switched ? (
                         <Badge variant="danger">Kill Switch</Badge>
-                      ) : customer.is_active ? (
+                      ) : customer.subscription_status === 'active' ? (
                         <Badge variant="success">Actief</Badge>
+                      ) : customer.subscription_status === 'trialing' ? (
+                        <Badge variant="primary">Proefperiode</Badge>
+                      ) : customer.subscription_status === 'canceled' ? (
+                        <Badge variant="gray">Geannuleerd</Badge>
                       ) : (
-                        <Badge variant="gray">Inactief</Badge>
+                        <Badge variant="warning">Pending</Badge>
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right">
