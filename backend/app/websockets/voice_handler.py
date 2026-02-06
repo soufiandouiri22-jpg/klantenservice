@@ -254,39 +254,88 @@ class VoiceCallHandler:
             for ex in examples
         ]
     
+    async def _send_twilio_silence(self, duration_seconds: float = 1.0):
+        """Send silence audio to Twilio to keep the connection alive."""
+        # Generate mulaw silence (8kHz, 1 byte per sample)
+        num_samples = int(8000 * duration_seconds)
+        # mulaw silence byte is 0xFF (127 in mulaw = ~0 in linear)
+        silence_mulaw = b'\xff' * num_samples
+        
+        media_message = {
+            "event": "media",
+            "streamSid": self.stream_sid,
+            "media": {
+                "payload": base64.b64encode(silence_mulaw).decode("utf-8")
+            }
+        }
+        await self.websocket.send_text(json.dumps(media_message))
+    
+    async def _keepalive_loop(self, stop_event: asyncio.Event):
+        """Send silence to Twilio every 5 seconds until stop_event is set."""
+        while not stop_event.is_set():
+            try:
+                await self._send_twilio_silence(0.5)
+                await asyncio.sleep(5)
+            except Exception:
+                break
+    
     async def start(self):
         """
         Start handling the voice call.
+        Uses pre-warmed PersonaPlex session if available for instant response.
+        Falls back to creating a new session with Twilio keepalive.
         """
         self.is_running = True
-        
-        # Get knowledge context for RAG
-        knowledge_context = await self.get_knowledge_context()
-        
-        # Get training rules and example answers
-        training_rules = self.get_training_rules()
-        example_answers = self.get_example_answers()
-        
-        # Get system-wide prompts (from /admin)
-        system_prompts = personaplex_service.get_system_prompts(self.db)
-        
-        # Create PersonaPlex session (establishes WebSocket to pod)
-        # Company and db are passed for voice preset lookup (company override > platform default)
-        await personaplex_service.create_session(
-            session_id=self.session_id,
-            worker=self.ai_worker,
-            company=self.company,
-            db=self.db,
-            voice_prompt_path=None,  # Can be overridden by company admin_overrides
-            knowledge_context=knowledge_context,
-            training_rules=training_rules,
-            example_answers=example_answers,
-            system_prompts=system_prompts
-        )
         
         # Update AI worker status
         self.ai_worker.status = AIWorkerStatus.BUSY
         self.db.commit()
+        
+        # Try to claim a pre-warmed session first (instant path)
+        worker_id = str(self.ai_worker.id)
+        warm_session = personaplex_service.claim_warm_session(worker_id, self.session_id)
+        
+        if warm_session:
+            logger.info(f"Using pre-warmed session for worker {self.ai_worker.name}")
+        else:
+            logger.info(f"No pre-warmed session available, initializing fresh (with keepalive)")
+            
+            # Start sending silence to Twilio to keep the connection alive
+            # while PersonaPlex initializes (30-60 seconds)
+            stop_keepalive = asyncio.Event()
+            keepalive_task = asyncio.create_task(self._keepalive_loop(stop_keepalive))
+            
+            try:
+                # Get knowledge context for RAG
+                knowledge_context = await self.get_knowledge_context()
+                
+                # Get training rules and example answers
+                training_rules = self.get_training_rules()
+                example_answers = self.get_example_answers()
+                
+                # Get system-wide prompts (from /admin)
+                system_prompts = personaplex_service.get_system_prompts(self.db)
+                
+                # Create PersonaPlex session (establishes WebSocket to pod)
+                await personaplex_service.create_session(
+                    session_id=self.session_id,
+                    worker=self.ai_worker,
+                    company=self.company,
+                    db=self.db,
+                    voice_prompt_path=None,
+                    knowledge_context=knowledge_context,
+                    training_rules=training_rules,
+                    example_answers=example_answers,
+                    system_prompts=system_prompts
+                )
+            finally:
+                # Stop keepalive once session is ready
+                stop_keepalive.set()
+                keepalive_task.cancel()
+                try:
+                    await keepalive_task
+                except asyncio.CancelledError:
+                    pass
         
         # Trigger initial greeting from PersonaPlex
         # Send a short silence segment to trigger PersonaPlex to generate initial greeting
@@ -315,6 +364,9 @@ class VoiceCallHandler:
         except Exception as e:
             logger.error(f"Failed to generate initial greeting: {e}", exc_info=True)
             # Continue anyway - call will still work when user speaks
+        
+        # Trigger pre-warming of a new session for next call (background)
+        asyncio.create_task(personaplex_service.pre_warm_available_workers(self.db))
         
         # Start tasks for receiving and sending audio
         receive_task = asyncio.create_task(self._receive_audio_loop())

@@ -61,6 +61,9 @@ class MoshiSession:
         # Turn-based context management
         self.current_turn: int = 0
         self.context_by_turn: Dict[int, Tuple[str, str]] = {}  # turn_id -> (facts, instructions)
+        
+        # Skip step_system_prompts on first process_audio since init already did it
+        self._init_prompts_active = True
     
     def start_turn(self, turn_id: int):
         """Start a new turn (called before process_audio for this segment)."""
@@ -109,11 +112,17 @@ class MoshiSession:
         from moshi.models.lm import _iterate_audio as lm_iterate_audio
         from moshi.models.lm import encode_from_sphn as lm_encode_from_sphn
         
-        # Apply this session's prompt + context (safe boundary: start of utterance segment)
-        effective_prompt = self._get_effective_prompt()
-        lm_gen.text_prompt_tokens = text_tokenizer.encode(wrap_with_system_tags(effective_prompt))
-        lm_gen.step_system_prompts(mimi)
-        mimi.reset_streaming()
+        # On first turn after init, skip step_system_prompts (already done during init)
+        # This makes the initial greeting response fast (~2-3s instead of 30-60s)
+        if self._init_prompts_active:
+            logger.info(f"Session {self.session_id}: using init prompts (fast path)")
+            self._init_prompts_active = False
+        else:
+            # Apply this session's prompt + context (safe boundary: start of utterance segment)
+            effective_prompt = self._get_effective_prompt()
+            lm_gen.text_prompt_tokens = text_tokenizer.encode(wrap_with_system_tags(effective_prompt))
+            lm_gen.step_system_prompts(mimi)
+            mimi.reset_streaming()
         
         # Convert bytes to tensor - shape must be (1, 1, samples) for mimi
         audio_np = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0

@@ -64,6 +64,12 @@ class PersonaPlexService:
         self.mock_mode = not self.pod_url
         self.active_sessions: Dict[str, ConversationSession] = {}
         
+        # Pre-warmed sessions: worker_id -> ConversationSession
+        # These sessions are initialized before a call comes in so
+        # PersonaPlex can respond immediately when someone calls.
+        self._warm_sessions: Dict[str, ConversationSession] = {}
+        self._warming_in_progress: set = set()  # worker_ids currently warming
+        
         if self.mock_mode:
             logger.warning(
                 "PersonaPlex running in MOCK MODE (no pod URL configured). "
@@ -400,6 +406,171 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
             raise
         
         return session
+    
+    async def pre_warm_session(
+        self,
+        worker: AIWorker,
+        company: Company,
+        db,
+    ) -> Optional[ConversationSession]:
+        """
+        Pre-warm a PersonaPlex session for an AI worker.
+        
+        This runs the heavy GPU initialization (step_system_prompts) in advance
+        so that when a call comes in, the session is ready and PersonaPlex can
+        respond immediately with the greeting.
+        """
+        worker_id = str(worker.id)
+        
+        # Skip if already warming or already warm
+        if worker_id in self._warming_in_progress:
+            logger.debug(f"Already warming session for worker {worker_id}")
+            return None
+        if worker_id in self._warm_sessions:
+            logger.debug(f"Session already warm for worker {worker_id}")
+            return self._warm_sessions[worker_id]
+        
+        if self.mock_mode:
+            logger.debug("Mock mode: skipping pre-warm")
+            return None
+        
+        self._warming_in_progress.add(worker_id)
+        
+        try:
+            # Use a temporary session_id for pre-warming
+            warm_session_id = f"warm-{worker_id}"
+            
+            # Get all context needed for the prompt
+            knowledge_context = None
+            training_rules = []
+            example_answers = []
+            system_prompts = self.get_system_prompts(db)
+            
+            # Get knowledge context
+            try:
+                from app.models.website_knowledge import WebsiteKnowledge, KnowledgeChunk
+                sources = db.query(WebsiteKnowledge).filter(
+                    WebsiteKnowledge.company_id == company.id,
+                    WebsiteKnowledge.is_active == True,
+                    WebsiteKnowledge.status == "completed"
+                ).all()
+                if sources:
+                    parts = []
+                    for source in sources:
+                        chunks = db.query(KnowledgeChunk).filter(
+                            KnowledgeChunk.website_id == source.id
+                        ).limit(10).all()
+                        for chunk in chunks:
+                            if chunk.content:
+                                parts.append(chunk.content[:500])
+                    if parts:
+                        knowledge_context = "\n\n---\n\n".join(parts)[:8000]
+            except Exception as e:
+                logger.warning(f"Pre-warm: could not get knowledge context: {e}")
+            
+            # Get training rules
+            try:
+                from app.models.training import TrainingRule
+                rules = db.query(TrainingRule).filter(
+                    TrainingRule.company_id == company.id,
+                    TrainingRule.is_enabled == True
+                ).all()
+                training_rules = [
+                    {"key": r.rule_key, "name": r.rule_name, "description": r.rule_description}
+                    for r in rules
+                ]
+            except Exception as e:
+                logger.warning(f"Pre-warm: could not get training rules: {e}")
+            
+            # Get example answers
+            try:
+                from app.models.training import ExampleAnswer
+                examples = db.query(ExampleAnswer).filter(
+                    ExampleAnswer.company_id == company.id,
+                    ExampleAnswer.is_active == True,
+                    ExampleAnswer.is_verified == True
+                ).all()
+                example_answers = [
+                    {"question": ex.question, "answer": ex.answer, "category": ex.category}
+                    for ex in examples
+                ]
+            except Exception as e:
+                logger.warning(f"Pre-warm: could not get example answers: {e}")
+            
+            logger.info(f"Pre-warming session for worker {worker.name} ({worker_id})")
+            
+            session = await self.create_session(
+                session_id=warm_session_id,
+                worker=worker,
+                company=company,
+                db=db,
+                knowledge_context=knowledge_context,
+                training_rules=training_rules,
+                example_answers=example_answers,
+                system_prompts=system_prompts
+            )
+            
+            # Store in warm pool
+            self._warm_sessions[worker_id] = session
+            logger.info(f"Session pre-warmed for worker {worker.name} ({worker_id})")
+            
+            return session
+            
+        except Exception as e:
+            logger.error(f"Failed to pre-warm session for worker {worker_id}: {e}")
+            return None
+        finally:
+            self._warming_in_progress.discard(worker_id)
+    
+    def claim_warm_session(self, worker_id: str, new_session_id: str) -> Optional[ConversationSession]:
+        """
+        Claim a pre-warmed session for an actual call.
+        
+        Moves the session from the warm pool to active_sessions with a new session_id.
+        Returns None if no warm session exists.
+        """
+        worker_id = str(worker_id)
+        
+        session = self._warm_sessions.pop(worker_id, None)
+        if not session:
+            return None
+        
+        # Move from warm pool to active sessions
+        old_id = session.session_id
+        session.session_id = new_session_id
+        
+        # Remove old entry and add with new id
+        self.active_sessions.pop(old_id, None)
+        self.active_sessions[new_session_id] = session
+        
+        logger.info(f"Claimed warm session for worker {worker_id}: {old_id} -> {new_session_id}")
+        return session
+    
+    async def pre_warm_available_workers(self, db):
+        """
+        Pre-warm sessions for all available AI workers.
+        Called on startup and after each call ends.
+        """
+        try:
+            from app.models.ai_worker import AIWorker, AIWorkerStatus
+            from app.models.company import Company
+            
+            workers = db.query(AIWorker).filter(
+                AIWorker.is_active == True,
+                AIWorker.status == AIWorkerStatus.AVAILABLE
+            ).all()
+            
+            for worker in workers:
+                worker_id = str(worker.id)
+                if worker_id not in self._warm_sessions and worker_id not in self._warming_in_progress:
+                    company = db.query(Company).filter(Company.id == worker.company_id).first()
+                    if company:
+                        # Run pre-warming in background (don't block)
+                        asyncio.create_task(self.pre_warm_session(worker, company, db))
+                        # Only warm one worker at a time (pod can only handle one session)
+                        break
+        except Exception as e:
+            logger.error(f"Error pre-warming workers: {e}")
     
     async def start_turn(self, session_id: str, turn_id: int) -> bool:
         """
