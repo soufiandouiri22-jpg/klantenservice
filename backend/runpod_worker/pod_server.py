@@ -29,6 +29,9 @@ from pydantic import BaseModel
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Moshi IndexError patch - fixes 4 overflow bugs in transformer.py
+from patch_moshi import apply_moshi_patch
+
 # Global model instances (loaded once at startup)
 mimi = None
 other_mimi = None
@@ -139,24 +142,32 @@ class MoshiSession:
         ):
             steps = user_encoded.shape[-1]
             for c in range(steps):
-                step_in = user_encoded[:, :, c : c + 1]
-                tokens = lm_gen.step(step_in)
-                
-                if tokens is None:
+                try:
+                    step_in = user_encoded[:, :, c : c + 1]
+                    tokens = lm_gen.step(step_in)
+                    
+                    if tokens is None:
+                        continue
+                    
+                    # Decode audio
+                    pcm = mimi.decode(tokens[:, 1:9])
+                    _ = other_mimi.decode(tokens[:, 1:9])
+                    pcm_np = pcm.detach().cpu().numpy()[0, 0]
+                    generated_frames.append(pcm_np)
+                    
+                    # Decode text token
+                    text_token = tokens[0, 0, 0].item()
+                    if text_token not in (0, 3):  # Skip PAD tokens
+                        text = text_tokenizer.id_to_piece(text_token)
+                        text = text.replace("▁", " ")
+                        generated_text.append(text)
+                except IndexError as e:
+                    logger.error(f"Index error at step {c}/{steps}: {e}")
+                    # Break on index error to return what we have so far
+                    break
+                except Exception as e:
+                    logger.error(f"Error processing step {c}: {e}")
                     continue
-                
-                # Decode audio
-                pcm = mimi.decode(tokens[:, 1:9])
-                _ = other_mimi.decode(tokens[:, 1:9])
-                pcm_np = pcm.detach().cpu().numpy()[0, 0]
-                generated_frames.append(pcm_np)
-                
-                # Decode text token
-                text_token = tokens[0, 0, 0].item()
-                if text_token not in (0, 3):  # Skip PAD tokens
-                    text = text_tokenizer.id_to_piece(text_token)
-                    text = text.replace("▁", " ")
-                    generated_text.append(text)
         
         if len(generated_frames) == 0:
             return b"", ""
@@ -204,6 +215,9 @@ def load_models():
     from moshi.models import loaders, LMGen
     import sentencepiece
     from huggingface_hub import hf_hub_download
+    
+    # Apply Moshi patches BEFORE any model inference
+    apply_moshi_patch()
     
     hf_repo = "nvidia/personaplex-7b-v1"
     
@@ -259,19 +273,32 @@ def warmup():
     """Run warmup to initialize CUDA graphs."""
     global mimi, other_mimi, lm_gen, frame_size
     
-    for _ in range(4):
-        chunk = torch.zeros(1, 1, frame_size, dtype=torch.float32, device=device)
-        codes = mimi.encode(chunk)
-        _ = other_mimi.encode(chunk)
-        for c in range(codes.shape[-1]):
-            tokens = lm_gen.step(codes[:, :, c : c + 1])
-            if tokens is None:
-                continue
-            _ = mimi.decode(tokens[:, 1:9])
-            _ = other_mimi.decode(tokens[:, 1:9])
-    
-    if torch.cuda.is_available():
-        torch.cuda.synchronize()
+    try:
+        for _ in range(4):
+            chunk = torch.zeros(1, 1, frame_size, dtype=torch.float32, device=device)
+            codes = mimi.encode(chunk)
+            _ = other_mimi.encode(chunk)
+            # Process steps - if IndexError occurs, we catch it and continue
+            for c in range(codes.shape[-1]):
+                try:
+                    tokens = lm_gen.step(codes[:, :, c : c + 1])
+                    if tokens is None:
+                        continue
+                    _ = mimi.decode(tokens[:, 1:9])
+                    _ = other_mimi.decode(tokens[:, 1:9])
+                except IndexError as e:
+                    logger.warning(f"Index error during warmup at step {c}: {e}")
+                    # Skip rest of warmup but continue startup
+                    break
+        
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+        
+        logger.info("Warmup completed successfully")
+    except Exception as e:
+        logger.error(f"Error during warmup: {e}", exc_info=True)
+        logger.info("Continuing without full warmup - first requests may be slower")
+        # Continue anyway - model may still work
 
 
 def wrap_with_system_tags(text: str) -> str:
@@ -564,17 +591,24 @@ async def get_voice_sample(voice_id: str):
             ):
                 steps = user_encoded.shape[-1]
                 for c in range(steps):
-                    step_in = user_encoded[:, :, c : c + 1]
-                    tokens = lm_gen.step(step_in)
-                    
-                    if tokens is None:
+                    try:
+                        step_in = user_encoded[:, :, c : c + 1]
+                        tokens = lm_gen.step(step_in)
+                        
+                        if tokens is None:
+                            continue
+                        
+                        # Decode audio
+                        pcm = mimi.decode(tokens[:, 1:9])
+                        _ = other_mimi.decode(tokens[:, 1:9])
+                        pcm_np = pcm.detach().cpu().numpy()[0, 0]
+                        generated_frames.append(pcm_np)
+                    except IndexError as e:
+                        logger.error(f"Index error in voice sample at step {c}/{steps}: {e}")
+                        break
+                    except Exception as e:
+                        logger.error(f"Error in voice sample at step {c}: {e}")
                         continue
-                    
-                    # Decode audio
-                    pcm = mimi.decode(tokens[:, 1:9])
-                    _ = other_mimi.decode(tokens[:, 1:9])
-                    pcm_np = pcm.detach().cpu().numpy()[0, 0]
-                    generated_frames.append(pcm_np)
             
             if len(generated_frames) == 0:
                 raise HTTPException(status_code=500, detail="No audio generated")

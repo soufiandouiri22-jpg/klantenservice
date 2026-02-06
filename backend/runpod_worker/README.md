@@ -100,3 +100,66 @@ Response:
 - First request will take longer (model loading)
 - Audio should be PCM 24kHz mono
 - PersonaPlex is English-only (for now)
+
+## Troubleshooting
+
+### IndexError: index 16 is out of bounds
+
+If you encounter this error, it's a known issue with Moshi's transformer. Multiple fixes have been applied:
+
+1. **Error handling** - Catches the error and returns partial audio
+2. **Boundary checks** - Prevents overflow in warmup
+3. **Monkey-patch** - Optional deeper fix (applied automatically)
+
+**Quick fix:**
+- Rebuild and redeploy the Docker image (fixes are already in the code)
+- See `QUICK_FIX.md` for deployment steps
+
+**Detailed troubleshooting:**
+- Run `python diagnose_moshi.py` in the container
+- See `TROUBLESHOOTING.md` for comprehensive guide
+
+**Files:**
+- `QUICK_FIX.md` - Quick deployment guide
+- `TROUBLESHOOTING.md` - Detailed troubleshooting
+- `diagnose_moshi.py` - Diagnostic tool
+- `patch_moshi.py` - Manual patch application
+
+### Service Won't Start
+
+1. Check HF_TOKEN is set correctly
+2. Ensure GPU has enough VRAM (24GB+)
+3. Check logs: `curl http://pod-url:8000/health`
+
+### Poor Audio Quality
+
+- Increase GPU memory
+- Check audio input is 24kHz PCM
+- Verify persona prompt is not too long
+
+## Development
+
+### Local Testing (with GPU)
+
+```bash
+# Build
+docker build -t personaplex-test .
+
+# Run
+docker run --gpus all -p 8000:8000 \
+  -e HF_TOKEN=your_token \
+  personaplex-test
+
+# Test
+curl http://localhost:8000/health
+```
+
+### Debugging
+
+```bash
+# Run diagnostic
+docker run --gpus all -it personaplex-test python diagnose_moshi.py
+
+# Check logs
+docker logs <container-id>
+```

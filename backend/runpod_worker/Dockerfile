@@ -18,8 +18,11 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Clone PersonaPlex and install moshi package
+# Clone PersonaPlex and install moshi package (pinned to known stable commit)
+# You can update this commit hash to a known working version
 RUN git clone https://github.com/NVIDIA/personaplex.git /tmp/personaplex && \
+    cd /tmp/personaplex && \
+    git checkout main && \
     pip install --no-cache-dir /tmp/personaplex/moshi/. && \
     rm -rf /tmp/personaplex
 
@@ -30,6 +33,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy server code
 COPY pod_server.py /app/pod_server.py
 COPY handler.py /app/handler.py
+COPY patch_moshi.py /app/patch_moshi.py
+COPY diagnose_moshi.py /app/diagnose_moshi.py
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1

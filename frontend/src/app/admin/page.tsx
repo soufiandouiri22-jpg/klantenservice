@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { 
   LayoutDashboard,
   Users,
-  Shield,
+  Shield, 
   Cpu,
   Mic,
   SlidersHorizontal,
@@ -119,7 +119,7 @@ export default function AdminPage() {
         <div className="mt-6">
           {renderTabContent()}
         </div>
-      </div>
+        </div>
     </DashboardLayout>
   )
 }

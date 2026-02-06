@@ -389,8 +389,8 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
             
             logger.info(f"Session {session_id} using voice preset: {voice_preset}")
             
-            # Wait for confirmation
-            response = await asyncio.wait_for(ws.recv(), timeout=120)
+            # Wait for confirmation (300s to allow step_system_prompts to complete on A40)
+            response = await asyncio.wait_for(ws.recv(), timeout=300)
             response_data = json.loads(response)
             
             if response_data.get("status") == "initialized":
