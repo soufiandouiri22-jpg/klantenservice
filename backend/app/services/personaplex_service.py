@@ -259,9 +259,9 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
         
         ws = await websockets.connect(
             url,
-            ping_interval=20,
-            ping_timeout=10,
-            close_timeout=5,
+            ping_interval=None,  # Disable ping during init (GPU ops block event loop)
+            ping_timeout=None,
+            close_timeout=10,
             max_size=10 * 1024 * 1024,  # 10MB max message size
         )
         

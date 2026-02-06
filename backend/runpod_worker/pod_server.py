@@ -98,72 +98,88 @@ class MoshiSession:
         
         return "".join(parts)
     
+    def _process_audio_sync(self, audio_bytes: bytes) -> Tuple[bytes, str]:
+        """
+        Synchronous audio processing (runs in thread executor).
+        
+        Contains all blocking GPU operations for processing an audio segment.
+        """
+        global mimi, other_mimi, lm_gen, text_tokenizer, frame_size
+        
+        from moshi.models.lm import _iterate_audio as lm_iterate_audio
+        from moshi.models.lm import encode_from_sphn as lm_encode_from_sphn
+        
+        # Apply this session's prompt + context (safe boundary: start of utterance segment)
+        effective_prompt = self._get_effective_prompt()
+        lm_gen.text_prompt_tokens = text_tokenizer.encode(wrap_with_system_tags(effective_prompt))
+        lm_gen.step_system_prompts(mimi)
+        mimi.reset_streaming()
+        
+        # Convert bytes to tensor - shape must be (1, 1, samples) for mimi
+        audio_np = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
+        user_audio = torch.from_numpy(audio_np).reshape(1, 1, -1).to(device)
+        
+        generated_frames = []
+        generated_text = []
+        
+        # Process through model
+        for user_encoded in lm_encode_from_sphn(
+            mimi,
+            lm_iterate_audio(user_audio, sample_interval_size=frame_size, pad=True),
+            max_batch=1,
+        ):
+            steps = user_encoded.shape[-1]
+            for c in range(steps):
+                step_in = user_encoded[:, :, c : c + 1]
+                tokens = lm_gen.step(step_in)
+                
+                if tokens is None:
+                    continue
+                
+                # Decode audio
+                pcm = mimi.decode(tokens[:, 1:9])
+                _ = other_mimi.decode(tokens[:, 1:9])
+                pcm_np = pcm.detach().cpu().numpy()[0, 0]
+                generated_frames.append(pcm_np)
+                
+                # Decode text token
+                text_token = tokens[0, 0, 0].item()
+                if text_token not in (0, 3):  # Skip PAD tokens
+                    text = text_tokenizer.id_to_piece(text_token)
+                    text = text.replace("▁", " ")
+                    generated_text.append(text)
+        
+        if len(generated_frames) == 0:
+            return b"", ""
+        
+        # Concatenate and convert to bytes
+        output_pcm = np.concatenate(generated_frames, axis=-1)
+        output_bytes = (output_pcm * 32768).astype(np.int16).tobytes()
+        
+        # Store transcript
+        assistant_text = "".join(generated_text)
+        if assistant_text:
+            self.transcript_assistant.append(assistant_text)
+        
+        return output_bytes, assistant_text
+
     async def process_audio(self, audio_bytes: bytes) -> Tuple[bytes, str]:
         """
         Process audio input and return (response_audio, assistant_text).
         
         This is called once per utterance-segment (not per Twilio chunk).
-        step_system_prompts + reset_streaming happen ONLY here, per segment.
+        Runs blocking GPU operations in a thread executor so the event loop
+        stays responsive for WebSocket ping/pong handling.
         """
-        global mimi, other_mimi, lm_gen, text_tokenizer, frame_size, _process_audio_lock
-        
-        from moshi.models.lm import _iterate_audio as lm_iterate_audio
-        from moshi.models.lm import encode_from_sphn as lm_encode_from_sphn
+        global _process_audio_lock
         
         async with _process_audio_lock:
-            # Apply this session's prompt + context (safe boundary: start of utterance segment)
-            effective_prompt = self._get_effective_prompt()
-            lm_gen.text_prompt_tokens = text_tokenizer.encode(wrap_with_system_tags(effective_prompt))
-            lm_gen.step_system_prompts(mimi)
-            mimi.reset_streaming()
-            
-            # Convert bytes to tensor
-            audio_np = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
-            user_audio = torch.from_numpy(audio_np).unsqueeze(0)
-            
-            generated_frames = []
-            generated_text = []
-            
-            # Process through model
-            for user_encoded in lm_encode_from_sphn(
-                mimi,
-                lm_iterate_audio(user_audio, sample_interval_size=frame_size, pad=True),
-                max_batch=1,
-            ):
-                steps = user_encoded.shape[-1]
-                for c in range(steps):
-                    step_in = user_encoded[:, :, c : c + 1]
-                    tokens = lm_gen.step(step_in)
-                    
-                    if tokens is None:
-                        continue
-                    
-                    # Decode audio
-                    pcm = mimi.decode(tokens[:, 1:9])
-                    _ = other_mimi.decode(tokens[:, 1:9])
-                    pcm_np = pcm.detach().cpu().numpy()[0, 0]
-                    generated_frames.append(pcm_np)
-                    
-                    # Decode text token
-                    text_token = tokens[0, 0, 0].item()
-                    if text_token not in (0, 3):  # Skip PAD tokens
-                        text = text_tokenizer.id_to_piece(text_token)
-                        text = text.replace("▁", " ")
-                        generated_text.append(text)
-            
-            if len(generated_frames) == 0:
-                return b"", ""
-            
-            # Concatenate and convert to bytes
-            output_pcm = np.concatenate(generated_frames, axis=-1)
-            output_bytes = (output_pcm * 32768).astype(np.int16).tobytes()
-            
-            # Store transcript
-            assistant_text = "".join(generated_text)
-            if assistant_text:
-                self.transcript_assistant.append(assistant_text)
-            
-            return output_bytes, assistant_text
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(
+                None,
+                self._process_audio_sync,
+                audio_bytes
+            )
 
 
 def load_models():
@@ -257,8 +273,13 @@ def wrap_with_system_tags(text: str) -> str:
     return f"<|system|> {cleaned} <|/system|>"
 
 
-async def init_session(session_id: str, persona_prompt: str, voice_prompt: str = "NATF2.pt") -> MoshiSession:
-    """Initialize a new conversation session."""
+def _init_session_sync(session_id: str, persona_prompt: str, voice_prompt: str = "NATF2.pt") -> MoshiSession:
+    """
+    Synchronous session initialization (runs in thread executor).
+    
+    This contains all blocking GPU operations that would otherwise
+    block the event loop and prevent WebSocket ping/pong handling.
+    """
     global mimi, other_mimi, lm_gen, text_tokenizer
     
     from huggingface_hub import hf_hub_download
@@ -300,7 +321,7 @@ async def init_session(session_id: str, persona_prompt: str, voice_prompt: str =
     else:
         lm_gen.text_prompt_tokens = None
     
-    # Run system prompts phase
+    # Run system prompts phase (heavy GPU operation)
     lm_gen.step_system_prompts(mimi)
     mimi.reset_streaming()
     
@@ -310,6 +331,23 @@ async def init_session(session_id: str, persona_prompt: str, voice_prompt: str =
     
     logger.info(f"Session {session_id} initialized")
     return session
+
+
+async def init_session(session_id: str, persona_prompt: str, voice_prompt: str = "NATF2.pt") -> MoshiSession:
+    """
+    Initialize a new conversation session.
+    
+    Runs the blocking GPU operations in a thread executor so the
+    event loop stays responsive for WebSocket ping/pong handling.
+    """
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(
+        None,  # default thread pool
+        _init_session_sync,
+        session_id,
+        persona_prompt,
+        voice_prompt
+    )
 
 
 def verify_token(authorization: Optional[str] = Header(None)) -> bool:
