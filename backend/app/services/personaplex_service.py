@@ -118,6 +118,7 @@ class PersonaPlexService:
         self, 
         worker: AIWorker, 
         company_name: str,
+        disclosure_message: Optional[str] = None,
         knowledge_context: Optional[str] = None,
         training_rules: Optional[list] = None,
         example_answers: Optional[list] = None,
@@ -191,11 +192,30 @@ Als de klant een van deze vragen stelt, gebruik dan het bijbehorende antwoord al
             prompt_parts.append(f"""# BASISINSTRUCTIES (klantenservice.ai)
 {system_prompts}""")
         
+        # Format disclosure message if provided
+        formatted_disclosure = ""
+        if disclosure_message:
+            formatted_disclosure = disclosure_message.format(
+                company_name=company_name,
+                ai_worker_name=worker.name
+            )
+        
+        # Build disclosure section if provided
+        disclosure_section = ""
+        if formatted_disclosure:
+            disclosure_section = f"""## BELANGRIJK - EERSTE BEGROETING
+Bij het begin van elk gesprek moet je ALTIJD eerst het volgende zeggen:
+{formatted_disclosure}
+
+Begin daarna pas met vragen hoe je kunt helpen.
+
+"""
+        
         worker_prompt = f"""# BEDRIJFSCONFIGURATIE
 
 Je bent {worker.name}, een {worker.role_title} bij {company_name}.
 
-## Communicatiestijl
+{disclosure_section}## Communicatiestijl
 - Spreek de klant aan met "{address}"
 {f"- Extra tooninstructies: {worker.tone_of_voice}" if worker.tone_of_voice else ""}
 
@@ -308,10 +328,14 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
             example_answers: Company-specific example Q&A
             system_prompts: Platform-wide system prompts
         """
+        # Get disclosure message from company
+        disclosure_message = company.disclosure_message if company else None
+        
         # Build persona prompt
         persona_prompt = self.build_persona_prompt(
             worker=worker,
             company_name=company.name,
+            disclosure_message=disclosure_message,
             knowledge_context=knowledge_context,
             training_rules=training_rules,
             example_answers=example_answers,

@@ -288,6 +288,34 @@ class VoiceCallHandler:
         self.ai_worker.status = AIWorkerStatus.BUSY
         self.db.commit()
         
+        # Trigger initial greeting from PersonaPlex
+        # Send a short silence segment to trigger PersonaPlex to generate initial greeting
+        try:
+            await personaplex_service.start_turn(self.session_id, turn_id=0)
+            # Create a short silence audio segment (0.5 seconds of silence at 24kHz, 16-bit mono)
+            silence_duration_ms = 500
+            silence_samples = int(24000 * silence_duration_ms / 1000)
+            silence_audio = b'\x00\x00' * silence_samples  # 16-bit PCM silence
+            
+            initial_audio, initial_text, _ = await personaplex_service.process_audio_segment(
+                self.session_id,
+                silence_audio,
+                turn_id=0
+            )
+            
+            # Queue initial greeting audio if received
+            if initial_audio:
+                chunk_size = 4800  # 100ms at 24kHz
+                for i in range(0, len(initial_audio), chunk_size):
+                    chunk = initial_audio[i:i+chunk_size]
+                    await self.send_queue.put(chunk)
+                logger.info(f"Initial greeting generated: {initial_text[:50] if initial_text else 'no transcript'}")
+            else:
+                logger.warning("No initial greeting audio received from PersonaPlex")
+        except Exception as e:
+            logger.error(f"Failed to generate initial greeting: {e}", exc_info=True)
+            # Continue anyway - call will still work when user speaks
+        
         # Start tasks for receiving and sending audio
         receive_task = asyncio.create_task(self._receive_audio_loop())
         send_task = asyncio.create_task(self._send_audio_loop())
