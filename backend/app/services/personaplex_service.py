@@ -522,34 +522,138 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
         finally:
             self._warming_in_progress.discard(worker_id)
     
-    def claim_warm_session(self, worker_id: str, new_session_id: str) -> Optional[ConversationSession]:
+    async def is_session_alive(self, session: ConversationSession) -> bool:
+        """
+        Check if a pre-warmed session's WebSocket is still alive.
+        
+        Sends a ping over the existing WebSocket and waits for pong.
+        Returns True if alive, False if dead or timed out.
+        """
+        if not session or not session.websocket:
+            return False
+        
+        try:
+            await session.websocket.send(json.dumps({"action": "ping"}))
+            response = await asyncio.wait_for(session.websocket.recv(), timeout=3.0)
+            data = json.loads(response)
+            if data.get("action") == "pong":
+                return True
+            return False
+        except Exception:
+            return False
+    
+    async def claim_warm_session(self, worker_id: str, new_session_id: str) -> Optional[ConversationSession]:
         """
         Claim a pre-warmed session for an actual call.
         
-        Moves the session from the warm pool to active_sessions with a new session_id.
-        Returns None if no warm session exists.
+        Verifies the session is alive before claiming. If dead, discards it
+        and returns None so the caller falls back to fresh init.
         """
         worker_id = str(worker_id)
         
-        session = self._warm_sessions.pop(worker_id, None)
+        session = self._warm_sessions.get(worker_id)
         if not session:
+            logger.info(f"No warm session for worker {worker_id}")
             return None
         
-        # Move from warm pool to active sessions
+        # Verify the session is still alive
+        alive = await self.is_session_alive(session)
+        if not alive:
+            logger.warning(f"Claim failed: warm session dead for worker {worker_id} -> fallback init")
+            self._warm_sessions.pop(worker_id, None)
+            self.active_sessions.pop(session.session_id, None)
+            return None
+        
+        # Remove from warm pool
+        self._warm_sessions.pop(worker_id, None)
+        
+        # Move from warm pool to active sessions with new id
         old_id = session.session_id
         session.session_id = new_session_id
         
-        # Remove old entry and add with new id
         self.active_sessions.pop(old_id, None)
         self.active_sessions[new_session_id] = session
         
-        logger.info(f"Claimed warm session for worker {worker_id}: {old_id} -> {new_session_id}")
+        logger.info(f"Claim warm session OK for worker {worker_id}: {old_id} -> {new_session_id}")
         return session
+    
+    async def _warm_keepalive_loop(self):
+        """
+        Periodic background task that ensures warm sessions are always available.
+        
+        Runs every 2 minutes:
+        - Checks all available workers
+        - Pings existing warm sessions to verify they're alive
+        - Re-warms dead or missing sessions
+        
+        Uses an async lock to ensure only one re-warm runs at a time.
+        """
+        from app.core.database import SessionLocal
+        
+        rewarm_lock = asyncio.Lock()
+        
+        # Wait for app to fully start
+        await asyncio.sleep(5)
+        
+        logger.info("Warm keepalive loop started")
+        
+        while True:
+            db = SessionLocal()
+            try:
+                async with rewarm_lock:
+                    from app.models.ai_worker import AIWorker, AIWorkerStatus
+                    from app.models.company import Company
+                    
+                    workers = db.query(AIWorker).filter(
+                        AIWorker.is_active == True,
+                        AIWorker.status == AIWorkerStatus.AVAILABLE
+                    ).all()
+                    
+                    for worker in workers:
+                        worker_id = str(worker.id)
+                        
+                        # Check if we already have a warm session
+                        session = self._warm_sessions.get(worker_id)
+                        
+                        if session:
+                            # Verify it's alive
+                            alive = await self.is_session_alive(session)
+                            if alive:
+                                logger.info(f"Warm session alive for worker {worker.name} ({worker_id})")
+                            else:
+                                logger.warning(f"Warm session dead for worker {worker.name} ({worker_id}) -> rewarm")
+                                # Discard dead session
+                                self._warm_sessions.pop(worker_id, None)
+                                self.active_sessions.pop(session.session_id, None)
+                                
+                                # Re-warm
+                                company = db.query(Company).filter(Company.id == worker.company_id).first()
+                                if company:
+                                    await self.pre_warm_session(worker, company, db)
+                        else:
+                            # No warm session at all, create one
+                            if worker_id not in self._warming_in_progress:
+                                company = db.query(Company).filter(Company.id == worker.company_id).first()
+                                if company:
+                                    logger.info(f"No warm session for worker {worker.name} ({worker_id}) -> pre-warming")
+                                    await self.pre_warm_session(worker, company, db)
+                        
+                        # Only warm one worker at a time (pod handles one session)
+                        break
+                        
+            except Exception as e:
+                logger.error(f"Error in warm keepalive loop: {e}")
+            finally:
+                db.close()
+            
+            # Wait 2 minutes before next check
+            await asyncio.sleep(120)
     
     async def pre_warm_available_workers(self, db):
         """
         Pre-warm sessions for all available AI workers.
-        Called on startup and after each call ends.
+        Called after each call ends for fast recovery.
+        The keepalive loop handles periodic health checks.
         """
         try:
             from app.models.ai_worker import AIWorker, AIWorkerStatus
@@ -565,9 +669,7 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
                 if worker_id not in self._warm_sessions and worker_id not in self._warming_in_progress:
                     company = db.query(Company).filter(Company.id == worker.company_id).first()
                     if company:
-                        # Run pre-warming in background (don't block)
                         asyncio.create_task(self.pre_warm_session(worker, company, db))
-                        # Only warm one worker at a time (pod can only handle one session)
                         break
         except Exception as e:
             logger.error(f"Error pre-warming workers: {e}")

@@ -44,29 +44,16 @@ async def lifespan(app: FastAPI):
         )
         logger.info("Sentry initialized")
     
-    # Pre-load PersonaPlex and pre-warm sessions for available workers
+    # Pre-load PersonaPlex and start warm keepalive loop
     if settings.PERSONAPLEX_POD_URL:
         try:
+            import asyncio
             from app.services.personaplex_service import personaplex_service
             logger.info("PersonaPlex service initialized")
             
-            # Pre-warm sessions for available AI workers (background)
-            import asyncio
-            from app.core.database import SessionLocal
-            
-            async def _startup_pre_warm():
-                """Pre-warm PersonaPlex sessions after a short delay."""
-                await asyncio.sleep(5)  # Wait for app to fully start
-                db = SessionLocal()
-                try:
-                    await personaplex_service.pre_warm_available_workers(db)
-                except Exception as e:
-                    logger.warning(f"Startup pre-warm failed: {e}")
-                finally:
-                    db.close()
-            
-            asyncio.create_task(_startup_pre_warm())
-            logger.info("PersonaPlex pre-warming scheduled")
+            # Start the keepalive loop - handles initial pre-warm + periodic health checks
+            asyncio.create_task(personaplex_service._warm_keepalive_loop())
+            logger.info("PersonaPlex warm keepalive loop started")
         except Exception as e:
             logger.warning(f"PersonaPlex not available: {e}")
     

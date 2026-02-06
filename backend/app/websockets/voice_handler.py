@@ -293,7 +293,7 @@ class VoiceCallHandler:
         
         # Try to claim a pre-warmed session first (instant path)
         worker_id = str(self.ai_worker.id)
-        warm_session = personaplex_service.claim_warm_session(worker_id, self.session_id)
+        warm_session = await personaplex_service.claim_warm_session(worker_id, self.session_id)
         
         if warm_session:
             logger.info(f"Using pre-warmed session for worker {self.ai_worker.name}")
