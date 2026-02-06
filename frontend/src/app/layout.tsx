@@ -18,6 +18,11 @@ export const metadata: Metadata = {
   title: 'klantenservice.ai - AI-telefonisten voor uw bedrijf',
   description: 'Automatiseer uw klantenservice met intelligente AI-telefonisten die 24/7 beschikbaar zijn.',
   keywords: ['AI', 'klantenservice', 'telefonie', 'automatisering', 'Nederlands'],
+  icons: {
+    icon: '/klantenservice-logo/logo-klantenservice.png',
+    shortcut: '/klantenservice-logo/logo-klantenservice.png',
+    apple: '/klantenservice-logo/logo-klantenservice.png',
+  },
 }
 
 export default function RootLayout({

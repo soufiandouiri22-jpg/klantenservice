@@ -31,9 +31,32 @@ from app.services.call_tools import (
 )
 from app.models.context_log import ContextLog
 from app.models.usage_log import UsageLog
+from app.models.global_config import GlobalConfig
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
+
+
+def _get_model_config(db: Session, key: str, default: str) -> str:
+    """
+    Get model configuration from database, fallback to default if not found.
+    
+    Args:
+        db: Database session
+        key: Config key (e.g., 'model_default', 'model_fallback', 'model_big')
+        default: Default value if config not found
+        
+    Returns:
+        Model name string
+    """
+    try:
+        config = db.query(GlobalConfig).filter(GlobalConfig.key == key).first()
+        if config and config.value:
+            return str(config.value)
+    except Exception as e:
+        logger.warning(f"Failed to read model config '{key}': {e}")
+    
+    return default
 
 # System prompt for the orchestrator
 SYSTEM_PROMPT = """Je bent de intent- en actie-laag voor een Nederlandse klantenservice-telefoonlijn.
@@ -329,7 +352,18 @@ Bepaal welke tools nodig zijn en geef daarna facts + instructions als JSON."""
     was_escalated = 0
     total_input_tokens = 0
     total_output_tokens = 0
-    model_used = settings.ORCHESTRATOR_MODEL
+    
+    # Get model configuration from database (with fallback to settings)
+    model_used = _get_model_config(db, "model_default", settings.ORCHESTRATOR_MODEL)
+    model_fallback = _get_model_config(db, "model_fallback", "gpt-3.5-turbo")
+    model_big = _get_model_config(db, "model_big", "gpt-4o")
+    use_big_on_unknown = False
+    try:
+        config_use_big = db.query(GlobalConfig).filter(GlobalConfig.key == "model_use_big_on_unknown").first()
+        if config_use_big and config_use_big.value:
+            use_big_on_unknown = bool(config_use_big.value)
+    except:
+        pass
     
     try:
         # First call: let LLM decide which tools to call
@@ -409,10 +443,90 @@ Bepaal welke tools nodig zijn en geef daarna facts + instructions als JSON."""
             
             text = followup.choices[0].message.content or ""
         else:
-            # No tools called - use direct response
-            text = choice.message.content or ""
-            detected_intent = "direct_response"
-            intent_confidence = 70
+            # No tools called - check if we should use big model for unknown questions
+            if use_big_on_unknown:
+                logger.info("No tools called, using big model for unknown question")
+                try:
+                    # Retry with big model
+                    big_response = client.chat.completions.create(
+                        model=model_big,
+                        messages=messages,
+                        tools=TOOLS_OPENAI,
+                        tool_choice="auto",
+                        max_tokens=1024,
+                    )
+                    big_choice = big_response.choices[0]
+                    if big_response.usage:
+                        total_input_tokens += big_response.usage.prompt_tokens
+                        total_output_tokens += big_response.usage.completion_tokens
+                    
+                    if big_choice.message.tool_calls:
+                        # Big model found tools - execute them
+                        tool_results = []
+                        tool_messages = [big_choice.message]
+                        
+                        for tc in big_choice.message.tool_calls:
+                            name = tc.function.name
+                            try:
+                                args = json.loads(tc.function.arguments or "{}")
+                            except json.JSONDecodeError:
+                                args = {}
+                            
+                            if detected_intent is None:
+                                detected_intent = name
+                                intent_confidence = 80
+                            
+                            logger.info(f"Orchestrator (big model) calling tool: {name} with {args}")
+                            tool_start = time.time()
+                            result = _run_tool(name, args, tool_context)
+                            tool_latency_ms = int((time.time() - tool_start) * 1000)
+                            
+                            result_str = json.dumps(result, ensure_ascii=False)
+                            tool_results.append(result_str)
+                            tool_calls_log.append({
+                                "name": name,
+                                "arguments": args,
+                                "result": result,
+                                "latency_ms": tool_latency_ms,
+                            })
+                            
+                            if name == "flag_unknown":
+                                was_escalated = 1
+                            elif name == "create_note" and args.get("priority") in ["high", "urgent"]:
+                                was_escalated = 2
+                            
+                            tool_messages.append({
+                                "role": "tool",
+                                "tool_call_id": tc.id,
+                                "content": result_str
+                            })
+                        
+                        # Get facts + instructions from big model
+                        followup = client.chat.completions.create(
+                            model=model_big,
+                            messages=messages + tool_messages,
+                            max_tokens=512,
+                        )
+                        if followup.usage:
+                            total_input_tokens += followup.usage.prompt_tokens
+                            total_output_tokens += followup.usage.completion_tokens
+                        text = followup.choices[0].message.content or ""
+                        model_used = model_big  # Update model_used for logging
+                    else:
+                        text = big_choice.message.content or ""
+                        detected_intent = "direct_response"
+                        intent_confidence = 70
+                        model_used = model_big  # Update model_used for logging
+                except Exception as big_err:
+                    logger.warning(f"Big model call failed, using default response: {big_err}")
+                    text = choice.message.content or ""
+                    detected_intent = "direct_response"
+                    intent_confidence = 70
+            else:
+                # No tools called - use direct response
+                text = choice.message.content or ""
+                detected_intent = "direct_response"
+                intent_confidence = 70
         
         # Parse facts and instructions from response
         facts, instructions = _parse_context_response(text)
@@ -456,6 +570,26 @@ Bepaal welke tools nodig zijn en geef daarna facts + instructions als JSON."""
         
     except Exception as e:
         logger.error(f"Orchestrator error: {e}", exc_info=True)
+        
+        # Try fallback model if default model failed
+        if model_used != model_fallback:
+            logger.info(f"Trying fallback model: {model_fallback}")
+            try:
+                fallback_response = client.chat.completions.create(
+                    model=model_fallback,
+                    messages=messages,
+                    tools=TOOLS_OPENAI,
+                    tool_choice="auto",
+                    max_tokens=1024,
+                )
+                choice = fallback_response.choices[0]
+                if choice.message.content:
+                    facts, instructions = _parse_context_response(choice.message.content)
+                    logger.info("Fallback model succeeded")
+                    return facts, instructions
+            except Exception as fallback_err:
+                logger.error(f"Fallback model also failed: {fallback_err}")
+        
         return "", ""
 
 
