@@ -198,38 +198,28 @@ export function OverviewTab() {
 
               {/* Customer Counts */}
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                <div className="bg-gray-50 rounded-lg p-4 text-center">
-                  <div className="flex justify-center mb-2">
-                    <Users className="h-5 w-5 text-gray-600" />
-                  </div>
+                <div className="bg-gray-50 rounded-lg p-4 flex flex-col items-center">
+                  <Users className="h-5 w-5 text-gray-600 mb-2" />
                   <p className="text-2xl font-bold text-gray-900">{business?.total_customers || 0}</p>
                   <p className="text-xs text-gray-500">Totaal</p>
                 </div>
-                <div className="bg-green-50 rounded-lg p-4 text-center">
-                  <div className="flex justify-center mb-2">
-                    <UserCheck className="h-5 w-5 text-green-600" />
-                  </div>
+                <div className="bg-green-50 rounded-lg p-4 flex flex-col items-center">
+                  <UserCheck className="h-5 w-5 text-green-600 mb-2" />
                   <p className="text-2xl font-bold text-green-700">{business?.active_customers || 0}</p>
                   <p className="text-xs text-green-600">Actief</p>
                 </div>
-                <div className="bg-amber-50 rounded-lg p-4 text-center">
-                  <div className="flex justify-center mb-2">
-                    <Clock className="h-5 w-5 text-amber-600" />
-                  </div>
+                <div className="bg-amber-50 rounded-lg p-4 flex flex-col items-center">
+                  <Clock className="h-5 w-5 text-amber-600 mb-2" />
                   <p className="text-2xl font-bold text-amber-700">{business?.trialing_customers || 0}</p>
                   <p className="text-xs text-amber-600">Proefperiode</p>
                 </div>
-                <div className="bg-gray-100 rounded-lg p-4 text-center">
-                  <div className="flex justify-center mb-2">
-                    <UserX className="h-5 w-5 text-gray-500" />
-                  </div>
+                <div className="bg-gray-100 rounded-lg p-4 flex flex-col items-center">
+                  <UserX className="h-5 w-5 text-gray-500 mb-2" />
                   <p className="text-2xl font-bold text-gray-600">{business?.pending_customers || 0}</p>
                   <p className="text-xs text-gray-500">Pending</p>
                 </div>
-                <div className="bg-red-50 rounded-lg p-4 text-center">
-                  <div className="flex justify-center mb-2">
-                    <UserMinus className="h-5 w-5 text-red-500" />
-                  </div>
+                <div className="bg-red-50 rounded-lg p-4 flex flex-col items-center">
+                  <UserMinus className="h-5 w-5 text-red-500 mb-2" />
                   <p className="text-2xl font-bold text-red-600">{business?.churned_this_month || 0}</p>
                   <p className="text-xs text-red-500">Churn deze maand</p>
                 </div>
