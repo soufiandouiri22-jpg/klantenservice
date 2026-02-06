@@ -389,14 +389,24 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
             
             logger.info(f"Session {session_id} using voice preset: {voice_preset}")
             
-            # Wait for confirmation (300s to allow step_system_prompts to complete on A40)
-            response = await asyncio.wait_for(ws.recv(), timeout=300)
-            response_data = json.loads(response)
-            
-            if response_data.get("status") == "initialized":
-                logger.info(f"Session {session_id} initialized successfully")
-            else:
-                logger.warning(f"Unexpected init response: {response_data}")
+            # Wait for "initialized" confirmation, ignoring "initializing" progress pings
+            # The pod sends keepalive pings every 15s during step_system_prompts
+            deadline = asyncio.get_event_loop().time() + 300
+            while True:
+                remaining = deadline - asyncio.get_event_loop().time()
+                if remaining <= 0:
+                    raise asyncio.TimeoutError()
+                response = await asyncio.wait_for(ws.recv(), timeout=remaining)
+                response_data = json.loads(response)
+                
+                if response_data.get("status") == "initialized":
+                    logger.info(f"Session {session_id} initialized successfully")
+                    break
+                elif response_data.get("status") == "initializing":
+                    logger.debug(f"Session {session_id} still initializing...")
+                else:
+                    logger.warning(f"Unexpected init response: {response_data}")
+                    break
             
         except asyncio.TimeoutError:
             logger.error(f"Session init timeout for {session_id}")

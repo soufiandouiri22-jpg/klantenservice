@@ -127,9 +127,9 @@ class MoshiSession:
             lm_gen.step_system_prompts(mimi)
             mimi.reset_streaming()
         
-        # Convert bytes to tensor - shape must be (1, 1, samples) for mimi
+        # Convert bytes to tensor - shape must be (1, T) for _iterate_audio
         audio_np = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
-        user_audio = torch.from_numpy(audio_np).reshape(1, 1, -1).to(device)
+        user_audio = torch.from_numpy(audio_np).unsqueeze(0).to(device)
         
         generated_frames = []
         generated_text = []
@@ -579,7 +579,7 @@ async def get_voice_sample(voice_id: str):
             silence_samples = int(silence_duration * sample_rate)
             
             # Very quiet noise (not complete silence, to trigger response)
-            silence_audio = torch.randn(1, 1, silence_samples, device=device) * 0.001
+            silence_audio = torch.randn(1, silence_samples, device=device) * 0.001
             
             generated_frames = []
             
@@ -775,7 +775,28 @@ async def audio_stream(websocket: WebSocket, session_id: str):
                         persona_prompt = data["persona_prompt"]
                         voice_prompt = data.get("voice_prompt", "NATF2.pt")
                         
-                        session = await init_session(session_id, persona_prompt, voice_prompt)
+                        # Run init in background while sending keepalive pings
+                        # This prevents Render's proxy from closing the idle WebSocket
+                        loop = asyncio.get_event_loop()
+                        init_task = loop.run_in_executor(
+                            None, _init_session_sync, session_id, persona_prompt, voice_prompt
+                        )
+                        
+                        while True:
+                            try:
+                                session = await asyncio.wait_for(
+                                    asyncio.shield(init_task), timeout=15.0
+                                )
+                                # Init completed
+                                break
+                            except asyncio.TimeoutError:
+                                # Still initializing - send progress ping to keep connection alive
+                                await websocket.send_json({
+                                    "status": "initializing",
+                                    "session_id": session_id
+                                })
+                                logger.debug(f"Session {session_id} still initializing, sent keepalive")
+                        
                         await websocket.send_json({
                             "status": "initialized",
                             "session_id": session_id
