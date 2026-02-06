@@ -22,6 +22,7 @@ from contextlib import asynccontextmanager
 import numpy as np
 import torch
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, Header
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -347,6 +348,15 @@ app = FastAPI(
     description="Real-time speech-to-speech AI server",
     version="1.0.0",
     lifespan=lifespan
+)
+
+# CORS middleware - allows admin UI to fetch voices and voice samples directly
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins for voice preview
+    allow_credentials=False,
+    allow_methods=["GET"],  # Only GET needed for /voices and /voice-sample
+    allow_headers=["*"],
 )
 
 

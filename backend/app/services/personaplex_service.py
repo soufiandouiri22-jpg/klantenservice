@@ -279,28 +279,36 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
         Returns:
             Voice preset filename (e.g., "NATF2.pt")
         """
+        preset = None
+        
         # 1. Check company-level override
         if company and company.admin_overrides:
             preset = company.admin_overrides.get("voice_preset")
             if preset:
                 logger.debug(f"Using company voice preset: {preset}")
-                return preset
         
         # 2. Check platform-wide default
-        if db:
+        if not preset and db:
             try:
                 config = db.query(GlobalConfig).filter(
                     GlobalConfig.key == "voice_default_preset"
                 ).first()
                 if config and config.value:
-                    logger.debug(f"Using platform voice preset: {config.value}")
-                    return config.value
+                    preset = config.value
+                    logger.debug(f"Using platform voice preset: {preset}")
             except Exception as e:
                 logger.warning(f"Could not get platform voice preset: {e}")
         
         # 3. Hardcoded fallback
-        logger.debug("Using hardcoded fallback voice preset: NATF2.pt")
-        return "NATF2.pt"
+        if not preset:
+            preset = "NATF2"
+            logger.debug("Using hardcoded fallback voice preset: NATF2")
+        
+        # Ensure .pt extension is present
+        if not preset.endswith('.pt'):
+            preset = preset + '.pt'
+        
+        return preset
 
     async def create_session(
         self,
