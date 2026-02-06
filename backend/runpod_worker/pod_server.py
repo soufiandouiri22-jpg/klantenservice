@@ -276,6 +276,10 @@ async def init_session(session_id: str, persona_prompt: str, voice_prompt: str =
         with tarfile.open(voices_tgz, "r:gz") as tar:
             tar.extractall(path=voices_tgz.parent)
     
+    # Ensure voice prompt has .pt extension
+    if not voice_prompt.endswith('.pt'):
+        voice_prompt = voice_prompt + '.pt'
+    
     voice_prompt_path = str(voices_dir / voice_prompt)
     
     # Reset streaming state
