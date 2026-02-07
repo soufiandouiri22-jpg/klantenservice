@@ -391,8 +391,9 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
             logger.info(f"Session {session_id} using voice preset: {voice_preset}")
             
             # Wait for "initialized" confirmation, ignoring "initializing" progress pings
-            # The pod sends keepalive pings every 15s during step_system_prompts
-            deadline = asyncio.get_event_loop().time() + 300
+            # The pod sends keepalive pings every 10s during step_system_prompts
+            # Normal init takes 30-60s; 90s is generous but catches stuck pods much faster than 300s
+            deadline = asyncio.get_event_loop().time() + 90
             while True:
                 remaining = deadline - asyncio.get_event_loop().time()
                 if remaining <= 0:

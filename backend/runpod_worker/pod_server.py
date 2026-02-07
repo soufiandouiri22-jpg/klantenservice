@@ -48,7 +48,12 @@ _process_audio_lock = asyncio.Lock()
 
 # Threading lock: serializes session init (runs in thread executor, shares global models)
 import threading
+import time as _time
 _init_lock = threading.Lock()
+_init_lock_holder: Optional[str] = None       # session_id holding the lock
+_init_lock_acquired_at: Optional[float] = None  # time.time() when lock was acquired
+_INIT_LOCK_TIMEOUT = 120  # seconds: max wait to acquire the lock
+_INIT_GPU_TIMEOUT = 180   # seconds: max time step_system_prompts may take
 
 # Authentication token (set via environment)
 API_TOKEN = os.getenv("PERSONAPLEX_API_TOKEN", "")
@@ -326,12 +331,41 @@ def _init_session_sync(session_id: str, persona_prompt: str, voice_prompt: str =
     so concurrent inits would corrupt each other's streaming state.
     """
     global mimi, other_mimi, lm_gen, text_tokenizer
+    global _init_lock_holder, _init_lock_acquired_at
     
     from huggingface_hub import hf_hub_download
     import tarfile
     
+    # ── Acquire lock with timeout ─────────────────────────────
     logger.info(f"Waiting for init lock for session {session_id}")
-    with _init_lock:
+    
+    # Log who currently holds the lock (if anyone)
+    holder = _init_lock_holder
+    held_since = _init_lock_acquired_at
+    if holder and held_since:
+        held_for = _time.time() - held_since
+        logger.warning(
+            f"Init lock held by {holder} for {held_for:.0f}s — "
+            f"session {session_id} waiting (timeout={_INIT_LOCK_TIMEOUT}s)"
+        )
+    
+    acquired = _init_lock.acquire(timeout=_INIT_LOCK_TIMEOUT)
+    if not acquired:
+        held_for = _time.time() - held_since if held_since else 0
+        logger.error(
+            f"INIT LOCK TIMEOUT for session {session_id} after {_INIT_LOCK_TIMEOUT}s — "
+            f"lock held by {_init_lock_holder} for {held_for:.0f}s (likely stuck)"
+        )
+        raise TimeoutError(
+            f"Init lock timeout: another session ({_init_lock_holder}) "
+            f"has held the lock for {held_for:.0f}s"
+        )
+    
+    # Lock acquired — track who holds it
+    _init_lock_holder = session_id
+    _init_lock_acquired_at = _time.time()
+    
+    try:
         logger.info(f"Initializing session {session_id}")
         
         # Download voice prompts if needed
@@ -369,15 +403,36 @@ def _init_session_sync(session_id: str, persona_prompt: str, voice_prompt: str =
             lm_gen.text_prompt_tokens = None
         
         # Run system prompts phase (heavy GPU operation)
+        t0 = _time.time()
         lm_gen.step_system_prompts(mimi)
+        gpu_elapsed = _time.time() - t0
+        logger.info(f"step_system_prompts completed in {gpu_elapsed:.1f}s for {session_id}")
+        
+        if gpu_elapsed > 120:
+            logger.warning(
+                f"step_system_prompts took {gpu_elapsed:.1f}s for {session_id} — "
+                f"this is abnormally slow, GPU may be under pressure"
+            )
+        
         mimi.reset_streaming()
         
         # Create and store session
         session = MoshiSession(session_id, persona_prompt, voice_prompt)
         sessions[session_id] = session
         
-        logger.info(f"Session {session_id} initialized")
+        total_elapsed = _time.time() - _init_lock_acquired_at
+        logger.info(f"Session {session_id} initialized in {total_elapsed:.1f}s")
         return session
+    
+    except Exception as e:
+        logger.error(f"Session init failed for {session_id}: {e}", exc_info=True)
+        raise
+    
+    finally:
+        # Always release lock and clear holder tracking
+        _init_lock_holder = None
+        _init_lock_acquired_at = None
+        _init_lock.release()
 
 
 async def init_session(session_id: str, persona_prompt: str, voice_prompt: str = "NATF2.pt") -> MoshiSession:
@@ -441,10 +496,20 @@ async def lifespan(app: FastAPI):
 def _prewarm_session():
     """Run a dummy step_system_prompts to warm CUDA caches."""
     global mimi, lm_gen, text_tokenizer
+    global _init_lock_holder, _init_lock_acquired_at
+    
     if mimi is None:
         return
     
-    with _init_lock:
+    acquired = _init_lock.acquire(timeout=_INIT_LOCK_TIMEOUT)
+    if not acquired:
+        logger.warning("Could not acquire init lock for startup pre-warm, skipping")
+        return
+    
+    _init_lock_holder = "__startup_prewarm__"
+    _init_lock_acquired_at = _time.time()
+    
+    try:
         logger.info("Pre-warming step_system_prompts on startup...")
         mimi.reset_streaming()
         lm_gen.reset_streaming()
@@ -453,9 +518,14 @@ def _prewarm_session():
         lm_gen.text_prompt_tokens = text_tokenizer.encode(
             wrap_with_system_tags(dummy_prompt)
         )
+        t0 = _time.time()
         lm_gen.step_system_prompts(mimi)
+        logger.info(f"Pre-warm step_system_prompts done in {_time.time() - t0:.1f}s")
         mimi.reset_streaming()
-        logger.info("Pre-warm step_system_prompts done")
+    finally:
+        _init_lock_holder = None
+        _init_lock_acquired_at = None
+        _init_lock.release()
 
 
 # Create FastAPI app
@@ -500,6 +570,8 @@ class HealthResponse(BaseModel):
     model_loaded: bool
     active_sessions: int
     device: str
+    init_lock_holder: Optional[str] = None
+    init_lock_held_seconds: Optional[float] = None
 
 
 class VoicesResponse(BaseModel):
@@ -510,11 +582,17 @@ class VoicesResponse(BaseModel):
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
     """Health check endpoint for monitoring."""
+    held_seconds = None
+    if _init_lock_acquired_at:
+        held_seconds = round(_time.time() - _init_lock_acquired_at, 1)
+    
     return HealthResponse(
         status="healthy" if mimi is not None else "loading",
         model_loaded=mimi is not None,
         active_sessions=len(sessions),
-        device=device
+        device=device,
+        init_lock_holder=_init_lock_holder,
+        init_lock_held_seconds=held_seconds,
     )
 
 
