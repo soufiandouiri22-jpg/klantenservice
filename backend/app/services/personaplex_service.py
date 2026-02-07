@@ -16,6 +16,7 @@ Reference: https://huggingface.co/nvidia/personaplex-7b-v1
 import asyncio
 import json
 import logging
+import time
 from typing import Optional, AsyncGenerator, Dict, Tuple
 from dataclasses import dataclass, field
 
@@ -591,26 +592,29 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
         """
         Periodic background task that ensures warm sessions are always available.
         
-        - When all workers have a live warm session: check every 2 minutes
-        - When pre-warming fails or no warm session exists: retry every 10 seconds
+        - When all workers have a live warm session: check every 2 minutes.
+        - When pre-warming fails or no warm session exists: retry every 10 seconds.
         
         This fast-retry ensures that after a deploy (pod or backend), the warm
-        session is established as quickly as possible instead of waiting 2 minutes.
+        session is established as quickly as possible.
         """
         from app.core.database import SessionLocal
         
         rewarm_lock = asyncio.Lock()
         
-        INTERVAL_OK = 120       # 2 minutes when everything is warm
-        INTERVAL_RETRY = 10     # 10 seconds when we need to (re)warm
+        INTERVAL_OK = 120       # 2 min when everything is warm
+        INTERVAL_RETRY = 10     # 10 s when we need to (re)warm
         
         # Wait for app to fully start
         await asyncio.sleep(5)
         
-        logger.info("Warm keepalive loop started")
+        logger.info("[KEEPALIVE] Warm keepalive loop started (pod_url=%s)", self.pod_url[:60] if self.pod_url else "NONE")
         
+        iteration = 0
         while True:
-            all_warm = True  # Assume success; set False if any worker needs warming
+            iteration += 1
+            all_warm = True
+            t0 = time.time()
             db = SessionLocal()
             try:
                 async with rewarm_lock:
@@ -622,56 +626,69 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
                         AIWorker.status == AIWorkerStatus.AVAILABLE
                     ).all()
                     
+                    if not workers:
+                        logger.info("[KEEPALIVE] iter=%d No available workers found", iteration)
+                        all_warm = False
+                    
                     for worker in workers:
                         worker_id = str(worker.id)
                         
-                        # Check if we already have a warm session
                         session = self._warm_sessions.get(worker_id)
                         
                         if session:
-                            # Verify it's alive
                             alive = await self.is_session_alive(session)
                             if alive:
-                                logger.info(f"Warm session alive for worker {worker.name} ({worker_id})")
+                                logger.info(
+                                    "[KEEPALIVE] iter=%d worker=%s (%s) -> ALIVE",
+                                    iteration, worker.name, worker_id[:8]
+                                )
                             else:
-                                logger.warning(f"Warm session dead for worker {worker.name} ({worker_id}) -> rewarm")
+                                logger.warning(
+                                    "[KEEPALIVE] iter=%d worker=%s (%s) -> DEAD, re-warming",
+                                    iteration, worker.name, worker_id[:8]
+                                )
                                 all_warm = False
-                                # Discard dead session
                                 self._warm_sessions.pop(worker_id, None)
                                 self.active_sessions.pop(session.session_id, None)
                                 
-                                # Re-warm
                                 company = db.query(Company).filter(Company.id == worker.company_id).first()
                                 if company:
                                     await self.pre_warm_session(worker, company, db)
                         else:
-                            # No warm session at all, create one
                             all_warm = False
                             if worker_id not in self._warming_in_progress:
                                 company = db.query(Company).filter(Company.id == worker.company_id).first()
                                 if company:
-                                    logger.info(f"No warm session for worker {worker.name} ({worker_id}) -> pre-warming")
+                                    logger.info(
+                                        "[KEEPALIVE] iter=%d worker=%s (%s) -> NO SESSION, pre-warming",
+                                        iteration, worker.name, worker_id[:8]
+                                    )
                                     await self.pre_warm_session(worker, company, db)
+                            else:
+                                logger.info(
+                                    "[KEEPALIVE] iter=%d worker=%s (%s) -> warming in progress, skipping",
+                                    iteration, worker.name, worker_id[:8]
+                                )
                         
                         # Only warm one worker at a time (pod handles one session)
                         break
                         
             except Exception as e:
-                logger.error(f"Error in warm keepalive loop: {e}")
+                logger.error("[KEEPALIVE] iter=%d ERROR: %s", iteration, e, exc_info=True)
                 all_warm = False
             finally:
                 db.close()
             
-            # Check if pre-warming actually succeeded (session might have failed inside pre_warm_session)
-            if all_warm:
-                # Double-check: do we actually have warm sessions?
-                has_any_warm = len(self._warm_sessions) > 0
-                if not has_any_warm:
-                    all_warm = False
+            # Double-check we actually have warm sessions
+            if all_warm and len(self._warm_sessions) == 0:
+                all_warm = False
             
+            elapsed_ms = int((time.time() - t0) * 1000)
             interval = INTERVAL_OK if all_warm else INTERVAL_RETRY
-            if not all_warm:
-                logger.info(f"Warm session not ready, retrying in {INTERVAL_RETRY}s")
+            logger.info(
+                "[KEEPALIVE] iter=%d done in %dms, warm_count=%d, next_check=%ds",
+                iteration, elapsed_ms, len(self._warm_sessions), interval
+            )
             await asyncio.sleep(interval)
     
     async def pre_warm_available_workers(self, db):

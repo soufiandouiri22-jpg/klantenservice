@@ -282,41 +282,103 @@ class VoiceCallHandler:
     async def start(self):
         """
         Start handling the voice call.
-        Uses pre-warmed PersonaPlex session if available for instant response.
-        Falls back to creating a new session with Twilio keepalive.
+        
+        CRITICAL DESIGN:
+        - The Twilio WS is already accepted.
+        - We IMMEDIATELY start receive/send loops so the WS never idles.
+        - Session preparation (claim warm / fresh init) runs in a background task.
+        - While the session is not ready, incoming audio frames are buffered
+          (up to a limit) and a keepalive silence is sent to Twilio.
+        - Once ready, the initial greeting is generated and normal flow begins.
         """
+        t_start = time.time()
         self.is_running = True
+        self._upstream_ready = asyncio.Event()  # set once PersonaPlex session is live
         
         # Update AI worker status
         self.ai_worker.status = AIWorkerStatus.BUSY
         self.db.commit()
         
-        # Try to claim a pre-warmed session first (instant path)
-        worker_id = str(self.ai_worker.id)
-        warm_session = await personaplex_service.claim_warm_session(worker_id, self.session_id)
+        # Launch upstream preparation in background (never blocks WS)
+        prep_task = asyncio.create_task(self._prepare_upstream())
         
-        if warm_session:
-            logger.info(f"Using pre-warmed session for worker {self.ai_worker.name}")
-        else:
-            logger.info(f"No pre-warmed session available, initializing fresh (with keepalive)")
+        # Start tasks for receiving and sending audio
+        receive_task = asyncio.create_task(self._receive_audio_loop())
+        send_task = asyncio.create_task(self._send_audio_loop())
+        keepalive_task = asyncio.create_task(self._ws_keepalive_while_preparing())
+        
+        logger.info(
+            f"[TIMING] Call {self.call_sid}: loops launched at "
+            f"+{int((time.time() - t_start)*1000)}ms"
+        )
+        
+        try:
+            await asyncio.gather(receive_task, send_task)
+        except WebSocketDisconnect:
+            logger.info(f"WebSocket disconnected for call {self.call_sid}")
+        except Exception as e:
+            logger.error(f"Error in voice call handler: {e}", exc_info=True)
+        finally:
+            # Cancel background tasks
+            for task in (prep_task, keepalive_task):
+                task.cancel()
+                try:
+                    await task
+                except (asyncio.CancelledError, Exception):
+                    pass
+            await self.cleanup()
+
+    async def _ws_keepalive_while_preparing(self):
+        """Send silence to Twilio every 3s until upstream is ready."""
+        try:
+            while not self._upstream_ready.is_set():
+                await self._send_twilio_silence(0.5)
+                await asyncio.sleep(3)
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            pass
+
+    async def _prepare_upstream(self):
+        """
+        Prepare PersonaPlex session (background task).
+        1. Try to claim a pre-warmed session (instant).
+        2. Fall back to fresh init with full context.
+        3. Generate initial greeting.
+        4. Signal _upstream_ready so normal audio flow starts.
+        """
+        t0 = time.time()
+        worker_id = str(self.ai_worker.id)
+        
+        try:
+            # ── 1. Try warm session ──────────────────────────────
+            warm_session = await personaplex_service.claim_warm_session(
+                worker_id, self.session_id
+            )
+            t_claim = time.time()
             
-            # Start sending silence to Twilio to keep the connection alive
-            # while PersonaPlex initializes (30-60 seconds)
-            stop_keepalive = asyncio.Event()
-            keepalive_task = asyncio.create_task(self._keepalive_loop(stop_keepalive))
-            
-            try:
-                # Get knowledge context for RAG
-                knowledge_context = await self.get_knowledge_context()
+            if warm_session:
+                logger.info(
+                    f"[TIMING] Warm session claimed in {int((t_claim - t0)*1000)}ms "
+                    f"for worker {self.ai_worker.name}"
+                )
+            else:
+                # ── 2. Fresh init ────────────────────────────────
+                logger.info(
+                    f"[TIMING] No warm session, starting fresh init "
+                    f"for worker {self.ai_worker.name}"
+                )
                 
-                # Get training rules and example answers
+                knowledge_context = await self.get_knowledge_context()
                 training_rules = self.get_training_rules()
                 example_answers = self.get_example_answers()
-                
-                # Get system-wide prompts (from /admin)
                 system_prompts = personaplex_service.get_system_prompts(self.db)
                 
-                # Create PersonaPlex session (establishes WebSocket to pod)
+                t_ctx = time.time()
+                logger.info(
+                    f"[TIMING] Context gathered in {int((t_ctx - t_claim)*1000)}ms"
+                )
+                
                 await personaplex_service.create_session(
                     session_id=self.session_id,
                     worker=self.ai_worker,
@@ -328,67 +390,54 @@ class VoiceCallHandler:
                     example_answers=example_answers,
                     system_prompts=system_prompts
                 )
-            finally:
-                # Stop keepalive once session is ready
-                stop_keepalive.set()
-                keepalive_task.cancel()
-                try:
-                    await keepalive_task
-                except asyncio.CancelledError:
-                    pass
-        
-        # Trigger initial greeting from PersonaPlex
-        # Send a short silence segment to trigger PersonaPlex to generate initial greeting
-        try:
-            await personaplex_service.start_turn(self.session_id, turn_id=0)
-            # Create a short silence audio segment (0.5 seconds of silence at 24kHz, 16-bit mono)
-            silence_duration_ms = 500
-            silence_samples = int(24000 * silence_duration_ms / 1000)
-            silence_audio = b'\x00\x00' * silence_samples  # 16-bit PCM silence
+                t_session = time.time()
+                logger.info(
+                    f"[TIMING] Fresh session created in {int((t_session - t_claim)*1000)}ms"
+                )
             
-            initial_audio, initial_text, _ = await personaplex_service.process_audio_segment(
-                self.session_id,
-                silence_audio,
-                turn_id=0
+            # ── 3. Generate initial greeting ─────────────────────
+            t_greet0 = time.time()
+            try:
+                await personaplex_service.start_turn(self.session_id, turn_id=0)
+                silence_samples = int(24000 * 0.5)
+                silence_audio = b'\x00\x00' * silence_samples
+                
+                initial_audio, initial_text, _ = await personaplex_service.process_audio_segment(
+                    self.session_id, silence_audio, turn_id=0
+                )
+                
+                if initial_audio:
+                    chunk_size = 4800
+                    for i in range(0, len(initial_audio), chunk_size):
+                        await self.send_queue.put(initial_audio[i:i+chunk_size])
+                    logger.info(
+                        f"[TIMING] Greeting generated in {int((time.time() - t_greet0)*1000)}ms: "
+                        f"{initial_text[:50] if initial_text else '(no text)'}"
+                    )
+                else:
+                    logger.warning("No initial greeting audio received from PersonaPlex")
+            except Exception as e:
+                logger.error(f"Failed to generate initial greeting: {e}", exc_info=True)
+            
+            # ── 4. Signal ready ──────────────────────────────────
+            self._upstream_ready.set()
+            logger.info(
+                f"[TIMING] Upstream ready, total prep={int((time.time() - t0)*1000)}ms"
             )
             
-            # Queue initial greeting audio if received
-            if initial_audio:
-                chunk_size = 4800  # 100ms at 24kHz
-                for i in range(0, len(initial_audio), chunk_size):
-                    chunk = initial_audio[i:i+chunk_size]
-                    await self.send_queue.put(chunk)
-                logger.info(f"Initial greeting generated: {initial_text[:50] if initial_text else 'no transcript'}")
-            else:
-                logger.warning("No initial greeting audio received from PersonaPlex")
         except Exception as e:
-            logger.error(f"Failed to generate initial greeting: {e}", exc_info=True)
-            # Continue anyway - call will still work when user speaks
-        
-        # NOTE: Do NOT pre-warm here. The pod has one global model set, so
-        # initializing a new session while this call is active would corrupt
-        # the model state (reset_streaming mid-inference). Re-warm happens
-        # in cleanup() after the call ends and the session is released.
-        
-        # Start tasks for receiving and sending audio
-        receive_task = asyncio.create_task(self._receive_audio_loop())
-        send_task = asyncio.create_task(self._send_audio_loop())
-        
-        try:
-            await asyncio.gather(receive_task, send_task)
-        except WebSocketDisconnect:
-            logger.info(f"WebSocket disconnected for call {self.call_sid}")
-        except Exception as e:
-            logger.error(f"Error in voice call handler: {e}")
-        finally:
-            await self.cleanup()
+            logger.error(f"_prepare_upstream failed: {e}", exc_info=True)
+            # Signal ready anyway so the WS loops can detect the missing session
+            # and handle gracefully (error responses / silence) rather than hanging.
+            self._upstream_ready.set()
     
     async def _receive_audio_loop(self):
         """
         Receive audio from Twilio and buffer into utterance segments.
         
-        When a segment is ready (based on duration or silence detection),
-        process it through PersonaPlex + STT + Orchestrator.
+        While upstream is NOT ready, audio frames are still received (keeping
+        the WS alive) but dropped. Once ready, normal buffering + processing
+        begins.
         """
         while self.is_running:
             try:
@@ -399,6 +448,10 @@ class VoiceCallHandler:
                 event_type = data.get("event")
                 
                 if event_type == "media":
+                    # Drop audio if upstream not ready yet (WS stays open)
+                    if not self._upstream_ready.is_set():
+                        continue
+                    
                     # Audio data from caller
                     payload = data.get("media", {}).get("payload", "")
                     mulaw_audio = base64.b64decode(payload)
@@ -419,13 +472,8 @@ class VoiceCallHandler:
                     elapsed = now - self._buffer_start_time
                     
                     if self._auto_respond:
-                        # VAD mode: automatically detect when to process based on duration
-                        # Ready if: duration exceeded (voice activity detection)
                         if elapsed >= SEGMENT_DURATION_SECONDS:
                             segment_ready = True
-                    # When auto_respond is False, we only process on:
-                    # - "stop" event (call ending)
-                    # - "mark" event with specific trigger (manual mode)
                     
                     # Process segment if ready
                     if segment_ready and elapsed >= MIN_SEGMENT_DURATION_SECONDS:
@@ -433,7 +481,7 @@ class VoiceCallHandler:
                 
                 elif event_type == "stop":
                     # Process any remaining buffer before stopping
-                    if self._audio_buffer and self._buffer_start_time:
+                    if self._upstream_ready.is_set() and self._audio_buffer and self._buffer_start_time:
                         elapsed = time.time() - self._buffer_start_time
                         if elapsed >= MIN_SEGMENT_DURATION_SECONDS:
                             await self._process_segment()
@@ -443,13 +491,11 @@ class VoiceCallHandler:
                     break
                 
                 elif event_type == "mark":
-                    # Playback marker - can be used for interrupt handling or manual trigger
                     mark_name = data.get("mark", {}).get("name", "")
                     logger.debug(f"Mark received: {mark_name}")
                     
-                    # In manual mode (auto_respond=False), a specific mark can trigger processing
                     if not self._auto_respond and mark_name == "process_segment":
-                        if self._audio_buffer and self._buffer_start_time:
+                        if self._upstream_ready.is_set() and self._audio_buffer and self._buffer_start_time:
                             elapsed = time.time() - self._buffer_start_time
                             if elapsed >= MIN_SEGMENT_DURATION_SECONDS:
                                 await self._process_segment()
@@ -721,6 +767,13 @@ class VoiceCallHandler:
         """
         self.is_running = False
         
+        # Log WebSocket close reason if available
+        try:
+            ws_state = self.websocket.client_state
+            logger.info(f"[WS-CLOSE] call={self.call_sid} ws_state={ws_state}")
+        except Exception:
+            pass
+        
         # Get transcript from PersonaPlex and close session
         transcript = await personaplex_service.end_session(self.session_id)
         
@@ -789,12 +842,16 @@ async def voice_websocket_handler(
     """
     Main WebSocket handler for Twilio Media Streams.
     
-    This is called when Twilio connects after answering a call.
-    The first message contains call metadata (CallSid, phone numbers, etc.)
+    CRITICAL: accept() must happen immediately so Twilio gets HTTP 101.
+    All heavy work (session init, upstream connect) happens AFTER accept.
     """
-    await websocket.accept()
+    t_enter = time.time()
     
-    logger.info("Twilio Media Stream connected")
+    await websocket.accept()
+    t_accept = time.time()
+    logger.info(
+        f"[WS] accept() done in {int((t_accept - t_enter)*1000)}ms"
+    )
     
     # Variables to store call info
     call_sid = None
@@ -812,10 +869,14 @@ async def voice_websocket_handler(
             event_type = data.get("event")
             
             if event_type == "connected":
-                logger.info("Media stream connected, waiting for start...")
+                t_connected = time.time()
+                logger.info(
+                    f"[WS] Twilio 'connected' event at +{int((t_connected - t_accept)*1000)}ms"
+                )
                 continue
             
             elif event_type == "start":
+                t_start = time.time()
                 # Extract call metadata
                 start_data = data.get("start", {})
                 call_sid = start_data.get("callSid")
@@ -827,8 +888,8 @@ async def voice_websocket_handler(
                 from_number = custom_params.get("from") or start_data.get("from")
                 
                 logger.info(
-                    f"Media stream started - CallSid: {call_sid}, "
-                    f"From: {from_number}, To: {to_number}"
+                    f"[WS] Twilio 'start' at +{int((t_start - t_accept)*1000)}ms "
+                    f"CallSid={call_sid} From={from_number} To={to_number}"
                 )
                 
                 # Create and initialize handler
@@ -852,7 +913,12 @@ async def voice_websocket_handler(
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected for call {call_sid}")
     except Exception as e:
-        logger.error(f"Error in voice WebSocket handler: {e}")
+        logger.error(f"Error in voice WebSocket handler: {e}", exc_info=True)
     finally:
         if handler:
             await handler.cleanup()
+        t_end = time.time()
+        logger.info(
+            f"[WS] handler finished for call {call_sid}, "
+            f"total={int((t_end - t_enter)*1000)}ms"
+        )

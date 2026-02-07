@@ -419,12 +419,43 @@ def verify_token(authorization: Optional[str] = Header(None)) -> bool:
 # Lifespan for model loading
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Load models on startup."""
+    """Load models on startup and pre-warm GPU."""
     load_models()
+    
+    # Pre-warm step_system_prompts with a dummy persona so that CUDA graphs /
+    # kernel caches are hot. This reduces the FIRST session init from ~3 min
+    # to ~30-60s. Runs in thread executor so the event loop isn't blocked.
+    try:
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, _prewarm_session)
+        logger.info("Pod startup pre-warm completed")
+    except Exception as e:
+        logger.warning(f"Pod startup pre-warm failed (non-fatal): {e}")
+    
     yield
     # Cleanup on shutdown
     logger.info("Shutting down, cleaning up sessions...")
     sessions.clear()
+
+
+def _prewarm_session():
+    """Run a dummy step_system_prompts to warm CUDA caches."""
+    global mimi, lm_gen, text_tokenizer
+    if mimi is None:
+        return
+    
+    with _init_lock:
+        logger.info("Pre-warming step_system_prompts on startup...")
+        mimi.reset_streaming()
+        lm_gen.reset_streaming()
+        
+        dummy_prompt = "Je bent een klantenservice medewerker."
+        lm_gen.text_prompt_tokens = text_tokenizer.encode(
+            wrap_with_system_tags(dummy_prompt)
+        )
+        lm_gen.step_system_prompts(mimi)
+        mimi.reset_streaming()
+        logger.info("Pre-warm step_system_prompts done")
 
 
 # Create FastAPI app

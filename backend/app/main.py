@@ -1,6 +1,9 @@
 """
 klantenservice.ai - Main FastAPI Application
 """
+import logging
+import sys
+
 from fastapi import FastAPI, WebSocket, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -11,14 +14,28 @@ from app.core.database import get_db
 from app.api.v1.router import api_router
 from app.websockets.voice_handler import voice_websocket_handler
 
-# Configure structured logging
+# ── Logging ──────────────────────────────────────────────────────────
+# Ensure the root logger has a StreamHandler to stdout so that ALL
+# application loggers (personaplex_service, voice_handler, etc.) have
+# their output captured by Render / Docker / systemd.
+_root = logging.getLogger()
+if not any(isinstance(h, logging.StreamHandler) for h in _root.handlers):
+    _handler = logging.StreamHandler(sys.stdout)
+    _handler.setFormatter(logging.Formatter(
+        "%(asctime)s %(levelname)s [%(name)s] %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    ))
+    _root.addHandler(_handler)
+_root.setLevel(logging.INFO)
+
+# Configure structured logging (used by main.py only)
 structlog.configure(
     processors=[
         structlog.stdlib.filter_by_level,
         structlog.stdlib.add_logger_name,
         structlog.stdlib.add_log_level,
         structlog.processors.TimeStamper(fmt="iso"),
-        structlog.processors.JSONRenderer()
+        structlog.dev.ConsoleRenderer()
     ],
     wrapper_class=structlog.stdlib.BoundLogger,
     context_class=dict,
