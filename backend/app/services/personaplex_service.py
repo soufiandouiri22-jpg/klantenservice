@@ -533,6 +533,29 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
         finally:
             self._warming_in_progress.discard(worker_id)
     
+    async def _mark_session_unhealthy(self, session: ConversationSession, session_id: str):
+        """
+        Mark a session as unhealthy after a timeout or connection error.
+        Closes the WS, removes from active/warm pools, and logs clearly.
+        """
+        logger.warning(
+            "[SESSION_UNHEALTHY] session=%s worker=%s — closing WS and removing from pools",
+            session_id, session.worker_id
+        )
+        session.is_active = False
+        
+        # Close the WS connection (best-effort)
+        if session.websocket:
+            try:
+                await session.websocket.close()
+            except Exception:
+                pass
+            session.websocket = None
+        
+        # Remove from active and warm pools
+        self.active_sessions.pop(session_id, None)
+        self._warm_sessions.pop(session.worker_id, None)
+    
     async def is_session_alive(self, session: ConversationSession) -> bool:
         """
         Check if a pre-warmed session's WebSocket is still alive.
@@ -806,6 +829,8 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
             logger.error(f"No WebSocket connection for session {session_id}")
             return None, "", turn_id
         
+        POD_RECV_TIMEOUT = 45.0  # seconds per recv (transcript + audio)
+        
         try:
             async with session._lock:
                 # Send audio segment bytes
@@ -817,7 +842,7 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
                 
                 # First: receive JSON (transcript_final)
                 try:
-                    response = await asyncio.wait_for(ws.recv(), timeout=30.0)
+                    response = await asyncio.wait_for(ws.recv(), timeout=POD_RECV_TIMEOUT)
                     
                     if isinstance(response, str):
                         data = json.loads(response)
@@ -841,13 +866,20 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
                         audio_response = response
                 
                 except asyncio.TimeoutError:
-                    logger.warning(f"Timeout waiting for transcript_final")
+                    logger.error(
+                        "[POD_TIMEOUT] Timeout waiting for transcript_final "
+                        "session=%s turn=%d timeout=%.0fs ws_open=%s",
+                        session_id, turn_id, POD_RECV_TIMEOUT,
+                        ws.open if hasattr(ws, 'open') else 'unknown'
+                    )
+                    # Mark session as unhealthy — close WS and remove from active
+                    await self._mark_session_unhealthy(session, session_id)
                     return None, "", turn_id
                 
                 # Second: receive audio bytes (if not already received)
                 if audio_response is None:
                     try:
-                        response = await asyncio.wait_for(ws.recv(), timeout=30.0)
+                        response = await asyncio.wait_for(ws.recv(), timeout=POD_RECV_TIMEOUT)
                         
                         if isinstance(response, bytes):
                             audio_response = response
@@ -859,24 +891,18 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
                                 logger.error(f"Pod error during audio recv: {data['error']}")
                     
                     except asyncio.TimeoutError:
-                        logger.warning(f"Timeout waiting for audio response")
+                        logger.error(
+                            "[POD_TIMEOUT] Timeout waiting for audio response "
+                            "session=%s turn=%d timeout=%.0fs",
+                            session_id, turn_id, POD_RECV_TIMEOUT
+                        )
+                        await self._mark_session_unhealthy(session, session_id)
                 
                 return audio_response, assistant_text, received_turn_id
                     
         except websockets.exceptions.ConnectionClosed as e:
             logger.warning(f"WebSocket closed for session {session_id}: {e}")
-            session.websocket = None
-            # Try to reconnect
-            try:
-                ws = await self._connect_websocket(session_id)
-                session.websocket = ws
-                # Re-init session
-                await ws.send(json.dumps({
-                    "persona_prompt": session.persona_prompt
-                }))
-                logger.info(f"Reconnected WebSocket for session {session_id}")
-            except Exception as reconnect_error:
-                logger.error(f"Failed to reconnect: {reconnect_error}")
+            await self._mark_session_unhealthy(session, session_id)
             return None, "", turn_id
         except Exception as e:
             logger.error(f"Error processing audio segment for session {session_id}: {e}")

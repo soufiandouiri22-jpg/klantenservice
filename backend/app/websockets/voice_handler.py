@@ -131,6 +131,11 @@ class VoiceCallHandler:
         self._metrics_warm_pool_available: int = 0
         self._metrics_warm_claim_latency_ms: int = 0
         self._metrics_fallback_used: bool = False
+        
+        # Media frame counters (for diagnosing "no audio" issues)
+        self._inbound_media_frames: int = 0   # Twilio -> us
+        self._outbound_media_frames: int = 0  # us -> Twilio
+        self._pod_timeouts: int = 0           # process_audio_segment timeouts
     
     async def initialize_from_phone_number(self, to_number: str, from_number: str):
         """
@@ -512,6 +517,8 @@ class VoiceCallHandler:
                 event_type = data.get("event")
                 
                 if event_type == "media":
+                    self._inbound_media_frames += 1
+                    
                     # Drop audio if upstream not ready yet (WS stays open)
                     if not self._upstream_ready.is_set():
                         continue
@@ -615,6 +622,14 @@ class VoiceCallHandler:
                 turn_id
             )
             pod_latency_ms = int((time.time() - pod_start) * 1000)
+            
+            if response_audio is None:
+                self._pod_timeouts += 1
+                logger.warning(
+                    "[POD_NO_RESPONSE] call=%s turn=%d pod_latency_ms=%d "
+                    "pod_timeouts_total=%d — no audio returned from pod",
+                    self.call_sid, turn_id, pod_latency_ms, self._pod_timeouts
+                )
             
             # Store assistant transcript
             if assistant_text:
@@ -817,6 +832,7 @@ class VoiceCallHandler:
                 }
                 
                 await self.websocket.send_text(json.dumps(media_message))
+                self._outbound_media_frames += 1
                 
             except WebSocketDisconnect:
                 self.is_running = False
@@ -896,12 +912,34 @@ class VoiceCallHandler:
         
         # ── Per-call metrics ─────────────────────────────────────
         logger.info(
-            "[METRICS] call=%s warm_pool_available=%d warm_claim_latency_ms=%d fallback_used=%s",
+            "[METRICS] call=%s warm_pool_available=%d warm_claim_latency_ms=%d "
+            "fallback_used=%s inbound_frames=%d outbound_frames=%d pod_timeouts=%d",
             self.call_sid,
             self._metrics_warm_pool_available,
             self._metrics_warm_claim_latency_ms,
             self._metrics_fallback_used,
+            self._inbound_media_frames,
+            self._outbound_media_frames,
+            self._pod_timeouts,
         )
+        
+        # Explicit diagnostic if no audio was ever sent to the caller
+        if self._outbound_media_frames == 0:
+            reason = "unknown"
+            if self._pod_timeouts > 0:
+                reason = "pod_timeout"
+            elif not self._upstream_ready.is_set():
+                reason = "upstream_never_ready"
+            elif self._inbound_media_frames == 0:
+                reason = "no_inbound_audio"
+            else:
+                reason = "no_tts_response"
+            logger.error(
+                "[NO_AUDIO_SENT_TO_TWILIO] call=%s reason=%s "
+                "inbound_frames=%d pod_timeouts=%d",
+                self.call_sid, reason,
+                self._inbound_media_frames, self._pod_timeouts,
+            )
         
         # Now that the call is done and the pod's models are free,
         # pre-warm a new session for the next incoming call.
