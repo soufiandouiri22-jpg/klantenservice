@@ -644,15 +644,16 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
                     from app.models.ai_worker import AIWorker, AIWorkerStatus
                     from app.models.company import Company
                     
-                    workers = db.query(AIWorker).filter(
+                    workers = db.query(AIWorker).join(Company, AIWorker.company_id == Company.id).filter(
                         AIWorker.is_active == True,
-                        AIWorker.status == AIWorkerStatus.AVAILABLE
+                        AIWorker.status == AIWorkerStatus.AVAILABLE,
+                        Company.is_kill_switched == False,
                     ).all()
                     
                     pool_target = settings.WARM_POOL_SIZE
                     
                     if not workers:
-                        logger.info("[KEEPALIVE] iter=%d No available workers found", iteration)
+                        logger.info("[KEEPALIVE] iter=%d No available workers found (or all kill-switched)", iteration)
                         all_warm = False
                     
                     warmed_count = 0
@@ -735,9 +736,10 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
             
             pool_target = settings.WARM_POOL_SIZE
             
-            workers = db.query(AIWorker).filter(
+            workers = db.query(AIWorker).join(Company, AIWorker.company_id == Company.id).filter(
                 AIWorker.is_active == True,
-                AIWorker.status == AIWorkerStatus.AVAILABLE
+                AIWorker.status == AIWorkerStatus.AVAILABLE,
+                Company.is_kill_switched == False,
             ).all()
             
             warmed_count = 0

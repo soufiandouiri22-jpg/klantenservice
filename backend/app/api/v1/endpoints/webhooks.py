@@ -10,8 +10,12 @@ from uuid import UUID, uuid4
 import hmac
 import hashlib
 
+import logging
+
 from app.core.database import get_db
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 from app.models.company import Company
 from app.models.call_log import CallLog, CallStatus
 from app.models.ai_worker import AIWorker, AIWorkerStatus
@@ -62,6 +66,16 @@ async def twilio_voice_webhook(
         return Response(content=twiml, media_type="text/xml")
     
     company = db.query(Company).filter(Company.id == phone.company_id).first()
+    
+    # Check kill switch - immediately reject calls for kill-switched companies
+    if company and company.is_kill_switched:
+        logger.warning(f"Call rejected: kill switch active for {company.name} (call_sid={call_sid})")
+        twiml = """<?xml version="1.0" encoding="UTF-8"?>
+        <Response>
+            <Say language="nl-NL">Dit nummer is momenteel niet bereikbaar. Probeert u het later nog eens.</Say>
+            <Hangup/>
+        </Response>"""
+        return Response(content=twiml, media_type="text/xml")
     
     # Check if within business hours
     if not phone.is_within_business_hours():

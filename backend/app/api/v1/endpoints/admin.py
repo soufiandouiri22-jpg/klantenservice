@@ -18,6 +18,7 @@ from app.api.deps import get_db, get_current_user
 from app.core.config import get_settings
 from app.models.user import User
 from app.models.company import Company
+from app.models.ai_worker import AIWorker, AIWorkerStatus
 from app.models.call_log import CallLog, CallStatus, CallTranscript
 from app.models.training import ExampleAnswer
 from app.models.system_prompt import SystemPrompt, DEFAULT_SYSTEM_PROMPTS
@@ -920,15 +921,53 @@ async def toggle_kill_switch(
         raise HTTPException(status_code=404, detail="Klant niet gevonden")
     
     company.is_kill_switched = data.enabled
+    
+    # Set all AI workers for this company to OFFLINE (or back to AVAILABLE)
+    workers = db.query(AIWorker).filter(AIWorker.company_id == company.id).all()
+    worker_count = 0
+    for worker in workers:
+        if data.enabled:
+            # Kill switch ON: set all workers to OFFLINE
+            if worker.status != AIWorkerStatus.OFFLINE:
+                worker.status = AIWorkerStatus.OFFLINE
+                worker.is_active = False
+                worker_count += 1
+        else:
+            # Kill switch OFF: restore workers to AVAILABLE
+            if worker.status == AIWorkerStatus.OFFLINE:
+                worker.status = AIWorkerStatus.AVAILABLE
+                worker.is_active = True
+                worker_count += 1
+    
     db.commit()
     
+    # If kill switch is enabled, also tear down any warm sessions for these workers
+    if data.enabled:
+        try:
+            from app.services.personaplex_service import personaplex_service
+            for worker in workers:
+                worker_id = str(worker.id)
+                session = personaplex_service._warm_sessions.pop(worker_id, None)
+                if session:
+                    try:
+                        await personaplex_service.end_session(session.session_id)
+                    except Exception:
+                        pass
+                    logger.info(f"Killed warm session for worker {worker.name} ({worker_id[:8]})")
+        except Exception as e:
+            logger.error(f"Error cleaning up warm sessions during kill switch: {e}")
+    
     action = "ingeschakeld" if data.enabled else "uitgeschakeld"
-    logger.warning(f"Kill switch {action} voor {company.name} door {current_user.email}. Reden: {data.reason}")
+    logger.warning(
+        f"Kill switch {action} voor {company.name} door {current_user.email}. "
+        f"Reden: {data.reason}. {worker_count} workers bijgewerkt."
+    )
     
     return {
         "status": "updated",
         "customer_id": str(customer_id),
         "is_kill_switched": data.enabled,
+        "workers_affected": worker_count,
     }
 
 

@@ -174,6 +174,11 @@ class VoiceCallHandler:
             logger.error(f"Company not found for AI worker {self.ai_worker.id}")
             raise ValueError("Company not found")
         
+        # Check kill switch
+        if self.company.is_kill_switched:
+            logger.warning(f"Call rejected in WS handler: kill switch active for {self.company.name}")
+            raise ValueError("Company is kill-switched")
+        
         # Look up existing call log (created by webhook) or create new one
         self.call_log = self.db.query(CallLog).filter(
             CallLog.twilio_call_sid == self.call_sid
