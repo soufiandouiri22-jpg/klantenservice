@@ -52,8 +52,8 @@ import time as _time
 _init_lock = threading.Lock()
 _init_lock_holder: Optional[str] = None       # session_id holding the lock
 _init_lock_acquired_at: Optional[float] = None  # time.time() when lock was acquired
-_INIT_LOCK_TIMEOUT = 120  # seconds: max wait to acquire the lock
-_INIT_GPU_TIMEOUT = 180   # seconds: max time step_system_prompts may take
+_INIT_LOCK_TIMEOUT = 300  # seconds: max wait to acquire the lock (A40 can take 200+s)
+_INIT_GPU_TIMEOUT = 300   # seconds: max time step_system_prompts may take
 
 # Authentication token (set via environment)
 API_TOKEN = os.getenv("PERSONAPLEX_API_TOKEN", "")

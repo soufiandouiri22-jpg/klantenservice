@@ -392,8 +392,8 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
             
             # Wait for "initialized" confirmation, ignoring "initializing" progress pings
             # The pod sends keepalive pings every 10s during step_system_prompts
-            # Normal init takes 30-60s; 90s is generous but catches stuck pods much faster than 300s
-            deadline = asyncio.get_event_loop().time() + 90
+            # On A40, step_system_prompts can take 200+ seconds with large prompts
+            deadline = asyncio.get_event_loop().time() + 300
             while True:
                 remaining = deadline - asyncio.get_event_loop().time()
                 if remaining <= 0:
