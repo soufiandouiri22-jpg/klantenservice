@@ -128,8 +128,10 @@ class MoshiSession:
             mimi.reset_streaming()
         
         # Convert bytes to tensor - shape must be (1, T) for _iterate_audio
+        # Keep on CPU: _iterate_audio uses numpy ops internally;
+        # encode_from_sphn handles the CPU→GPU transfer.
         audio_np = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
-        user_audio = torch.from_numpy(audio_np).unsqueeze(0).to(device)
+        user_audio = torch.from_numpy(audio_np).unsqueeze(0)
         
         generated_frames = []
         generated_text = []
@@ -579,7 +581,9 @@ async def get_voice_sample(voice_id: str):
             silence_samples = int(silence_duration * sample_rate)
             
             # Very quiet noise (not complete silence, to trigger response)
-            silence_audio = torch.randn(1, silence_samples, device=device) * 0.001
+            # Keep on CPU: _iterate_audio uses numpy ops internally;
+            # encode_from_sphn handles the CPU→GPU transfer.
+            silence_audio = torch.randn(1, silence_samples) * 0.001
             
             generated_frames = []
             
@@ -775,6 +779,12 @@ async def audio_stream(websocket: WebSocket, session_id: str):
                         persona_prompt = data["persona_prompt"]
                         voice_prompt = data.get("voice_prompt", "NATF2.pt")
                         
+                        # Send immediate ping so connection has traffic from the start (no idle gap)
+                        await websocket.send_json({
+                            "status": "initializing",
+                            "session_id": session_id
+                        })
+                        
                         # Run init in background while sending keepalive pings
                         # This prevents Render's proxy from closing the idle WebSocket
                         loop = asyncio.get_event_loop()
@@ -785,7 +795,7 @@ async def audio_stream(websocket: WebSocket, session_id: str):
                         while True:
                             try:
                                 session = await asyncio.wait_for(
-                                    asyncio.shield(init_task), timeout=15.0
+                                    asyncio.shield(init_task), timeout=10.0
                                 )
                                 # Init completed
                                 break

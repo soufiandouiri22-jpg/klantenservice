@@ -265,8 +265,8 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
         
         ws = await websockets.connect(
             url,
-            ping_interval=None,  # Disable ping during init (GPU ops block event loop)
-            ping_timeout=None,
+            ping_interval=20,   # Send WebSocket protocol ping every 20s (keeps connection alive)
+            ping_timeout=20,    # Allow 20s for pong response (GPU init runs in thread, event loop is free)
             close_timeout=10,
             max_size=10 * 1024 * 1024,  # 10MB max message size
         )
