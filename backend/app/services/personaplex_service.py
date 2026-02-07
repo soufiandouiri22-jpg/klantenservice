@@ -411,10 +411,33 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
                     break
             
         except asyncio.TimeoutError:
-            logger.error(f"Session init timeout for {session_id}")
+            logger.error(f"Session init timeout for {session_id} (300s)")
+            # Clean up: close the orphaned WS and remove stale session
+            # so the next pre-warm attempt starts fresh.
+            # NOTE: the pod may still be running _init_session_sync in a
+            # background thread.  When it finishes, it stores the session
+            # in its sessions dict.  On the next backend attempt the pod
+            # will find the existing session and skip step_system_prompts.
+            if session.websocket:
+                try:
+                    await session.websocket.close()
+                except Exception:
+                    pass
+                session.websocket = None
+            session.is_active = False
+            self.active_sessions.pop(session_id, None)
             raise
         except Exception as e:
             logger.error(f"Failed to create session {session_id}: {e}", exc_info=True)
+            # Clean up on any failure
+            if session.websocket:
+                try:
+                    await session.websocket.close()
+                except Exception:
+                    pass
+                session.websocket = None
+            session.is_active = False
+            self.active_sessions.pop(session_id, None)
             raise
         
         return session

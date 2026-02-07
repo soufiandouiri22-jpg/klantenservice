@@ -329,9 +329,24 @@ def _init_session_sync(session_id: str, persona_prompt: str, voice_prompt: str =
     
     Uses _init_lock to serialize: the pod has one global model set,
     so concurrent inits would corrupt each other's streaming state.
+    
+    IMPORTANT: Checks if the session already exists BEFORE acquiring the
+    lock, and again AFTER acquiring it.  This prevents the race condition
+    where a backend reconnect triggers a redundant 245-second
+    step_system_prompts for a session that was already initialized by a
+    previous WebSocket connection.
     """
     global mimi, other_mimi, lm_gen, text_tokenizer
     global _init_lock_holder, _init_lock_acquired_at
+    
+    # ── Fast path: session already initialized ────────────────
+    existing = sessions.get(session_id)
+    if existing:
+        logger.info(
+            f"Session {session_id} already initialized (fast path — "
+            f"skipping step_system_prompts entirely)"
+        )
+        return existing
     
     from huggingface_hub import hf_hub_download
     import tarfile
@@ -366,6 +381,17 @@ def _init_session_sync(session_id: str, persona_prompt: str, voice_prompt: str =
     _init_lock_acquired_at = _time.time()
     
     try:
+        # ── Re-check after lock acquired ──────────────────────
+        # Another thread may have finished initializing this session
+        # while we were waiting for the lock.
+        existing = sessions.get(session_id)
+        if existing:
+            logger.info(
+                f"Session {session_id} initialized by another thread while "
+                f"we waited for the lock (fast path — skipping step_system_prompts)"
+            )
+            return existing
+        
         logger.info(f"Initializing session {session_id}")
         
         # Download voice prompts if needed
@@ -893,42 +919,60 @@ async def audio_stream(websocket: WebSocket, session_id: str):
                     data = json.loads(message["text"])
                     
                     if "persona_prompt" in data:
-                        # Initialize session via WebSocket
-                        persona_prompt = data["persona_prompt"]
-                        voice_prompt = data.get("voice_prompt", "NATF2.pt")
-                        
-                        # Send immediate ping so connection has traffic from the start (no idle gap)
-                        await websocket.send_json({
-                            "status": "initializing",
-                            "session_id": session_id
-                        })
-                        
-                        # Run init in background while sending keepalive pings
-                        # This prevents Render's proxy from closing the idle WebSocket
-                        loop = asyncio.get_event_loop()
-                        init_task = loop.run_in_executor(
-                            None, _init_session_sync, session_id, persona_prompt, voice_prompt
-                        )
-                        
-                        while True:
-                            try:
-                                session = await asyncio.wait_for(
-                                    asyncio.shield(init_task), timeout=10.0
-                                )
-                                # Init completed
-                                break
-                            except asyncio.TimeoutError:
-                                # Still initializing - send progress ping to keep connection alive
-                                await websocket.send_json({
-                                    "status": "initializing",
-                                    "session_id": session_id
-                                })
-                                logger.debug(f"Session {session_id} still initializing, sent keepalive")
-                        
-                        await websocket.send_json({
-                            "status": "initialized",
-                            "session_id": session_id
-                        })
+                        # ── Fast path: session already initialized ──────
+                        # This handles the race condition where:
+                        #   1. A previous WS connection already initialized this session
+                        #   2. The backend timed out and reconnected
+                        #   3. This new WS connection sends persona_prompt again
+                        # Without this check, the pod would run another 245s
+                        # step_system_prompts unnecessarily.
+                        if session_id in sessions:
+                            session = sessions[session_id]
+                            logger.info(
+                                f"Session {session_id} already initialized — "
+                                f"reusing existing session (skipping step_system_prompts)"
+                            )
+                            await websocket.send_json({
+                                "status": "initialized",
+                                "session_id": session_id
+                            })
+                        else:
+                            # Initialize session via WebSocket
+                            persona_prompt = data["persona_prompt"]
+                            voice_prompt = data.get("voice_prompt", "NATF2.pt")
+                            
+                            # Send immediate ping so connection has traffic from the start (no idle gap)
+                            await websocket.send_json({
+                                "status": "initializing",
+                                "session_id": session_id
+                            })
+                            
+                            # Run init in background while sending keepalive pings
+                            # This prevents Render's proxy from closing the idle WebSocket
+                            loop = asyncio.get_event_loop()
+                            init_task = loop.run_in_executor(
+                                None, _init_session_sync, session_id, persona_prompt, voice_prompt
+                            )
+                            
+                            while True:
+                                try:
+                                    session = await asyncio.wait_for(
+                                        asyncio.shield(init_task), timeout=10.0
+                                    )
+                                    # Init completed
+                                    break
+                                except asyncio.TimeoutError:
+                                    # Still initializing - send progress ping to keep connection alive
+                                    await websocket.send_json({
+                                        "status": "initializing",
+                                        "session_id": session_id
+                                    })
+                                    logger.debug(f"Session {session_id} still initializing, sent keepalive")
+                            
+                            await websocket.send_json({
+                                "status": "initialized",
+                                "session_id": session_id
+                            })
                     
                     elif data.get("action") == "start_turn":
                         # Start a new turn (must be called before sending audio segment)
