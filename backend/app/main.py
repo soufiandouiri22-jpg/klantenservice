@@ -2,10 +2,12 @@
 klantenservice.ai - Main FastAPI Application
 """
 import logging
+import os
 import sys
 
 from fastapi import FastAPI, WebSocket, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import structlog
 
@@ -49,7 +51,13 @@ logger = structlog.get_logger()
 async def lifespan(app: FastAPI):
     """Application lifespan events."""
     # Startup
-    logger.info("Starting klantenservice.ai API", version="1.0.0")
+    effective_port = os.environ.get("PORT", "8000")
+    logger.info(
+        "Starting klantenservice.ai API",
+        version="1.0.0",
+        port=effective_port,
+        env=settings.APP_ENV,
+    )
     
     # Initialize Sentry if configured
     if settings.SENTRY_DSN:
@@ -106,8 +114,30 @@ app.add_middleware(
 @app.get("/health")
 @app.get("/healthz")
 async def health_check():
-    """Health check endpoint for load balancers."""
+    """Health check endpoint for load balancers. Always fast, no dependencies."""
     return {"status": "healthy", "service": "klantenservice.ai"}
+
+
+@app.get("/ready")
+async def readiness_check():
+    """
+    Readiness check — returns 200 only when at least one warm session is available.
+    Use this for external monitoring; Render health check should use /health.
+    """
+    try:
+        from app.services.personaplex_service import personaplex_service
+        warm_count = len(personaplex_service._warm_sessions)
+        if warm_count >= 1:
+            return {"status": "ready", "warm_sessions": warm_count}
+        return JSONResponse(
+            status_code=503,
+            content={"status": "not_ready", "warm_sessions": warm_count},
+        )
+    except Exception:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "not_ready", "warm_sessions": 0},
+        )
 
 
 # Include API router
@@ -141,10 +171,12 @@ async def websocket_voice_endpoint(websocket: WebSocket):
 
 
 if __name__ == "__main__":
+    import os
     import uvicorn
+    port = int(os.environ.get("PORT", 8000))
     uvicorn.run(
         "app.main:app",
         host="0.0.0.0",
-        port=8000,
+        port=port,
         reload=settings.DEBUG,
     )
