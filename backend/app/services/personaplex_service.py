@@ -626,10 +626,13 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
                         AIWorker.status == AIWorkerStatus.AVAILABLE
                     ).all()
                     
+                    pool_target = settings.WARM_POOL_SIZE
+                    
                     if not workers:
                         logger.info("[KEEPALIVE] iter=%d No available workers found", iteration)
                         all_warm = False
                     
+                    warmed_count = 0
                     for worker in workers:
                         worker_id = str(worker.id)
                         
@@ -670,8 +673,14 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
                                     iteration, worker.name, worker_id[:8]
                                 )
                         
-                        # Only warm one worker at a time (pod handles one session)
-                        break
+                        warmed_count += 1
+                        if warmed_count >= pool_target:
+                            break
+                    
+                    logger.info(
+                        "[KEEPALIVE] iter=%d pool_target=%d pool_current=%d",
+                        iteration, pool_target, len(self._warm_sessions)
+                    )
                         
             except Exception as e:
                 logger.error("[KEEPALIVE] iter=%d ERROR: %s", iteration, e, exc_info=True)
@@ -693,7 +702,7 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
     
     async def pre_warm_available_workers(self, db):
         """
-        Pre-warm sessions for all available AI workers.
+        Pre-warm sessions for available AI workers up to WARM_POOL_SIZE.
         Called after each call ends for fast recovery.
         The keepalive loop handles periodic health checks.
         """
@@ -701,18 +710,23 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
             from app.models.ai_worker import AIWorker, AIWorkerStatus
             from app.models.company import Company
             
+            pool_target = settings.WARM_POOL_SIZE
+            
             workers = db.query(AIWorker).filter(
                 AIWorker.is_active == True,
                 AIWorker.status == AIWorkerStatus.AVAILABLE
             ).all()
             
+            warmed_count = 0
             for worker in workers:
                 worker_id = str(worker.id)
                 if worker_id not in self._warm_sessions and worker_id not in self._warming_in_progress:
                     company = db.query(Company).filter(Company.id == worker.company_id).first()
                     if company:
                         asyncio.create_task(self.pre_warm_session(worker, company, db))
-                        break
+                        warmed_count += 1
+                        if warmed_count >= pool_target:
+                            break
         except Exception as e:
             logger.error(f"Error pre-warming workers: {e}")
     

@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     # PersonaPlex Dedicated Pod
     PERSONAPLEX_POD_URL: str = ""  # URL of the dedicated GPU pod (e.g., https://pod-id.runpod.net)
     PERSONAPLEX_POD_TOKEN: str = ""  # Authentication token for the pod
+    WARM_POOL_SIZE: int = 1  # Max workers to keep pre-warmed (1 per pod; increase when adding pods)
     
     # RunPod (legacy - for serverless fallback)
     RUNPOD_API_KEY: str = ""

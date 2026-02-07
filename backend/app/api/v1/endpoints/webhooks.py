@@ -139,6 +139,7 @@ async def twilio_voice_webhook(
     
     twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
     <Response>
+        <Say language="nl-NL" voice="Polly.Lotte">Een moment geduld alstublieft.</Say>
         <Connect>
             <Stream url="{ws_url}">
                 <Parameter name="to" value="{to_number}"/>

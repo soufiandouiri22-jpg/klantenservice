@@ -53,6 +53,22 @@ SEGMENT_DURATION_SECONDS = 2.5  # Buffer audio for this long before processing
 SILENCE_THRESHOLD_SECONDS = 0.8  # Detect end of utterance after this silence
 MIN_SEGMENT_DURATION_SECONDS = 0.5  # Minimum segment to process
 
+# ── Fallback audio ─────────────────────────────────────────────────────
+# Try to load a pre-recorded mulaw clip (8kHz, 1 byte/sample).
+# If the file doesn't exist, fall back to 2 seconds of silence.
+import os as _os
+_FALLBACK_AUDIO_PATH = _os.path.join(
+    _os.path.dirname(__file__), "fallback_audio.raw"
+)
+try:
+    with open(_FALLBACK_AUDIO_PATH, "rb") as _f:
+        _FALLBACK_AUDIO_CLIP = _f.read()
+    logger.info("[FALLBACK] Loaded fallback_audio.raw (%d bytes)", len(_FALLBACK_AUDIO_CLIP))
+except FileNotFoundError:
+    # 2 seconds of mulaw silence at 8kHz
+    _FALLBACK_AUDIO_CLIP = b'\xff' * (8000 * 2)
+    logger.info("[FALLBACK] fallback_audio.raw not found, using 2s silence")
+
 
 class VoiceCallHandler:
     """
@@ -110,6 +126,11 @@ class VoiceCallHandler:
         
         # Auto-respond setting (from GlobalConfig, set in initialize)
         self._auto_respond: bool = True
+        
+        # Per-call metrics (logged in cleanup)
+        self._metrics_warm_pool_available: int = 0
+        self._metrics_warm_claim_latency_ms: int = 0
+        self._metrics_fallback_used: bool = False
     
     async def initialize_from_phone_number(self, to_number: str, from_number: str):
         """
@@ -329,9 +350,21 @@ class VoiceCallHandler:
             await self.cleanup()
 
     async def _ws_keepalive_while_preparing(self):
-        """Send silence to Twilio every 3s until upstream is ready."""
+        """
+        Send silence to Twilio every 3s until upstream is ready.
+        After 1500ms without a ready session, send a fallback audio clip
+        so the caller hears *something* while they wait.
+        """
+        FALLBACK_DELAY = 1.5  # seconds before sending fallback clip
+        fallback_sent = False
+        t0 = time.time()
         try:
             while not self._upstream_ready.is_set():
+                elapsed = time.time() - t0
+                if not fallback_sent and elapsed >= FALLBACK_DELAY:
+                    await self._send_fallback_audio()
+                    self._metrics_fallback_used = True
+                    fallback_sent = True
                 await self._send_twilio_silence(0.5)
                 await asyncio.sleep(3)
         except asyncio.CancelledError:
@@ -339,16 +372,39 @@ class VoiceCallHandler:
         except Exception:
             pass
 
+    async def _send_fallback_audio(self):
+        """Send the pre-loaded fallback mulaw clip to Twilio."""
+        media_message = {
+            "event": "media",
+            "streamSid": self.stream_sid,
+            "media": {
+                "payload": base64.b64encode(_FALLBACK_AUDIO_CLIP).decode("utf-8")
+            }
+        }
+        try:
+            await self.websocket.send_text(json.dumps(media_message))
+            logger.info("[FALLBACK] Sent fallback audio (%d bytes) for call %s",
+                        len(_FALLBACK_AUDIO_CLIP), self.call_sid)
+        except Exception as e:
+            logger.error("[FALLBACK] Failed to send fallback audio: %s", e)
+
     async def _prepare_upstream(self):
         """
         Prepare PersonaPlex session (background task).
         1. Try to claim a pre-warmed session (instant).
         2. Fall back to fresh init with full context.
+           NOTE: step_system_prompts runs ONLY during:
+             (a) pod startup pre-warm,
+             (b) keepalive loop re-warm,
+             (c) this fallback fresh init (unavoidable, caller hears fallback audio).
         3. Generate initial greeting.
         4. Signal _upstream_ready so normal audio flow starts.
         """
         t0 = time.time()
         worker_id = str(self.ai_worker.id)
+        
+        # Record pool snapshot before claim attempt
+        self._metrics_warm_pool_available = len(personaplex_service._warm_sessions)
         
         try:
             # ── 1. Try warm session ──────────────────────────────
@@ -356,6 +412,7 @@ class VoiceCallHandler:
                 worker_id, self.session_id
             )
             t_claim = time.time()
+            self._metrics_warm_claim_latency_ms = int((t_claim - t0) * 1000)
             
             if warm_session:
                 logger.info(
@@ -363,10 +420,11 @@ class VoiceCallHandler:
                     f"for worker {self.ai_worker.name}"
                 )
             else:
-                # ── 2. Fresh init ────────────────────────────────
-                logger.info(
+                # ── 2. Fresh init (step_system_prompts will run on the pod) ──
+                logger.warning(
                     f"[TIMING] No warm session, starting fresh init "
-                    f"for worker {self.ai_worker.name}"
+                    f"for worker {self.ai_worker.name} "
+                    f"(step_system_prompts will run - expect ~30-50s latency)"
                 )
                 
                 knowledge_context = await self.get_knowledge_context()
@@ -391,9 +449,15 @@ class VoiceCallHandler:
                     system_prompts=system_prompts
                 )
                 t_session = time.time()
+                fresh_init_ms = int((t_session - t_claim) * 1000)
                 logger.info(
-                    f"[TIMING] Fresh session created in {int((t_session - t_claim)*1000)}ms"
+                    f"[TIMING] Fresh session created in {fresh_init_ms}ms"
                 )
+                if fresh_init_ms > 50_000:
+                    logger.warning(
+                        f"[TIMING] Fresh init took {fresh_init_ms}ms — close to "
+                        f"Twilio 60s WS timeout. Pre-warming should prevent this."
+                    )
             
             # ── 3. Generate initial greeting ─────────────────────
             t_greet0 = time.time()
@@ -829,6 +893,15 @@ class VoiceCallHandler:
             self.db.commit()
         
         logger.info(f"Call {self.call_sid} cleaned up successfully")
+        
+        # ── Per-call metrics ─────────────────────────────────────
+        logger.info(
+            "[METRICS] call=%s warm_pool_available=%d warm_claim_latency_ms=%d fallback_used=%s",
+            self.call_sid,
+            self._metrics_warm_pool_available,
+            self._metrics_warm_claim_latency_ms,
+            self._metrics_fallback_used,
+        )
         
         # Now that the call is done and the pod's models are free,
         # pre-warm a new session for the next incoming call.
