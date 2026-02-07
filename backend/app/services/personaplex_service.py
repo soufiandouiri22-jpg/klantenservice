@@ -591,16 +591,18 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
         """
         Periodic background task that ensures warm sessions are always available.
         
-        Runs every 2 minutes:
-        - Checks all available workers
-        - Pings existing warm sessions to verify they're alive
-        - Re-warms dead or missing sessions
+        - When all workers have a live warm session: check every 2 minutes
+        - When pre-warming fails or no warm session exists: retry every 10 seconds
         
-        Uses an async lock to ensure only one re-warm runs at a time.
+        This fast-retry ensures that after a deploy (pod or backend), the warm
+        session is established as quickly as possible instead of waiting 2 minutes.
         """
         from app.core.database import SessionLocal
         
         rewarm_lock = asyncio.Lock()
+        
+        INTERVAL_OK = 120       # 2 minutes when everything is warm
+        INTERVAL_RETRY = 10     # 10 seconds when we need to (re)warm
         
         # Wait for app to fully start
         await asyncio.sleep(5)
@@ -608,6 +610,7 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
         logger.info("Warm keepalive loop started")
         
         while True:
+            all_warm = True  # Assume success; set False if any worker needs warming
             db = SessionLocal()
             try:
                 async with rewarm_lock:
@@ -632,6 +635,7 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
                                 logger.info(f"Warm session alive for worker {worker.name} ({worker_id})")
                             else:
                                 logger.warning(f"Warm session dead for worker {worker.name} ({worker_id}) -> rewarm")
+                                all_warm = False
                                 # Discard dead session
                                 self._warm_sessions.pop(worker_id, None)
                                 self.active_sessions.pop(session.session_id, None)
@@ -642,6 +646,7 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
                                     await self.pre_warm_session(worker, company, db)
                         else:
                             # No warm session at all, create one
+                            all_warm = False
                             if worker_id not in self._warming_in_progress:
                                 company = db.query(Company).filter(Company.id == worker.company_id).first()
                                 if company:
@@ -653,11 +658,21 @@ Je bent {worker.name}, een {worker.role_title} bij {company_name}.
                         
             except Exception as e:
                 logger.error(f"Error in warm keepalive loop: {e}")
+                all_warm = False
             finally:
                 db.close()
             
-            # Wait 2 minutes before next check
-            await asyncio.sleep(120)
+            # Check if pre-warming actually succeeded (session might have failed inside pre_warm_session)
+            if all_warm:
+                # Double-check: do we actually have warm sessions?
+                has_any_warm = len(self._warm_sessions) > 0
+                if not has_any_warm:
+                    all_warm = False
+            
+            interval = INTERVAL_OK if all_warm else INTERVAL_RETRY
+            if not all_warm:
+                logger.info(f"Warm session not ready, retrying in {INTERVAL_RETRY}s")
+            await asyncio.sleep(interval)
     
     async def pre_warm_available_workers(self, db):
         """
