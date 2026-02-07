@@ -46,6 +46,10 @@ sessions: Dict[str, "MoshiSession"] = {}
 # Global lock: one process_audio at a time (prompt state is global in lm_gen)
 _process_audio_lock = asyncio.Lock()
 
+# Threading lock: serializes session init (runs in thread executor, shares global models)
+import threading
+_init_lock = threading.Lock()
+
 # Authentication token (set via environment)
 API_TOKEN = os.getenv("PERSONAPLEX_API_TOKEN", "")
 
@@ -317,58 +321,63 @@ def _init_session_sync(session_id: str, persona_prompt: str, voice_prompt: str =
     
     This contains all blocking GPU operations that would otherwise
     block the event loop and prevent WebSocket ping/pong handling.
+    
+    Uses _init_lock to serialize: the pod has one global model set,
+    so concurrent inits would corrupt each other's streaming state.
     """
     global mimi, other_mimi, lm_gen, text_tokenizer
     
     from huggingface_hub import hf_hub_download
     import tarfile
     
-    logger.info(f"Initializing session {session_id}")
-    
-    # Download voice prompts if needed
-    hf_repo = "nvidia/personaplex-7b-v1"
-    voices_tgz = hf_hub_download(hf_repo, "voices.tgz")
-    voices_tgz = Path(voices_tgz)
-    voices_dir = voices_tgz.parent / "voices"
-    
-    if not voices_dir.exists():
-        logger.info("Extracting voice prompts...")
-        with tarfile.open(voices_tgz, "r:gz") as tar:
-            tar.extractall(path=voices_tgz.parent)
-    
-    # Ensure voice prompt has .pt extension
-    if not voice_prompt.endswith('.pt'):
-        voice_prompt = voice_prompt + '.pt'
-    
-    voice_prompt_path = str(voices_dir / voice_prompt)
-    
-    # Reset streaming state
-    mimi.reset_streaming()
-    other_mimi.reset_streaming()
-    lm_gen.reset_streaming()
-    
-    # Load voice prompt
-    if voice_prompt_path.endswith('.pt'):
-        lm_gen.load_voice_prompt_embeddings(voice_prompt_path)
-    else:
-        lm_gen.load_voice_prompt(voice_prompt_path)
-    
-    # Set text prompt
-    if persona_prompt:
-        lm_gen.text_prompt_tokens = text_tokenizer.encode(wrap_with_system_tags(persona_prompt))
-    else:
-        lm_gen.text_prompt_tokens = None
-    
-    # Run system prompts phase (heavy GPU operation)
-    lm_gen.step_system_prompts(mimi)
-    mimi.reset_streaming()
-    
-    # Create and store session
-    session = MoshiSession(session_id, persona_prompt, voice_prompt)
-    sessions[session_id] = session
-    
-    logger.info(f"Session {session_id} initialized")
-    return session
+    logger.info(f"Waiting for init lock for session {session_id}")
+    with _init_lock:
+        logger.info(f"Initializing session {session_id}")
+        
+        # Download voice prompts if needed
+        hf_repo = "nvidia/personaplex-7b-v1"
+        voices_tgz = hf_hub_download(hf_repo, "voices.tgz")
+        voices_tgz = Path(voices_tgz)
+        voices_dir = voices_tgz.parent / "voices"
+        
+        if not voices_dir.exists():
+            logger.info("Extracting voice prompts...")
+            with tarfile.open(voices_tgz, "r:gz") as tar:
+                tar.extractall(path=voices_tgz.parent)
+        
+        # Ensure voice prompt has .pt extension
+        if not voice_prompt.endswith('.pt'):
+            voice_prompt = voice_prompt + '.pt'
+        
+        voice_prompt_path = str(voices_dir / voice_prompt)
+        
+        # Reset streaming state
+        mimi.reset_streaming()
+        other_mimi.reset_streaming()
+        lm_gen.reset_streaming()
+        
+        # Load voice prompt
+        if voice_prompt_path.endswith('.pt'):
+            lm_gen.load_voice_prompt_embeddings(voice_prompt_path)
+        else:
+            lm_gen.load_voice_prompt(voice_prompt_path)
+        
+        # Set text prompt
+        if persona_prompt:
+            lm_gen.text_prompt_tokens = text_tokenizer.encode(wrap_with_system_tags(persona_prompt))
+        else:
+            lm_gen.text_prompt_tokens = None
+        
+        # Run system prompts phase (heavy GPU operation)
+        lm_gen.step_system_prompts(mimi)
+        mimi.reset_streaming()
+        
+        # Create and store session
+        session = MoshiSession(session_id, persona_prompt, voice_prompt)
+        sessions[session_id] = session
+        
+        logger.info(f"Session {session_id} initialized")
+        return session
 
 
 async def init_session(session_id: str, persona_prompt: str, voice_prompt: str = "NATF2.pt") -> MoshiSession:
