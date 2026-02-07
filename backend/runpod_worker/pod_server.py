@@ -124,16 +124,25 @@ class MoshiSession:
         from moshi.models.lm import _iterate_audio as lm_iterate_audio
         from moshi.models.lm import encode_from_sphn as lm_encode_from_sphn
         
-        # On first turn after init, skip step_system_prompts (already done during init)
-        # This makes the initial greeting response fast (~2-3s instead of 30-60s)
+        # step_system_prompts is ONLY called during session init.
+        # It takes ~245s on A40 — calling it here would make every turn
+        # unusable for real-time conversation.
+        #
+        # The model maintains its streaming state across turns:
+        # - Turn 0 (greeting): uses the init prompts directly (fast path)
+        # - Turn 1+: model continues from its current state; we only
+        #   reset the audio codec between segments for clean boundaries.
         if self._init_prompts_active:
-            logger.info(f"Session {self.session_id}: using init prompts (fast path)")
+            logger.info(f"Session {self.session_id}: turn 0 — using init prompts")
             self._init_prompts_active = False
         else:
-            # Apply this session's prompt + context (safe boundary: start of utterance segment)
-            effective_prompt = self._get_effective_prompt()
-            lm_gen.text_prompt_tokens = text_tokenizer.encode(wrap_with_system_tags(effective_prompt))
-            lm_gen.step_system_prompts(mimi)
+            # Reset audio codec state between utterance segments so
+            # encoder/decoder buffers start clean.  The language model
+            # (lm_gen) keeps its full conversation history.
+            logger.info(
+                f"Session {self.session_id}: turn {self.current_turn} — "
+                f"continuing conversation (codec reset only)"
+            )
             mimi.reset_streaming()
         
         # Convert bytes to tensor - shape must be (1, T) for _iterate_audio
@@ -893,7 +902,7 @@ async def audio_stream(websocket: WebSocket, session_id: str):
                     })
                     continue
                 
-                # Process audio (step_system_prompts + reset happens here, once per segment)
+                # Process audio (model maintains streaming state across turns)
                 try:
                     response_audio, assistant_text = await session.process_audio(audio_bytes)
                     
@@ -909,9 +918,17 @@ async def audio_stream(websocket: WebSocket, session_id: str):
                     if response_audio:
                         await websocket.send_bytes(response_audio)
                         
+                except (WebSocketDisconnect, RuntimeError) as e:
+                    # Backend closed the connection (e.g. timeout) — stop
+                    logger.warning(f"WS closed during audio processing for {session_id}: {e}")
+                    break
                 except Exception as e:
-                    logger.error(f"Error processing audio: {e}")
-                    await websocket.send_json({"error": str(e), "turn_id": session.current_turn if session else 0})
+                    logger.error(f"Error processing audio for {session_id}: {e}")
+                    try:
+                        await websocket.send_json({"error": str(e), "turn_id": session.current_turn if session else 0})
+                    except Exception:
+                        # WS already dead — nothing we can do
+                        break
             
             elif "text" in message:
                 # JSON command
