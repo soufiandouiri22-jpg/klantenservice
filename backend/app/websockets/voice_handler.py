@@ -365,8 +365,10 @@ class VoiceCallHandler:
             logger.error(f"Failed to generate initial greeting: {e}", exc_info=True)
             # Continue anyway - call will still work when user speaks
         
-        # Trigger pre-warming of a new session for next call (background)
-        asyncio.create_task(personaplex_service.pre_warm_available_workers(self.db))
+        # NOTE: Do NOT pre-warm here. The pod has one global model set, so
+        # initializing a new session while this call is active would corrupt
+        # the model state (reset_streaming mid-inference). Re-warm happens
+        # in cleanup() after the call ends and the session is released.
         
         # Start tasks for receiving and sending audio
         receive_task = asyncio.create_task(self._receive_audio_loop())
@@ -774,6 +776,10 @@ class VoiceCallHandler:
             self.db.commit()
         
         logger.info(f"Call {self.call_sid} cleaned up successfully")
+        
+        # Now that the call is done and the pod's models are free,
+        # pre-warm a new session for the next incoming call.
+        asyncio.create_task(personaplex_service.pre_warm_available_workers(self.db))
 
 
 async def voice_websocket_handler(
