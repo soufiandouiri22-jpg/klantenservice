@@ -197,30 +197,34 @@ function RegisterContent() {
 
             {/* Form */}
             <div className="bg-white rounded-xl shadow-soft border border-gray-200 p-8">
-              {/* Google Register Button */}
-              <button
-                type="button"
-                onClick={handleGoogleRegister}
-                disabled={isGoogleLoading}
-                className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-gray-300 rounded-lg bg-white text-gray-700 font-medium hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {isGoogleLoading ? (
-                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-300 border-t-primary-600" />
-                ) : (
-                  <GoogleIcon className="h-5 w-5" />
-                )}
-                Registreren met Google
-              </button>
+              {step === 1 && (
+                <>
+                  {/* Google Register Button */}
+                  <button
+                    type="button"
+                    onClick={handleGoogleRegister}
+                    disabled={isGoogleLoading}
+                    className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-gray-300 rounded-lg bg-white text-gray-700 font-medium hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {isGoogleLoading ? (
+                      <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-300 border-t-primary-600" />
+                    ) : (
+                      <GoogleIcon className="h-5 w-5" />
+                    )}
+                    Registreren met Google
+                  </button>
 
-              {/* Divider */}
-              <div className="relative my-6">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-200" />
-                </div>
-                <div className="relative flex justify-center text-sm">
-                  <span className="bg-white px-4 text-gray-500">of</span>
-                </div>
-              </div>
+                  {/* Divider */}
+                  <div className="relative my-6">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-gray-200" />
+                    </div>
+                    <div className="relative flex justify-center text-sm">
+                      <span className="bg-white px-4 text-gray-500">of</span>
+                    </div>
+                  </div>
+                </>
+              )}
 
               <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
                 {step === 1 ? (
