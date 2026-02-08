@@ -8,7 +8,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID
 
 # revision identifiers
-revision = "017_add_ai_worker_to_websites_calendars"
+revision = "017_ai_worker_resource_link"
 down_revision = "016_add_trial_used_column"
 branch_labels = None
 depends_on = None
