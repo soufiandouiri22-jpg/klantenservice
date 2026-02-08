@@ -80,11 +80,16 @@ function RegisterContent() {
     formState: { errors },
     trigger,
     getValues,
+    watch,
   } = useForm<RegisterForm>({
     resolver: zodResolver(registerSchema),
     defaultValues: { terms_accepted: true, marketing_consent: false },
     mode: 'onTouched',
   })
+
+  const watchPassword = watch('password', '')
+  const watchConfirmPassword = watch('confirm_password', '')
+  const passwordsMismatch = watchConfirmPassword.length > 0 && watchPassword !== watchConfirmPassword
 
   const handleNextStep = async () => {
     const isValid = await trigger(['company_name', 'company_email'])
@@ -270,7 +275,7 @@ function RegisterContent() {
                       type="password"
                       placeholder="••••••••"
                       autoComplete="new-password"
-                      error={errors.confirm_password?.message}
+                      error={passwordsMismatch ? 'Wachtwoorden komen niet overeen' : errors.confirm_password?.message}
                       {...register('confirm_password')}
                     />
                     <label className="flex items-center gap-3 cursor-pointer group">
