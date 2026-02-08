@@ -273,8 +273,16 @@ class RealtimeCallHandler:
             )
 
             # ── 2. Get voice setting ─────────────────────────────
-            # Use worker-specific voice if configured, otherwise use global default
-            voice = settings.OPENAI_REALTIME_VOICE
+            # Priority: worker voice_id > global config voice_default > env var fallback
+            voice = settings.OPENAI_REALTIME_VOICE  # env var fallback
+            try:
+                voice_config = self.db.query(GlobalConfig).filter(
+                    GlobalConfig.key == "voice_default"
+                ).first()
+                if voice_config and voice_config.value:
+                    voice = str(voice_config.value)
+            except Exception:
+                pass
             if self.ai_worker.voice_id:
                 voice = self.ai_worker.voice_id
 
