@@ -49,9 +49,7 @@ const registerSchema = z.object({
     .regex(/[a-z]/, 'Wachtwoord moet minimaal één kleine letter bevatten')
     .regex(/[0-9]/, 'Wachtwoord moet minimaal één cijfer bevatten'),
   confirm_password: z.string(),
-  terms_accepted: z.boolean().refine((v) => v === true, {
-    message: 'U dient akkoord te gaan met de voorwaarden en het privacybeleid.',
-  }),
+  terms_accepted: z.literal(true).default(true),
   marketing_consent: z.boolean().optional().default(false),
 }).refine((data) => data.password === data.confirm_password, {
   message: 'Wachtwoorden komen niet overeen',
@@ -85,7 +83,7 @@ function RegisterContent() {
     getValues,
   } = useForm<RegisterForm>({
     resolver: zodResolver(registerSchema),
-    defaultValues: { terms_accepted: false, marketing_consent: false },
+    defaultValues: { terms_accepted: true, marketing_consent: false },
   })
 
   const handleNextStep = async () => {
@@ -276,57 +274,47 @@ function RegisterContent() {
                       error={errors.confirm_password?.message}
                       {...register('confirm_password')}
                     />
-                    <div className="space-y-4">
-                      <label className="flex items-start gap-3 cursor-pointer">
+                    <label className="flex items-center gap-3 cursor-pointer group">
+                      <div className="relative flex items-center justify-center">
                         <input
                           type="checkbox"
-                          className="mt-1 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                          {...register('terms_accepted')}
-                        />
-                        <span className="text-sm text-gray-700">
-                          Ik ga akkoord met de{' '}
-                          <Link href="/voorwaarden" target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:text-primary-700 underline">
-                            algemene voorwaarden
-                          </Link>
-                          {' '}en het{' '}
-                          <Link href="/avg" target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:text-primary-700 underline">
-                            privacybeleid
-                          </Link>.
-                        </span>
-                      </label>
-                      {errors.terms_accepted && (
-                        <p className="text-sm text-red-600">{errors.terms_accepted.message}</p>
-                      )}
-                      <label className="flex items-start gap-3 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          className="mt-1 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                          className="peer sr-only"
                           {...register('marketing_consent')}
                         />
-                        <span className="text-sm text-gray-700">
-                          Ja, ik ontvang graag tips en aanbiedingen per e-mail.
-                        </span>
-                      </label>
-                    </div>
-                    <div className="flex gap-4">
+                        <div className="h-5 w-5 rounded-md border-2 border-gray-300 bg-white transition-all peer-checked:border-primary-600 peer-checked:bg-primary-600 peer-focus-visible:ring-2 peer-focus-visible:ring-primary-500 peer-focus-visible:ring-offset-2 group-hover:border-gray-400 peer-checked:group-hover:border-primary-700" />
+                        <Check className="absolute h-3.5 w-3.5 text-white opacity-0 transition-opacity peer-checked:opacity-100 pointer-events-none" />
+                      </div>
+                      <span className="text-sm text-gray-600 select-none">
+                        Ja, ik ontvang graag tips en aanbiedingen per e-mail.
+                      </span>
+                    </label>
+                    <div className="flex gap-3">
                       <Button
                         type="button"
                         variant="outline"
-                        className="flex-1"
-                        size="lg"
+                        className="whitespace-nowrap"
                         onClick={() => setStep(1)}
                       >
                         Terug
                       </Button>
                       <Button
                         type="submit"
-                        className="flex-1"
-                        size="lg"
+                        className="flex-1 whitespace-nowrap"
                         isLoading={isLoading}
                       >
                         Account aanmaken
                       </Button>
                     </div>
+                    <p className="text-xs text-center text-gray-400 leading-relaxed">
+                      Door een account aan te maken ga je akkoord met onze{' '}
+                      <Link href="/voorwaarden" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-primary-600 underline">
+                        algemene voorwaarden
+                      </Link>
+                      {' '}en ons{' '}
+                      <Link href="/avg" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-primary-600 underline">
+                        privacybeleid
+                      </Link>.
+                    </p>
                   </>
                 )}
               </form>
