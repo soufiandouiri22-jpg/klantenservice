@@ -204,11 +204,11 @@ export function PoliciesTab() {
           <div className="flex gap-3">
             <Bot className="h-5 w-5 text-blue-600 mt-0.5 shrink-0" />
             <div className="text-sm text-blue-800">
-              <p className="font-medium mb-1">AI-instructies zijn automatisch geconfigureerd</p>
+              <p className="font-medium mb-1">AI-instructies beheren</p>
               <p className="text-blue-700">
-                Persoonlijkheid, toon, spreekstijl, gespreksverloop, veiligheid en taalregels worden 
-                automatisch ingesteld op basis van OpenAI's best practices. Hier kun je alleen 
-                aanvullend bedrijfsbeleid toevoegen, zoals privacy- of compliance-regels.
+                Beheer alle AI-instructies: persoonlijkheid, toon, spreekstijl, gespreksverloop, 
+                veiligheid en taalregels. Voeg daarnaast aanvullend bedrijfsbeleid toe, zoals 
+                privacy- of compliance-regels.
               </p>
             </div>
           </div>
@@ -494,8 +494,8 @@ export function PoliciesTab() {
           <div className="flex gap-3 p-3 bg-blue-50 rounded-lg">
             <Info className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
             <p className="text-xs text-blue-700">
-              Dit zijn alleen de aanvullende beleidsregels. De basispersoonlijkheid, toon, 
-              gespreksverloop en veiligheidsregels worden automatisch geconfigureerd.
+              Dit is een preview van alle actieve instructies, inclusief persoonlijkheid, toon, 
+              gespreksverloop, veiligheidsregels en aanvullend bedrijfsbeleid.
             </p>
           </div>
           <div className="max-h-[50vh] overflow-y-auto">
