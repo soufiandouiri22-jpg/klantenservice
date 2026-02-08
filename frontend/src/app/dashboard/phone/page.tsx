@@ -287,7 +287,7 @@ export default function PhonePage() {
         }
       />
 
-      <div className={phoneNumbers?.length === 0 ? "flex items-center justify-center min-h-[calc(100vh-4rem)]" : "p-6 space-y-6"}>
+      <div className={phoneNumbers?.length === 0 ? "flex items-center justify-center min-h-[calc(100vh-4rem)] pb-24" : "p-6 space-y-6"}>
         {phoneNumbers?.length === 0 ? (
           <EmptyState
             icon={Phone}

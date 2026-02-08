@@ -221,7 +221,7 @@ export default function AIWorkersPage() {
         }
       />
 
-      <div className={workers?.length === 0 ? "flex items-center justify-center min-h-[calc(100vh-4rem)]" : "p-6"}>
+      <div className={workers?.length === 0 ? "flex items-center justify-center min-h-[calc(100vh-4rem)] pb-24" : "p-6"}>
         {workers?.length === 0 ? (
           <EmptyState
             icon={Headphones}
