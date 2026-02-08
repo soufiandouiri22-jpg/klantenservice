@@ -39,7 +39,7 @@ class AIWorker(Base):
     avatar_url = Column(String(500), nullable=True)
     
     # Voice & Language
-    voice_id = Column(String(100), nullable=True)  # TTS voice identifier
+    voice_id = Column(String(100), default="alloy")  # TTS voice identifier
     language = Column(String(10), default="nl-NL")
     
     # Behavior Settings

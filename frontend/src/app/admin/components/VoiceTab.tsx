@@ -138,9 +138,6 @@ export function VoiceTab() {
                     </div>
                     <div>
                       <span className="text-sm font-semibold text-gray-900">{voice.name}</span>
-                      <span className="ml-1.5 text-xs text-gray-400">
-                        {voice.gender === 'male' ? '♂' : voice.gender === 'female' ? '♀' : '◎'}
-                      </span>
                     </div>
                   </div>
 
