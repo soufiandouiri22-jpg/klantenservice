@@ -457,6 +457,12 @@ function SettingsContent() {
                       className="input min-h-[100px] resize-none"
                       defaultValue={privacySettings?.disclosure_message}
                       placeholder="U spreekt met {ai_worker_name}, de digitale assistent van {company_name}"
+                      onBlur={(e) => {
+                        const v = e.target.value.trim()
+                        if (v !== privacySettings?.disclosure_message) {
+                          updateCompanyMutation.mutate({ disclosure_message: v })
+                        }
+                      }}
                     />
                     <p className="mt-2 text-sm text-gray-500">
                       Gebruik <code className="px-1 py-0.5 bg-gray-100 rounded">{'{ai_worker_name}'}</code> voor de naam van de AI-medewerker en <code className="px-1 py-0.5 bg-gray-100 rounded">{'{company_name}'}</code> voor de bedrijfsnaam.
