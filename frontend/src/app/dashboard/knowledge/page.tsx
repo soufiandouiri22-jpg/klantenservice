@@ -30,6 +30,10 @@ export default function KnowledgePage() {
   const { data: websites, isLoading } = useQuery({
     queryKey: ['websites'],
     queryFn: websitesApi.list,
+    refetchInterval: (query) => {
+      const data = query.state.data as any[] | undefined
+      return data?.some((w: any) => w.status === 'indexing') ? 3000 : false
+    },
   })
 
   const { data: workers } = useQuery({
