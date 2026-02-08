@@ -10,7 +10,7 @@ import {
   Calendar,
   Globe,
   GraduationCap,
-  FileText,
+  PhoneIncoming,
   ClipboardList,
   StickyNote,
   Settings,
@@ -29,7 +29,7 @@ const navigation = [
   { name: 'Agenda', href: '/dashboard/calendar', icon: Calendar },
   { name: 'Website-kennis', href: '/dashboard/knowledge', icon: Globe },
   { name: 'Training', href: '/dashboard/training', icon: GraduationCap },
-  { name: 'Gesprekken', href: '/dashboard/calls', icon: FileText },
+  { name: 'Gesprekken', href: '/dashboard/calls', icon: PhoneIncoming },
   { name: 'Afspraken', href: '/dashboard/appointments', icon: ClipboardList },
   { name: 'Notities', href: '/dashboard/notes', icon: StickyNote },
 ]
