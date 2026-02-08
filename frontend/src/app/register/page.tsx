@@ -331,13 +331,15 @@ function RegisterContent() {
                       <Button
                         type="button"
                         variant="outline"
-                        className="whitespace-nowrap"
+                        size="lg"
+                        className="flex-1 whitespace-nowrap"
                         onClick={() => setStep(1)}
                       >
                         Terug
                       </Button>
                       <Button
                         type="submit"
+                        size="lg"
                         className="flex-1 whitespace-nowrap"
                         isLoading={isLoading}
                       >
