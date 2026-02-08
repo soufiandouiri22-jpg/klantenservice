@@ -6,6 +6,7 @@ import { ArrowLeft, Mail, Phone, MapPin, Send, Check } from 'lucide-react'
 import toast from 'react-hot-toast'
 import PublicHeader from '@/components/layout/PublicHeader'
 import Footer from '@/components/layout/Footer'
+import { Select } from '@/components/ui/Select'
 
 export default function ContactPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -215,25 +216,20 @@ export default function ContactPage() {
                       </div>
                     </div>
 
-                    <div>
-                      <label htmlFor="subject" className="block text-sm font-medium text-gray-700 mb-1">
-                        Onderwerp
-                      </label>
-                      <select
-                        id="subject"
-                        name="subject"
-                        value={formData.subject}
-                        onChange={handleChange}
-                        className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors bg-white"
-                      >
-                        <option value="Algemene vraag">Algemene vraag</option>
-                        <option value="Demo aanvragen">Demo aanvragen</option>
-                        <option value="Prijsinformatie">Prijsinformatie</option>
-                        <option value="Technische vraag">Technische vraag</option>
-                        <option value="Partnership">Partnership</option>
-                        <option value="Anders">Anders</option>
-                      </select>
-                    </div>
+                    <Select
+                      id="subject"
+                      label="Onderwerp"
+                      name="subject"
+                      value={formData.subject}
+                      onChange={handleChange}
+                    >
+                      <option value="Algemene vraag">Algemene vraag</option>
+                      <option value="Demo aanvragen">Demo aanvragen</option>
+                      <option value="Prijsinformatie">Prijsinformatie</option>
+                      <option value="Technische vraag">Technische vraag</option>
+                      <option value="Partnership">Partnership</option>
+                      <option value="Anders">Anders</option>
+                    </Select>
 
                     <div>
                       <label htmlFor="message" className="block text-sm font-medium text-gray-700 mb-1">

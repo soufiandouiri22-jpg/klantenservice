@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Toggle } from '@/components/ui/Toggle'
 import { Spinner } from '@/components/ui/Spinner'
+import { Select } from '@/components/ui/Select'
 import { adminApi } from '@/lib/api'
 import { useState, useEffect } from 'react'
 
@@ -110,15 +111,15 @@ export function ModelRoutingTab() {
             </CardHeader>
             <CardBody>
               <div className="space-y-4">
-                <select
+                <Select
+                  className="max-w-sm"
                   value={values['model_default'] || 'gpt-4o-mini'}
                   onChange={(e) => setValues({ ...values, model_default: e.target.value })}
-                  className="w-full max-w-sm rounded-lg border border-gray-200 px-4 py-2.5 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
                 >
                   <option value="gpt-4o-mini">GPT-4o Mini (snel, goedkoop)</option>
                   <option value="gpt-4o">GPT-4o (slim, duurder)</option>
                   <option value="gpt-3.5-turbo">GPT-3.5 Turbo (legacy)</option>
-                </select>
+                </Select>
                 <Button
                   onClick={() => handleSave('model_default')}
                   disabled={updateMutation.isPending}
@@ -141,14 +142,14 @@ export function ModelRoutingTab() {
             </CardHeader>
             <CardBody>
               <div className="space-y-4">
-                <select
+                <Select
+                  className="max-w-xs"
                   value={values['model_fallback'] || 'gpt-3.5-turbo'}
                   onChange={(e) => setValues({ ...values, model_fallback: e.target.value })}
-                  className="w-full max-w-xs rounded-lg border border-gray-200 px-4 py-2.5 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
                 >
                   <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
                   <option value="gpt-4o-mini">GPT-4o Mini</option>
-                </select>
+                </Select>
                 <Button
                   onClick={() => handleSave('model_fallback')}
                   disabled={updateMutation.isPending}
@@ -171,14 +172,14 @@ export function ModelRoutingTab() {
             </CardHeader>
             <CardBody>
               <div className="space-y-4">
-                <select
+                <Select
+                  className="max-w-xs"
                   value={values['model_big'] || 'gpt-4o'}
                   onChange={(e) => setValues({ ...values, model_big: e.target.value })}
-                  className="w-full max-w-xs rounded-lg border border-gray-200 px-4 py-2.5 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
                 >
                   <option value="gpt-4o">GPT-4o</option>
                   <option value="gpt-4-turbo">GPT-4 Turbo</option>
-                </select>
+                </Select>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-gray-600">Gebruik bij onbekende vragen</span>
                   <Toggle

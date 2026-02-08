@@ -18,6 +18,7 @@ import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
 import { PageLoader } from '@/components/ui/Spinner'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { Select } from '@/components/ui/Select'
 import { phoneNumbersApi, aiWorkersApi } from '@/lib/api'
 import { formatPhoneNumber } from '@/lib/utils'
 import { useAuthStore } from '@/lib/store'
@@ -491,23 +492,18 @@ export default function PhonePage() {
                   />
 
                   {aiWorkers && aiWorkers.length > 0 && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Wie neemt op?
-                      </label>
-                      <select
-                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                        value={selectedAIWorkerId}
-                        onChange={(e) => setSelectedAIWorkerId(e.target.value)}
-                      >
-                        <option value="">-- Selecteer AI-medewerker --</option>
-                        {aiWorkers.map((worker: any) => (
-                          <option key={worker.id} value={worker.id}>
-                            {worker.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    <Select
+                      label="Wie neemt op?"
+                      value={selectedAIWorkerId}
+                      onChange={(e) => setSelectedAIWorkerId(e.target.value)}
+                    >
+                      <option value="">-- Selecteer AI-medewerker --</option>
+                      {aiWorkers.map((worker: any) => (
+                        <option key={worker.id} value={worker.id}>
+                          {worker.name}
+                        </option>
+                      ))}
+                    </Select>
                   )}
                 </div>
 
@@ -748,8 +744,7 @@ export default function PhonePage() {
             <div>
               <h4 className="font-medium text-gray-900 mb-3">Wie neemt op?</h4>
               <div className="bg-primary-50 rounded-lg p-4 border border-primary-100">
-                <select
-                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                <Select
                   value={settingsForm.ai_worker_id}
                   onChange={(e) => setSettingsForm({ ...settingsForm, ai_worker_id: e.target.value })}
                 >
@@ -759,7 +754,7 @@ export default function PhonePage() {
                       {worker.name}
                     </option>
                   ))}
-                </select>
+                </Select>
               </div>
             </div>
 

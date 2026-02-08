@@ -20,6 +20,7 @@ import { Input } from '@/components/ui/Input'
 import { Toggle } from '@/components/ui/Toggle'
 import { Modal } from '@/components/ui/Modal'
 import { Spinner } from '@/components/ui/Spinner'
+import { Select } from '@/components/ui/Select'
 import { adminApi } from '@/lib/api'
 
 interface Customer {
@@ -386,31 +387,27 @@ function CustomerDetailContent({ customer, onSave, onSubscriptionSave, onDelete,
           Abonnement Beheren
         </h4>
         <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Plan</label>
-            <select
-              value={selectedPlan}
-              onChange={(e) => setSelectedPlan(e.target.value)}
-              className="w-full max-w-[240px] px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-            >
-              <option value="starter">Starter (1 AI-medewerker)</option>
-              <option value="business">Business (5 AI-medewerkers)</option>
-              <option value="enterprise">Enterprise (7 AI-medewerkers)</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-            <select
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-              className="w-full max-w-[240px] px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-            >
-              <option value="active">Actief</option>
-              <option value="trialing">Proefperiode</option>
-              <option value="pending">Pending (geen toegang)</option>
-              <option value="canceled">Opgezegd (geen toegang)</option>
-            </select>
-          </div>
+          <Select
+            label="Plan"
+            className="max-w-[240px]"
+            value={selectedPlan}
+            onChange={(e) => setSelectedPlan(e.target.value)}
+          >
+            <option value="starter">Starter (1 AI-medewerker)</option>
+            <option value="business">Business (5 AI-medewerkers)</option>
+            <option value="enterprise">Enterprise (7 AI-medewerkers)</option>
+          </Select>
+          <Select
+            label="Status"
+            className="max-w-[240px]"
+            value={selectedStatus}
+            onChange={(e) => setSelectedStatus(e.target.value)}
+          >
+            <option value="active">Actief</option>
+            <option value="trialing">Proefperiode</option>
+            <option value="pending">Pending (geen toegang)</option>
+            <option value="canceled">Opgezegd (geen toegang)</option>
+          </Select>
         </div>
         {hasSubscriptionChanges && (
           <div className="mt-4 flex justify-end">

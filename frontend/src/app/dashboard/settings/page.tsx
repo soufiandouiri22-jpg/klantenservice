@@ -15,6 +15,7 @@ import { Toggle } from '@/components/ui/Toggle'
 import { Badge } from '@/components/ui/Badge'
 import { PageLoader } from '@/components/ui/Spinner'
 import { Modal } from '@/components/ui/Modal'
+import { Select } from '@/components/ui/Select'
 import { companyApi, usersApi, authApi, paymentsApi } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 
@@ -814,18 +815,15 @@ function SettingsContent() {
                       onChange={(e) => setNewUserData({ ...newUserData, phone: e.target.value })}
                       placeholder="+31 6 12345678"
                     />
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Rol</label>
-                      <select
-                        value={newUserData.role}
-                        onChange={(e) => setNewUserData({ ...newUserData, role: e.target.value as any })}
-                        className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
-                      >
-                        <option value="viewer">Kijker - Alleen bekijken</option>
-                        <option value="user">Gebruiker - Basistoegang</option>
-                        <option value="admin">Admin - Volledige toegang</option>
-                      </select>
-                    </div>
+                    <Select
+                      label="Rol"
+                      value={newUserData.role}
+                      onChange={(e) => setNewUserData({ ...newUserData, role: e.target.value as any })}
+                    >
+                      <option value="viewer">Kijker - Alleen bekijken</option>
+                      <option value="user">Gebruiker - Basistoegang</option>
+                      <option value="admin">Admin - Volledige toegang</option>
+                    </Select>
                     <div className="flex gap-3 pt-4">
                       <Button
                         variant="outline"

@@ -17,6 +17,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Modal } from '@/components/ui/Modal'
 import { PageLoader } from '@/components/ui/Spinner'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { Select } from '@/components/ui/Select'
 import { appointmentsApi } from '@/lib/api'
 import { formatDateTime, formatDate, getStatusLabel } from '@/lib/utils'
 
@@ -304,8 +305,8 @@ export default function AppointmentsPage() {
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
-              <select
-                className="input w-48"
+              <Select
+                className="w-48"
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
               >
@@ -314,7 +315,7 @@ export default function AppointmentsPage() {
                 <option value="cancelled">Geannuleerd</option>
                 <option value="completed">Afgerond</option>
                 <option value="no_show">Niet verschenen</option>
-              </select>
+              </Select>
             </div>
           </CardBody>
         </Card>

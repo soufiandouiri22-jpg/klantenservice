@@ -14,6 +14,7 @@ import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
 import { PageLoader } from '@/components/ui/Spinner'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { Select } from '@/components/ui/Select'
 import { websitesApi, aiWorkersApi } from '@/lib/api'
 import { formatRelativeTime, getStatusLabel } from '@/lib/utils'
 
@@ -304,8 +305,7 @@ export default function KnowledgePage() {
                 Alle AI-medewerkers hebben al een website gekoppeld. Maak eerst een nieuwe medewerker aan of ontkoppel een bestaande website.
               </p>
             ) : (
-              <select
-                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
+              <Select
                 value={selectedWorkerId}
                 onChange={(e) => setSelectedWorkerId(e.target.value)}
               >
@@ -313,7 +313,7 @@ export default function KnowledgePage() {
                 {availableWorkers.map((w: any) => (
                   <option key={w.id} value={w.id}>{w.name} — {w.role_title}</option>
                 ))}
-              </select>
+              </Select>
             )}
           </div>
           <div className="rounded-lg bg-gray-50 p-4">

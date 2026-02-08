@@ -3,11 +3,12 @@
 import { useState, useEffect } from 'react'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { Phone, Search, Filter, Play, Clock, User, MessageSquare, X, ChevronDown } from 'lucide-react'
+import { Phone, Search, Filter, Play, Clock, User, MessageSquare, X } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { Header } from '@/components/layout/Header'
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
+import { Select } from '@/components/ui/Select'
 import { Badge } from '@/components/ui/Badge'
 import { Modal } from '@/components/ui/Modal'
 import { PageLoader } from '@/components/ui/Spinner'
@@ -132,43 +133,37 @@ export default function CallsPage() {
             {showFilters && (
               <div className="flex items-center gap-4 pt-2 border-t border-gray-100">
                 <div className="flex-1">
-                  <label className="text-xs font-medium text-gray-500 mb-1 block">Status</label>
-                  <div className="relative">
-                    <select
-                      className="input text-sm appearance-none pr-10"
-                      value={statusFilter}
-                      onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }}
-                    >
-                      <option value="">Alle statussen</option>
-                      <option value="completed">Afgerond</option>
-                      <option value="missed">Gemist</option>
-                      <option value="voicemail">Voicemail</option>
-                      <option value="failed">Mislukt</option>
-                      <option value="abandoned">Afgebroken</option>
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  </div>
+                  <Select
+                    label="Status"
+                    className="text-sm"
+                    value={statusFilter}
+                    onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }}
+                  >
+                    <option value="">Alle statussen</option>
+                    <option value="completed">Afgerond</option>
+                    <option value="missed">Gemist</option>
+                    <option value="voicemail">Voicemail</option>
+                    <option value="failed">Mislukt</option>
+                    <option value="abandoned">Afgebroken</option>
+                  </Select>
                 </div>
                 <div className="flex-1">
-                  <label className="text-xs font-medium text-gray-500 mb-1 block">Uitkomst</label>
-                  <div className="relative">
-                    <select
-                      className="input text-sm appearance-none pr-10"
-                      value={outcomeFilter}
-                      onChange={(e) => { setOutcomeFilter(e.target.value); setPage(1) }}
-                    >
-                      <option value="">Alle uitkomsten</option>
-                      <option value="handled">Afgehandeld</option>
-                      <option value="appointment_made">Afspraak gemaakt</option>
-                      <option value="appointment_cancelled">Afspraak geannuleerd</option>
-                      <option value="info_provided">Info verstrekt</option>
-                      <option value="note_left">Notitie achtergelaten</option>
-                      <option value="callback_requested">Terugbelverzoek</option>
-                      <option value="transferred">Doorverbonden</option>
-                      <option value="no_action">Geen actie</option>
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  </div>
+                  <Select
+                    label="Uitkomst"
+                    className="text-sm"
+                    value={outcomeFilter}
+                    onChange={(e) => { setOutcomeFilter(e.target.value); setPage(1) }}
+                  >
+                    <option value="">Alle uitkomsten</option>
+                    <option value="handled">Afgehandeld</option>
+                    <option value="appointment_made">Afspraak gemaakt</option>
+                    <option value="appointment_cancelled">Afspraak geannuleerd</option>
+                    <option value="info_provided">Info verstrekt</option>
+                    <option value="note_left">Notitie achtergelaten</option>
+                    <option value="callback_requested">Terugbelverzoek</option>
+                    <option value="transferred">Doorverbonden</option>
+                    <option value="no_action">Geen actie</option>
+                  </Select>
                 </div>
                 {activeFilterCount > 0 && (
                   <Button
