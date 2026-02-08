@@ -319,7 +319,7 @@ function RegisterContent() {
             </div>
 
             {/* Login link */}
-            <p className="mt-6 text-center text-sm text-gray-600">
+            <p className="mt-6 mb-8 text-center text-sm text-gray-600">
               Al een account?{' '}
               <Link href="/login" className="text-primary-600 hover:text-primary-700 font-medium">
                 Log in
