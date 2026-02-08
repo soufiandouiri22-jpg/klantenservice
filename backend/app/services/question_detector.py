@@ -23,26 +23,38 @@ logger = logging.getLogger(__name__)
 
 # Patterns that indicate the AI couldn't answer the question
 UNCERTAINTY_PATTERNS = [
-    # Dutch uncertainty phrases
-    r"ik weet (het )?niet",
-    r"dat weet ik niet",
-    r"ik ben niet zeker",
-    r"ik kan (u|je) daar niet (mee|bij) helpen",
-    r"ik heb (daar )?geen informatie over",
-    r"dat is mij niet bekend",
-    r"ik kan die vraag niet beantwoorden",
-    r"ik zal (het |dat )?(moeten )?navragen",
+    # "I don't know" variants
+    r"ik weet (het )?(helaas )?niet",
+    r"dat weet ik (helaas )?niet",
+    r"(helaas |sorry.{0,10})?ik (weet|zou) (het )?(eerlijk gezegd )?(helaas )?niet (weten|precies)",
+    r"ik ben (daar )?(helaas )?niet zeker",
+    r"dat is mij (helaas )?niet bekend",
+    # "I can't help" variants
+    r"ik kan (u|je) daar (helaas )?niet (mee|bij) helpen",
+    r"(sorry.{0,10})?daar kan ik (u|je) (helaas )?niet (mee|bij) helpen",
+    r"ik kan (u|je) daar (nu )?(helaas )?niet (direct )?antwoord op geven",
+    r"ik kan (u|je) (helaas )?niet (verder )?helpen",
+    r"ik kan die vraag (helaas )?niet beantwoorden",
+    # "I have no information" variants
+    r"ik heb (daar )?(helaas |op dit moment )?geen (informatie|antwoord|gegevens)",
+    r"daar heb ik (helaas |op dit moment )?(geen|niet) (informatie|antwoord|gegevens)",
+    r"ik beschik (helaas )?niet over (die|deze|die specifieke) informatie",
+    # Deflection / referral
+    r"ik zal (het |dat )?(even )?(moeten )?navragen",
+    r"dat (zou|moet) ik (even )?(moeten )?(navragen|uitzoeken|checken)",
     r"ik geef (u|je) door",
-    r"een collega kan (u|je) (beter )?helpen",
-    r"neem (alstublieft )?contact op met",
+    r"een collega kan (u|je) (daar )?(beter |wellicht )?helpen",
+    r"neem (alstublieft |gerust )?contact op met",
     r"ik verbind (u|je) door",
     r"ik noteer (het|dat|uw vraag)",
     r"belt u (alstublieft )?terug",
     r"ik kom (daar )?later op terug",
-    r"ik zal (het |dat )?uitzoeken",
+    r"ik zal (het |dat )?(even )?(moeten )?(uitzoeken|opzoeken|nakijken|checken)",
     r"daar moet ik even naar kijken",
-    r"ik kan (u|je) daar (nu )?niet (direct )?antwoord op geven",
-    r"helaas (kan|weet) ik",
+    r"ik raad (u|je) aan.{0,30}(website|contact|bellen|mailen)",
+    r"(u|je) (kunt?|zou) (het )?(beste?|beter) (even )?(contact|bellen|mailen|kijken)",
+    # Catch-all "helaas" + inability
+    r"helaas (kan|weet|heb|beschik) ik",
 ]
 
 # Compiled patterns for efficiency
