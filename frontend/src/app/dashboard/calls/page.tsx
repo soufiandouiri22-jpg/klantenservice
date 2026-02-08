@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useState, useEffect } from 'react'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import { Phone, Search, Filter, Play, Clock, User, MessageSquare, X, ChevronDown } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
@@ -19,21 +19,32 @@ export default function CallsPage() {
   const [page, setPage] = useState(1)
   const [selectedCall, setSelectedCall] = useState<any>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [showFilters, setShowFilters] = useState(false)
   const [statusFilter, setStatusFilter] = useState('')
   const [outcomeFilter, setOutcomeFilter] = useState('')
 
+  // Debounce search input so it doesn't fire on every keystroke
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery)
+      setPage(1)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+
   const activeFilterCount = [statusFilter, outcomeFilter].filter(Boolean).length
 
   const { data: callsData, isLoading } = useQuery({
-    queryKey: ['calls', page, searchQuery, statusFilter, outcomeFilter],
+    queryKey: ['calls', page, debouncedSearch, statusFilter, outcomeFilter],
     queryFn: () => callsApi.list({
       page,
       page_size: 20,
-      search: searchQuery || undefined,
+      search: debouncedSearch || undefined,
       status: statusFilter || undefined,
       outcome: outcomeFilter || undefined,
     }),
+    placeholderData: keepPreviousData,
   })
 
   const { data: callDetail, isLoading: detailLoading } = useQuery({
@@ -47,7 +58,7 @@ export default function CallsPage() {
     queryFn: () => callsApi.getStats(),
   })
 
-  if (isLoading) {
+  if (isLoading && !callsData) {
     return (
       <DashboardLayout>
         <PageLoader />
@@ -106,7 +117,7 @@ export default function CallsPage() {
                   placeholder="Zoek op telefoonnummer of naam..."
                   className="input pl-10"
                   value={searchQuery}
-                  onChange={(e) => { setSearchQuery(e.target.value); setPage(1) }}
+                  onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
               <Button
