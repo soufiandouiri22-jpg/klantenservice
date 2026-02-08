@@ -8,7 +8,6 @@ import {
   Shield, 
   Cpu,
   Mic,
-  SlidersHorizontal,
   FileText
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
@@ -21,7 +20,6 @@ import { CustomersTab } from './components/CustomersTab'
 import { PoliciesTab } from './components/PoliciesTab'
 import { ModelRoutingTab } from './components/ModelRoutingTab'
 import { VoiceTab } from './components/VoiceTab'
-import { ThresholdsTab } from './components/ThresholdsTab'
 import { LogsTab } from './components/LogsTab'
 
 const tabs = [
@@ -30,7 +28,6 @@ const tabs = [
   { id: 'policies', name: 'Policies', icon: Shield },
   { id: 'model', name: 'Model & Routing', icon: Cpu },
   { id: 'voice', name: 'Realtime Voice', icon: Mic },
-  { id: 'thresholds', name: 'Thresholds', icon: SlidersHorizontal },
   { id: 'logs', name: 'Logs & Debug', icon: FileText },
 ]
 
@@ -72,8 +69,6 @@ export default function AdminPage() {
         return <ModelRoutingTab />
       case 'voice':
         return <VoiceTab />
-      case 'thresholds':
-        return <ThresholdsTab />
       case 'logs':
         return <LogsTab />
       default:
