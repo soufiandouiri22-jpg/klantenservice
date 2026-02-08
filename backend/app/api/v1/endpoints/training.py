@@ -230,23 +230,32 @@ async def list_detected_questions(
 ):
     """
     List frequently asked questions detected from calls.
+    Only returns genuine customer questions (filters out AI artefacts).
     """
+    from app.services.question_detector import _is_real_customer_question
+
     # Get unverified/detected questions sorted by occurrence
     questions = db.query(ExampleAnswer).filter(
         ExampleAnswer.company_id == company.id,
         ExampleAnswer.source == "detected",
         ExampleAnswer.is_verified == False
-    ).order_by(ExampleAnswer.detected_count.desc()).limit(limit).all()
+    ).order_by(ExampleAnswer.detected_count.desc()).all()
     
-    return [
-        {
-            "id": str(q.id),
-            "question": q.question,
-            "occurrences": q.detected_count,
-            "suggested_answer": q.answer,
-        }
-        for q in questions
-    ]
+    # Post-filter: only return questions that pass the real-question check.
+    # This also cleans up any legacy entries saved before the improved detector.
+    results = []
+    for q in questions:
+        if _is_real_customer_question(q.question):
+            results.append({
+                "id": str(q.id),
+                "question": q.question,
+                "occurrences": q.detected_count,
+                "suggested_answer": q.answer,
+            })
+            if len(results) >= limit:
+                break
+    
+    return results
 
 
 @router.post("/detected-questions/{question_id}/approve")

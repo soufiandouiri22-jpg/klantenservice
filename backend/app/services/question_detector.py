@@ -3,7 +3,7 @@ klantenservice.ai - Question Detection Service
 Analyzes call transcripts to detect questions that couldn't be answered.
 
 This service identifies:
-- Questions asked by callers
+- Real questions asked by callers (not AI internal thoughts)
 - Responses indicating the AI couldn't answer
 - Saves them as "detected" questions for manual review
 """
@@ -51,16 +51,85 @@ UNCERTAINTY_REGEX = re.compile(
     re.IGNORECASE
 )
 
+# ── Filters to exclude non-customer questions ───────────────────────────
+# These catch AI internal thoughts, greetings, farewells, filler phrases,
+# and meta-conversational snippets that are NOT real customer questions.
+
+# Phrases that indicate AI internal monologue / self-talk leaked into
+# the caller transcript (Realtime API artefact)
+_AI_INTERNAL_PATTERNS = [
+    r"wat (wil|moet|kan|zou) (de klant|de beller|ik|de gebruiker)",
+    r"hoe (moet|kan|zou) ik (nu |hier |dit |dat )?(reageren|antwoorden|zeggen|helpen)",
+    r"wat (moet|kan|zou) ik (nu |hier )?(zeggen|doen|antwoorden)",
+    r"ik (moet|kan|zou) (nu |hier )?(zeggen|doen|antwoorden|reageren)",
+    r"laat me (even )?(nadenken|denken|kijken)",
+    r"ik denk na over",
+    r"ik begrijp de vraag niet",
+    r"wat bedoelt? (de klant|de beller|hij|zij|die persoon)",
+    r"ik weet niet wat ik moet",
+    r"wat is de (juiste|beste) (reactie|antwoord|respons)",
+    r"(dit|dat) is (een )?(lastig|moeilijk|ingewikkeld)(e vraag)?",
+]
+
+_AI_INTERNAL_REGEX = re.compile(
+    "|".join(_AI_INTERNAL_PATTERNS),
+    re.IGNORECASE,
+)
+
+# Common greetings, farewells, filler, and confirmation phrases (Dutch)
+# These should never end up as "detected questions".
+_NON_QUESTION_PHRASES = [
+    # Greetings / farewells
+    r"^(hallo|hoi|hey|goedemorgen|goedemiddag|goedenavond|dag|doei|tot ziens|fijne dag|dankjewel|dankuwel|bedankt|tot snel)\b",
+    # Simple confirmations / fillers
+    r"^(ja|nee|ok[eé]?|hmm+|uhm+|oh|ah|aha|precies|klopt|inderdaad|zeker|nou)\b",
+    # Meta-conversational (caller asking AI to repeat / clarify itself)
+    r"^(wat zei je|kun je dat herhalen|wat bedoel je|hoe bedoel je|sorry)\??$",
+    # Single word or very short filler that looks like a question
+    r"^(wie|wat|waar|hoe|waarom)\??$",
+]
+
+_NON_QUESTION_REGEX = re.compile(
+    "|".join(_NON_QUESTION_PHRASES),
+    re.IGNORECASE,
+)
+
+# Minimum word count for a question to be considered meaningful
+_MIN_QUESTION_WORDS = 4
+
+
+def _is_real_customer_question(sentence: str) -> bool:
+    """
+    Determine whether a sentence is a genuine customer question rather than
+    AI internal thoughts, greetings, or filler.
+    """
+    cleaned = sentence.strip().rstrip("?").strip()
+
+    # Too short to be a real question
+    if len(cleaned) < 12 or len(cleaned.split()) < _MIN_QUESTION_WORDS:
+        return False
+
+    # AI internal monologue leaked into transcript
+    if _AI_INTERNAL_REGEX.search(cleaned):
+        return False
+
+    # Common greetings, filler, and meta-conversation
+    if _NON_QUESTION_REGEX.match(cleaned):
+        return False
+
+    return True
+
 
 def extract_questions(text: str) -> List[str]:
     """
-    Extract questions from text.
+    Extract real customer questions from the caller transcript.
+    Filters out AI internal thoughts, greetings, filler, and meta phrases.
     
     Args:
         text: The transcript text (from caller/user)
         
     Returns:
-        List of detected questions
+        List of genuine customer questions
     """
     if not text:
         return []
@@ -68,7 +137,6 @@ def extract_questions(text: str) -> List[str]:
     questions = []
     
     # Split into sentences
-    # Match sentences ending with ? or likely question patterns
     sentences = re.split(r'[.!?]+', text)
     
     for i, sentence in enumerate(sentences):
@@ -88,7 +156,7 @@ def extract_questions(text: str) -> List[str]:
         
         # Check for Dutch question words at start
         question_starters = [
-            r'^(wat|wie|waar|wanneer|waarom|hoe|welke?|hoeveel|kunnen?|kun|mag|mogen|is|zijn|heeft|hebben|kan|zou|zouden)',
+            r'^(wat|wie|waar|wanneer|waarom|hoe|welke?|hoeveel|kunnen?|kun|mag|mogen|is|zijn|heeft|hebben|kan|zou|zouden)\b',
         ]
         
         for pattern in question_starters:
@@ -96,7 +164,7 @@ def extract_questions(text: str) -> List[str]:
                 is_question = True
                 break
         
-        if is_question and len(sentence) > 10:  # Minimum length to be meaningful
+        if is_question and _is_real_customer_question(sentence):
             # Clean up the question
             question = sentence.strip()
             if not question.endswith('?'):
