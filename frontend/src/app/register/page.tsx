@@ -41,7 +41,6 @@ const registerSchema = z.object({
   company_email: z.string().email('Voer een geldig e-mailadres in'),
   first_name: z.string().min(1, 'Voornaam is verplicht'),
   last_name: z.string().min(1, 'Achternaam is verplicht'),
-  email: z.string().email('Voer een geldig e-mailadres in'),
   password: z
     .string()
     .min(8, 'Wachtwoord moet minimaal 8 karakters zijn')
@@ -114,7 +113,7 @@ function RegisterContent() {
           email: data.company_email,
         },
         user_data: {
-          email: data.email,
+          email: data.company_email,
           password: data.password,
           first_name: data.first_name,
           last_name: data.last_name,
@@ -233,7 +232,7 @@ function RegisterContent() {
                       {...register('company_name')}
                     />
                     <Input
-                      label="Bedrijfs e-mailadres"
+                      label="E-mailadres"
                       type="email"
                       placeholder="info@uwbedrijf.nl"
                       error={errors.company_email?.message}
@@ -264,13 +263,6 @@ function RegisterContent() {
                         {...register('last_name')}
                       />
                     </div>
-                    <Input
-                      label="E-mailadres"
-                      type="email"
-                      placeholder="jan@uwbedrijf.nl"
-                      error={errors.email?.message}
-                      {...register('email')}
-                    />
                     <Input
                       label="Wachtwoord"
                       type="password"
