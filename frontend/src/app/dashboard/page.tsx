@@ -248,32 +248,7 @@ export default function DashboardPage() {
                     {!hasAIWorker && <ChevronRight className="h-5 w-5 text-gray-400" />}
                   </Link>
 
-                  {/* Step 2: Knowledge */}
-                  <Link
-                    href="/dashboard/knowledge"
-                    className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
-                      hasKnowledge 
-                        ? 'bg-green-50 border-green-200' 
-                        : 'bg-white border-gray-200 hover:border-primary-300'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      {hasKnowledge ? (
-                        <CheckCircle2 className="h-5 w-5 text-green-600" />
-                      ) : (
-                        <Circle className="h-5 w-5 text-gray-300" />
-                      )}
-                      <div>
-                        <p className={`font-medium ${hasKnowledge ? 'text-green-700' : 'text-gray-900'}`}>
-                          Kennisbank vullen
-                        </p>
-                        <p className="text-xs text-gray-500">Voeg uw website toe of upload documenten</p>
-                      </div>
-                    </div>
-                    {!hasKnowledge && <ChevronRight className="h-5 w-5 text-gray-400" />}
-                  </Link>
-
-                  {/* Step 3: Phone Number */}
+                  {/* Step 2: Phone Number */}
                   <Link
                     href="/dashboard/phone"
                     className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
@@ -300,6 +275,31 @@ export default function DashboardPage() {
                       </div>
                     </div>
                     {!(hasPhoneNumber && phoneLinkedToAI) && <ChevronRight className="h-5 w-5 text-gray-400" />}
+                  </Link>
+
+                  {/* Step 3: Knowledge */}
+                  <Link
+                    href="/dashboard/knowledge"
+                    className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
+                      hasKnowledge 
+                        ? 'bg-green-50 border-green-200' 
+                        : 'bg-white border-gray-200 hover:border-primary-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      {hasKnowledge ? (
+                        <CheckCircle2 className="h-5 w-5 text-green-600" />
+                      ) : (
+                        <Circle className="h-5 w-5 text-gray-300" />
+                      )}
+                      <div>
+                        <p className={`font-medium ${hasKnowledge ? 'text-green-700' : 'text-gray-900'}`}>
+                          Kennisbank vullen
+                        </p>
+                        <p className="text-xs text-gray-500">Voeg uw website toe of upload documenten</p>
+                      </div>
+                    </div>
+                    {!hasKnowledge && <ChevronRight className="h-5 w-5 text-gray-400" />}
                   </Link>
                 </div>
 
