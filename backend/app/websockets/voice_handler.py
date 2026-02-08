@@ -187,14 +187,14 @@ class RealtimeCallHandler:
         for source in knowledge_sources:
             chunks = self.db.query(KnowledgeChunk).filter(
                 KnowledgeChunk.website_id == source.id
-            ).limit(10).all()
+            ).all()
 
             for chunk in chunks:
                 if chunk.content:
-                    context_parts.append(chunk.content[:500])
+                    context_parts.append(chunk.content)
 
         if context_parts:
-            return "\n\n---\n\n".join(context_parts)[:8000]
+            return "\n\n---\n\n".join(context_parts)[:60000]
         return None
 
     def _get_training_rules(self) -> list:
