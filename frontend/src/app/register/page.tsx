@@ -81,10 +81,22 @@ function RegisterContent() {
     formState: { errors },
     trigger,
     getValues,
+    watch,
   } = useForm<RegisterForm>({
     resolver: zodResolver(registerSchema),
     defaultValues: { terms_accepted: true, marketing_consent: false },
   })
+
+  const watchPassword = watch('password', '')
+  const watchConfirmPassword = watch('confirm_password', '')
+
+  const passwordChecks = {
+    length: watchPassword.length >= 8,
+    uppercase: /[A-Z]/.test(watchPassword),
+    lowercase: /[a-z]/.test(watchPassword),
+    number: /[0-9]/.test(watchPassword),
+    match: watchPassword.length > 0 && watchConfirmPassword.length > 0 && watchPassword === watchConfirmPassword,
+  }
 
   const handleNextStep = async () => {
     const isValid = await trigger(['company_name', 'company_email'])
@@ -264,7 +276,6 @@ function RegisterContent() {
                       type="password"
                       placeholder="••••••••"
                       error={errors.password?.message}
-                      helperText="Minimaal 8 karakters met hoofdletter, kleine letter en cijfer"
                       {...register('password')}
                     />
                     <Input
@@ -274,6 +285,34 @@ function RegisterContent() {
                       error={errors.confirm_password?.message}
                       {...register('confirm_password')}
                     />
+                    {watchPassword.length > 0 && (
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                        {[
+                          { key: 'length', label: 'Minimaal 8 karakters' },
+                          { key: 'uppercase', label: 'Een hoofdletter' },
+                          { key: 'lowercase', label: 'Een kleine letter' },
+                          { key: 'number', label: 'Een cijfer' },
+                          ...(watchConfirmPassword.length > 0
+                            ? [{ key: 'match', label: 'Wachtwoorden komen overeen' }]
+                            : []),
+                        ].map(({ key, label }) => (
+                          <div key={key} className={`flex items-center gap-1.5 text-xs ${
+                            passwordChecks[key as keyof typeof passwordChecks]
+                              ? 'text-green-600'
+                              : 'text-gray-400'
+                          }`}>
+                            <div className={`flex items-center justify-center h-3.5 w-3.5 rounded-full flex-shrink-0 transition-colors ${
+                              passwordChecks[key as keyof typeof passwordChecks]
+                                ? 'bg-green-100'
+                                : 'bg-gray-100'
+                            }`}>
+                              <Check className="h-2.5 w-2.5" />
+                            </div>
+                            {label}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <label className="flex items-center gap-3 cursor-pointer group">
                       <div className="relative flex items-center justify-center">
                         <input
