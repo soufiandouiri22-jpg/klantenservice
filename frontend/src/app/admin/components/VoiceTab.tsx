@@ -132,7 +132,11 @@ export function VoiceTab() {
       setPlayingVoice(voiceId)
     } catch (error: any) {
       console.error('Voice preview error:', error)
-      toast.error('Kon voice preview niet laden')
+      if (error?.response?.status === 422) {
+        toast('Deze stem werkt tijdens gesprekken, maar heeft geen preview', { icon: 'ℹ️' })
+      } else {
+        toast.error('Kon voice preview niet laden')
+      }
     } finally {
       setPreviewLoading(null)
     }
@@ -289,11 +293,12 @@ export function VoiceTab() {
               <Sparkles className="h-5 w-5 text-primary-500" />
             </div>
             <div className="text-sm text-gray-600">
-              <p className="font-medium text-gray-900 mb-1">OpenAI Realtime API</p>
+              <p className="font-medium text-gray-900 mb-1">OpenAI gpt-realtime</p>
               <p>
                 Alle stemmen ondersteunen Nederlands en zijn full-duplex:
                 de AI kan luisteren terwijl het spreekt en stopt automatisch als de beller
                 iets zegt (barge-in). Geen vertraging bij het starten van een gesprek.
+                Sommige stemmen hebben geen preview maar werken wel tijdens gesprekken.
               </p>
             </div>
           </div>

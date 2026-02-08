@@ -1112,7 +1112,12 @@ OPENAI_VOICES = [
     {"id": "sage", "name": "Sage", "description": "Warm en autoritair", "gender": "female"},
     {"id": "shimmer", "name": "Shimmer", "description": "Licht en energiek", "gender": "female"},
     {"id": "verse", "name": "Verse", "description": "Dynamisch en levendig", "gender": "male"},
+    {"id": "cedar", "name": "Cedar", "description": "Rustig en betrouwbaar", "gender": "male"},
+    {"id": "marin", "name": "Marin", "description": "Helder en professioneel", "gender": "female"},
 ]
+
+# Voices that support the TTS API for previews (others need Realtime API)
+TTS_SUPPORTED_VOICES = {"alloy", "ash", "coral", "echo", "fable", "nova", "onyx", "sage", "shimmer"}
 
 VOICE_SAMPLE_TEXT = (
     "Goedemiddag, u spreekt met de klantenservice. "
@@ -1137,7 +1142,8 @@ async def preview_voice(
 ):
     """
     Generate a voice preview using OpenAI TTS API.
-    Returns MP3 audio as base64 for browser playback.
+    Returns MP3 audio for browser playback.
+    Some voices (ballad, verse, cedar, marin) are Realtime-only and don't support TTS preview.
     """
     from fastapi.responses import Response
     import openai
@@ -1149,6 +1155,12 @@ async def preview_voice(
             detail=f"Ongeldige stem: {voice_id}. Kies uit: {', '.join(valid_ids)}",
         )
 
+    if voice_id not in TTS_SUPPORTED_VOICES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Preview niet beschikbaar voor '{voice_id}'. Deze stem werkt wel tijdens gesprekken, maar ondersteunt geen TTS preview.",
+        )
+
     settings = get_settings()
     if not settings.OPENAI_API_KEY:
         raise HTTPException(status_code=500, detail="OPENAI_API_KEY niet geconfigureerd")
@@ -1156,20 +1168,19 @@ async def preview_voice(
     try:
         client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
         response = client.audio.speech.create(
-            model="tts-1",
+            model="tts-1-hd",
             voice=voice_id,
             input=VOICE_SAMPLE_TEXT,
             response_format="mp3",
         )
 
-        # Return MP3 audio directly
         audio_bytes = response.content
         return Response(
             content=audio_bytes,
             media_type="audio/mpeg",
             headers={
                 "Content-Disposition": f'inline; filename="preview-{voice_id}.mp3"',
-                "Cache-Control": "public, max-age=86400",  # Cache for 24h
+                "Cache-Control": "public, max-age=86400",
             },
         )
     except Exception as e:

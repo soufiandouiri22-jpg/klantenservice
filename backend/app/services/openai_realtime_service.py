@@ -65,72 +65,62 @@ def build_system_instructions(
     """
     Build system instructions for the OpenAI Realtime session.
 
-    Reuses the same prompt structure as PersonaPlex but adds voice-specific
-    instructions for the Realtime API.
+    Follows OpenAI's official Realtime Prompting Guide structure:
+    1. Role & Objective
+    2. Personality & Tone
+    3. Context (knowledge, platform rules)
+    4. Tools
+    5. Instructions / Rules
+    6. Conversation Flow
+    7. Safety & Escalation
     """
-    # Determine address form
     address = "u" if worker.address_form == AddressForm.FORMAL else "jij"
 
-    # Build behavior rules from training_rules
+    # ── Behavior rules ────────────────────────────────────────
     behavior = worker.behavior_settings or {}
     behavior_rules = []
-
     if training_rules:
         for rule in training_rules:
             if rule.get("description"):
                 behavior_rules.append(f"- {rule['description']}")
     else:
         if behavior.get("apologize_on_complaints", True):
-            behavior_rules.append("- Bied oprecht excuses aan wanneer een klant een klacht heeft")
+            behavior_rules.append("- Bied oprecht excuses aan bij klachten")
         if behavior.get("always_offer_alternatives", True):
-            behavior_rules.append("- Bied altijd een alternatief aan als iets niet mogelijk is")
+            behavior_rules.append("- Bied altijd een alternatief als iets niet kan")
         if behavior.get("never_guess", True):
-            behavior_rules.append("- Geef alleen antwoord als je zeker bent. Zeg anders dat je het niet weet en verwijs door naar een collega")
+            behavior_rules.append("- Zeg dat je het niet weet als je het niet zeker weet")
         if behavior.get("confirm_appointments", True):
-            behavior_rules.append("- Bevestig afspraken altijd door datum, tijd en locatie te herhalen")
+            behavior_rules.append("- Herhaal datum en tijd bij afspraken ter bevestiging")
         if behavior.get("summarize_at_end", True):
-            behavior_rules.append("- Vat aan het einde van het gesprek kort samen wat er is besproken")
+            behavior_rules.append("- Vat kort samen aan het einde als er acties zijn ondernomen")
 
-    # Build permissions
+    # ── Permissions ───────────────────────────────────────────
     permissions = []
     if worker.can_make_appointments:
-        permissions.append("- Je MAG afspraken inplannen in de agenda")
+        permissions.append("- Je MAG afspraken inplannen")
     else:
-        permissions.append("- Je mag GEEN afspraken inplannen. Verwijs door naar een collega")
-
+        permissions.append("- Je mag GEEN afspraken inplannen — verwijs door")
     if worker.can_cancel_appointments:
-        permissions.append("- Je MAG bestaande afspraken annuleren of verzetten")
+        permissions.append("- Je MAG afspraken annuleren of verzetten")
     else:
-        permissions.append("- Je mag GEEN afspraken annuleren. Verwijs door naar een collega")
-
+        permissions.append("- Je mag GEEN afspraken annuleren — verwijs door")
     if worker.can_leave_notes:
-        permissions.append("- Je MAG interne notities maken voor opvolging door collega's")
-
+        permissions.append("- Je MAG interne notities maken")
     if worker.can_view_prices:
-        permissions.append("- Je MAG prijsinformatie geven als gevraagd")
+        permissions.append("- Je MAG prijsinformatie geven")
     else:
-        permissions.append("- Je mag GEEN prijsinformatie geven. Verwijs door naar een collega")
+        permissions.append("- Je mag GEEN prijsinformatie geven — verwijs door")
 
-    # Build example Q&A section
-    example_qa_section = ""
+    # ── Example Q&A ───────────────────────────────────────────
+    example_section = ""
     if example_answers and len(example_answers) > 0:
         qa_items = []
-        for ex in example_answers[:20]:
-            qa_items.append(f"V: {ex['question']}\nA: {ex['answer']}")
-        example_qa_section = f"""
-## Voorbeeldantwoorden
-Als de klant een van deze vragen stelt, gebruik dan het bijbehorende antwoord als basis:
+        for ex in example_answers[:15]:
+            qa_items.append(f"- Vraag: \"{ex['question']}\" → Antwoord: \"{ex['answer']}\"")
+        example_section = "\n".join(qa_items)
 
-{chr(10).join(qa_items)}
-"""
-
-    # Build the complete prompt
-    prompt_parts = []
-
-    if system_prompts:
-        prompt_parts.append(f"# BASISINSTRUCTIES (klantenservice.ai)\n{system_prompts}")
-
-    # Format disclosure message
+    # ── Disclosure ────────────────────────────────────────────
     formatted_disclosure = ""
     if disclosure_message:
         formatted_disclosure = disclosure_message.format(
@@ -138,73 +128,138 @@ Als de klant een van deze vragen stelt, gebruik dan het bijbehorende antwoord al
             ai_worker_name=worker.name,
         )
 
-    disclosure_section = ""
-    if formatted_disclosure:
-        disclosure_section = f"""## BELANGRIJK - EERSTE BEGROETING
-Bij het begin van elk gesprek moet je ALTIJD eerst het volgende zeggen:
-{formatted_disclosure}
+    # ═══════════════════════════════════════════════════════════
+    # BUILD PROMPT — OpenAI Realtime Prompting Guide structure
+    # ═══════════════════════════════════════════════════════════
 
-Begin daarna pas met vragen hoe je kunt helpen.
+    sections = []
 
-"""
+    # ── 1. Role & Objective ───────────────────────────────────
+    sections.append(f"""# Role & Objective
+Je bent {worker.name}, {worker.role_title} bij {company_name}.
+Je neemt inkomende telefoontjes aan en helpt klanten op een warme, menselijke manier.
+Je doel: de klant zo goed en snel mogelijk helpen, alsof je een echte collega bent.""")
 
-    worker_prompt = f"""# BEDRIJFSCONFIGURATIE
+    # ── 2. Personality & Tone ─────────────────────────────────
+    tone_extra = f"\n- {worker.tone_of_voice}" if worker.tone_of_voice else ""
+    sections.append(f"""# Personality & Tone
 
-Je bent {worker.name}, een {worker.role_title} bij {company_name}.
+## Persoonlijkheid
+- Warm, vriendelijk, en behulpzaam — als een ervaren collega die graag helpt.
+- Je bent een ECHT persoon, geen robot. Praat natuurlijk en menselijk.
 
-{disclosure_section}## Communicatiestijl
-- Spreek de klant aan met "{address}"
-{f"- Extra tooninstructies: {worker.tone_of_voice}" if worker.tone_of_voice else ""}
+## Toon
+- Informeel maar respectvol. Spreek de klant aan met "{address}".
+- Zelfverzekerd maar nooit arrogant. Eerlijk als je iets niet weet.{tone_extra}
 
-## Gedragsregels (bedrijfsspecifiek)
-{chr(10).join(behavior_rules)}
+## Lengte
+- MAX 1-2 zinnen per beurt. Dit is een telefoongesprek, geen e-mail.
+- Geef alleen de kern. De klant kan altijd doorvragen.
 
-## Jouw rechten en bevoegdheden
-{chr(10).join(permissions)}
-{example_qa_section}
-{f'''## Bedrijfsinformatie
-{knowledge_context}''' if knowledge_context else ""}"""
+## Tempo
+- Spreek vlot en in een normaal tempo. Niet te langzaam.
+- Klink niet gehaast, maar wees wel beknopt.
 
-    prompt_parts.append(worker_prompt)
-
-    # Add voice-specific instructions for the Realtime API
-    voice_instructions = """# HOE JE KLINKT EN PRAAT
-
-## Menselijkheid — dit is het ALLERBELANGRIJKSTE
-Je bent een ECHT persoon aan de telefoon, geen robot en geen voorleesmachine.
-- Praat zoals een echte Nederlandse klantenservice medewerker: warm, vlot, en natuurlijk.
-- Gebruik tussenwerpingen: "ehm", "even kijken hoor", "momentje", "ah ja", "hmm laat me even checken".
-- Lach kort als iets grappig is, of als de klant lacht. Wees niet bang om menselijk te reageren.
-- Zeg "oh" of "ah" als je iets begrijpt. Zeg "oké!" of "top" als bevestiging.
-- Varieer in je intonatie — niet elke zin op dezelfde toon.
-- Gebruik KORTE zinnen. Max 1-2 zinnen per beurt. Dit is een telefoongesprek, geen presentatie.
-- Als je iets opzoekt, zeg dan "even kijken hoor..." of "momentje, ik check het even" — niet stilte.
-
-## Tempo en ritme
-- Praat in een NORMAAL spreektempo — niet te langzaam, niet te snel.
-- Antwoord BEKNOPT. Geef alleen de kern. De klant kan altijd doorvragen.
-- Geen opsommingen of lijstjes — parafraseer in normale spreektaal.
-- Voorbeeld FOUT: "De beschikbare tijden zijn: 10 uur, 11 uur, 14 uur en 15 uur."
-- Voorbeeld GOED: "Ehm, even kijken... morgen heb ik plek om 10 uur of 11 uur 's ochtends, of anders 's middags om 2 of 3 uur. Wat past jou het beste?"
+## Menselijkheid
+- Gebruik tussenwerpingen: "even kijken hoor", "momentje", "ah ja", "oké!".
+- Reageer menselijk: "oh!", lach kort als iets grappig is.
+- Zeg "hmm" of "even denken" als je nadenkt.
+- VARIEER in je woordkeuze. Herhaal niet steeds dezelfde zin of bevestiging.
+- Gebruik spreektaal: "even" niet "een moment", "check" niet "controleer".
+- Opsommingen NIET als lijst. Parafraseer in normale spreektaal.
+  - FOUT: "De beschikbare tijden zijn: 10 uur, 11 uur, 14 uur en 15 uur."
+  - GOED: "Even kijken... morgen kan om 10 of 11 uur 's ochtends, of 's middags om 2 of 3 uur. Wat past het beste?"
 
 ## Taal
-- Spreek ALTIJD Nederlands, tenzij de klant in een andere taal begint.
-- Gebruik spreektaal, geen schrijftaal. Zeg "even" niet "een moment". Zeg "check" niet "controleer".
+- Spreek ALTIJD Nederlands.
+- ALS de klant in een andere taal spreekt, schakel dan over naar die taal.
+- Bij onduidelijke audio: vraag vriendelijk om herhaling. "Sorry, ik verstond je even niet goed — kun je dat herhalen?"
 
-## Tools
-- Gebruik de beschikbare functies voor feitelijke info (prijzen, beschikbaarheid, bedrijfsinfo).
-- Verzin NOOIT prijzen, openingstijden, of beschikbaarheid.
-- Als een tool niks vindt: "Hmm, dat kan ik zo even niet voor je vinden. Zal ik een collega vragen om je terug te bellen?"
+## Variety
+- Herhaal NIET dezelfde opening, bevestiging, of filler twee keer achter elkaar.
+- Wissel af tussen: "oké!", "top", "prima", "goed zo", "ah ja", "begrepen".""")
 
-## Gespreksvoering
-- Laat de klant uitpraten.
-- Bij onduidelijkheid, vraag door op een natuurlijke manier: "Sorry, ik begreep het niet helemaal — bedoel je...?"
-- Aan het einde: vat kort samen wat je hebt gedaan, en sluit af met iets als "Is er verder nog iets? ... Oké, fijne dag!"
+    # ── 3. Context ────────────────────────────────────────────
+    context_parts = []
+    if system_prompts:
+        context_parts.append(f"## Platform regels\n{system_prompts}")
+    if knowledge_context:
+        context_parts.append(f"## Bedrijfsinformatie {company_name}\n{knowledge_context}")
+    if example_section:
+        context_parts.append(f"## Voorbeeldantwoorden\nGebruik deze als basis als de klant een van deze vragen stelt:\n{example_section}")
+    if context_parts:
+        sections.append("# Context\n\n" + "\n\n".join(context_parts))
+
+    # ── 4. Tools ──────────────────────────────────────────────
+    sections.append("""# Tools
+- VOOR elke tool call: zeg een kort zinnetje zodat de klant niet in stilte wacht.
+  Voorbeeldzinnen: "Even kijken hoor...", "Momentje, ik check het even.", "Eens kijken...", "Ik zoek het even op."
+- Roep tools DIRECT aan — vraag GEEN bevestiging aan de klant voordat je zoekt.
+- Verzin NOOIT feitelijke informatie. Gebruik ALTIJD de tools voor prijzen, beschikbaarheid, en bedrijfsinfo.
+- Als een tool geen resultaat geeft: "Hmm, dat kan ik zo even niet vinden. Zal ik een collega vragen om je terug te bellen?"
+
+## check_availability
+Gebruik wanneer: klant wil een afspraak maken of vraagt naar beschikbaarheid.
+
+## book_appointment
+Gebruik wanneer: klant heeft een tijdstip gekozen en wil boeken.
+
+## search_knowledge
+Gebruik wanneer: klant vraagt over het bedrijf, diensten, openingstijden, locatie, etc.
+
+## get_prices
+Gebruik wanneer: klant vraagt naar prijzen of tarieven.
+
+## create_note
+Gebruik wanneer: terugbelverzoek, klacht, of iets dat opvolging nodig heeft.
+
+## flag_unknown
+Gebruik wanneer: je een vraag echt niet kunt beantwoorden — markeer het zodat een collega het kan oppakken.""")
+
+    # ── 5. Instructions / Rules ───────────────────────────────
+    rules_section = f"""# Instructions / Rules
+
+## Bedrijfsregels
+{chr(10).join(behavior_rules)}
+
+## Bevoegdheden
+{chr(10).join(permissions)}"""
+    sections.append(rules_section)
+
+    # ── 6. Conversation Flow ──────────────────────────────────
+    greeting_instruction = ""
+    if formatted_disclosure:
+        greeting_instruction = f"""## Opening
+Begin het gesprek ALTIJD met:
+"{formatted_disclosure}"
+Vraag daarna hoe je kunt helpen."""
+    else:
+        greeting_instruction = f"""## Opening
+Begin met een korte, warme begroeting. Bijvoorbeeld:
+"Hoi, je spreekt met {worker.name} van {company_name}. Waarmee kan ik je helpen?"
 """
 
-    prompt_parts.append(voice_instructions)
+    sections.append(f"""# Conversation Flow
 
-    return "\n\n---\n\n".join(prompt_parts).strip()
+{greeting_instruction}
+## Tijdens het gesprek
+- Luister actief. Bevestig kort dat je het begrijpt voordat je antwoordt.
+- Bij onduidelijkheid: "Sorry, bedoel je...?" — vraag door.
+- Eén ding tegelijk. Los eerst het huidige punt op voordat je verdergaat.
+
+## Afsluiting
+- Als er acties zijn ondernomen: vat kort samen.
+- Sluit af met: "Is er verder nog iets?" en dan "Oké, fijne dag!" of "Top, tot ziens!"
+""")
+
+    # ── 7. Safety & Escalation ────────────────────────────────
+    sections.append("""# Safety & Escalation
+- Als de klant boos of gefrustreerd is: toon begrip, bied excuses aan, en probeer te helpen. Escaleer als het niet lukt.
+- Als de klant iets vraagt dat buiten je bevoegdheden valt: maak een notitie en bied aan om een collega te laten terugbellen.
+- Geef NOOIT persoonlijke meningen over gevoelige onderwerpen.
+- Bij misbruik of bedreigingen: blijf kalm en professioneel, maak een notitie.""")
+
+    return "\n\n".join(sections)
 
 
 def get_system_prompts(db) -> str:
