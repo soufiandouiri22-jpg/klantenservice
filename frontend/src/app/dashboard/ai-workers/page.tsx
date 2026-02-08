@@ -383,6 +383,22 @@ export default function AIWorkersPage() {
       >
         {selectedWorker && (
           <div className="space-y-6">
+            {/* Name & Role */}
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label="Naam"
+                value={selectedWorker.name}
+                onChange={(e) => setSelectedWorker({ ...selectedWorker, name: e.target.value })}
+                onBlur={() => handleSettingChange('name', selectedWorker.name)}
+              />
+              <Input
+                label="Rol / Functie"
+                value={selectedWorker.role_title}
+                onChange={(e) => setSelectedWorker({ ...selectedWorker, role_title: e.target.value })}
+                onBlur={() => handleSettingChange('role_title', selectedWorker.role_title)}
+              />
+            </div>
+
             {/* Voice Selection */}
             <div className="space-y-3">
               <h4 className="font-medium text-gray-900">Stem</h4>
