@@ -37,6 +37,8 @@ from app.schemas.user import (
     EmailVerifyCode,
     EmailResendCode,
     ProfileUpdate,
+    ChangeEmailRequest,
+    ChangeEmailVerify,
 )
 from app.schemas.company import CompanyCreate
 from app.api.deps import get_current_user
@@ -432,8 +434,8 @@ async def update_me(
     db: Session = Depends(get_db),
 ):
     """
-    Update current user profile (first_name, last_name, email, phone).
-    When logging in with Google, these are often pre-filled from Google.
+    Update current user profile (first_name, last_name, phone).
+    Email changes require verification via /change-email/request + /verify.
     """
     if data.first_name is not None:
         current_user.first_name = data.first_name
@@ -441,16 +443,123 @@ async def update_me(
         current_user.last_name = data.last_name
     if data.phone is not None:
         current_user.phone = data.phone
-    if data.email is not None and data.email != current_user.email:
-        existing = db.query(User).filter(User.email == data.email, User.id != current_user.id).first()
-        if existing:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Dit e-mailadres is al in gebruik",
-            )
-        current_user.email = data.email
     db.commit()
     db.refresh(current_user)
+    return current_user
+
+
+@router.post("/change-email/request")
+async def request_email_change(
+    data: ChangeEmailRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Request an email change. Sends a 6-digit verification code to the
+    user's CURRENT email address to confirm the change.
+    """
+    new_email = data.new_email.lower().strip()
+
+    # Same email
+    if new_email == current_user.email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Dit is al uw huidige e-mailadres",
+        )
+
+    # Check if new email is already in use
+    existing = db.query(User).filter(User.email == new_email, User.id != current_user.id).first()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Dit e-mailadres is al in gebruik",
+        )
+
+    # Rate limit: 60 seconds between requests
+    if current_user.verification_sent_at:
+        cooldown = current_user.verification_sent_at + timedelta(seconds=60)
+        if datetime.utcnow() < cooldown:
+            seconds_left = int((cooldown - datetime.utcnow()).total_seconds())
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Wacht nog {seconds_left} seconden voordat u een nieuwe code aanvraagt",
+            )
+
+    # Generate code and store pending email
+    code = generate_verification_code()
+    current_user.verification_token = code
+    current_user.verification_sent_at = datetime.utcnow()
+    current_user.pending_email = new_email
+    db.commit()
+
+    # Send code to CURRENT email
+    send_verification_code_email(
+        to_email=current_user.email,
+        first_name=current_user.first_name,
+        code=code,
+    )
+
+    return {"message": "Verificatiecode verzonden naar uw huidige e-mailadres"}
+
+
+@router.post("/change-email/verify", response_model=UserResponse)
+async def verify_email_change(
+    data: ChangeEmailVerify,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Verify email change with the 6-digit code sent to the current email.
+    On success, updates the email to the pending_email.
+    """
+    # Check if there is a pending email change
+    if not current_user.pending_email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Er is geen e-mailwijziging in behandeling",
+        )
+
+    # Check if code is expired (10 minutes)
+    if current_user.verification_sent_at:
+        expires_at = current_user.verification_sent_at + timedelta(minutes=10)
+        if datetime.utcnow() > expires_at:
+            current_user.verification_token = None
+            current_user.pending_email = None
+            db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Verificatiecode is verlopen. Vraag een nieuwe code aan.",
+            )
+
+    # Validate code
+    if current_user.verification_token != data.code:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ongeldige verificatiecode",
+        )
+
+    # Double-check new email is still available
+    existing = db.query(User).filter(
+        User.email == current_user.pending_email,
+        User.id != current_user.id
+    ).first()
+    if existing:
+        current_user.verification_token = None
+        current_user.pending_email = None
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Dit e-mailadres is inmiddels al in gebruik",
+        )
+
+    # Apply email change
+    current_user.email = current_user.pending_email
+    current_user.pending_email = None
+    current_user.verification_token = None
+    current_user.verification_sent_at = None
+    db.commit()
+    db.refresh(current_user)
+
     return current_user
 
 

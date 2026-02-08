@@ -76,10 +76,9 @@ class TokenRefresh(BaseModel):
 
 
 class ProfileUpdate(BaseModel):
-    """Schema for current user profile update (first_name, last_name, email, phone)."""
+    """Schema for current user profile update (first_name, last_name, phone)."""
     first_name: Optional[str] = Field(None, min_length=1, max_length=100)
     last_name: Optional[str] = Field(None, min_length=1, max_length=100)
-    email: Optional[EmailStr] = None
     phone: Optional[str] = None
 
 
@@ -157,3 +156,13 @@ class EmailVerifyCode(BaseModel):
 class EmailResendCode(BaseModel):
     """Schema for resending verification code (no auth required)."""
     email: EmailStr
+
+
+class ChangeEmailRequest(BaseModel):
+    """Schema for requesting an email change (sends code to current email)."""
+    new_email: EmailStr
+
+
+class ChangeEmailVerify(BaseModel):
+    """Schema for verifying email change with code."""
+    code: str = Field(..., min_length=6, max_length=6, description="6-digit verification code")

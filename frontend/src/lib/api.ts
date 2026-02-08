@@ -76,8 +76,18 @@ export const authApi = {
     return response.data
   },
 
-  updateMe: async (data: { first_name?: string; last_name?: string; email?: string; phone?: string }) => {
+  updateMe: async (data: { first_name?: string; last_name?: string; phone?: string }) => {
     const response = await api.patch('/auth/me', data)
+    return response.data
+  },
+
+  changeEmailRequest: async (newEmail: string) => {
+    const response = await api.post('/auth/change-email/request', { new_email: newEmail })
+    return response.data
+  },
+
+  changeEmailVerify: async (code: string) => {
+    const response = await api.post('/auth/change-email/verify', { code })
     return response.data
   },
   

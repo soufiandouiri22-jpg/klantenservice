@@ -64,6 +64,7 @@ class User(Base):
     verification_token = Column(String(255), nullable=True)
     verification_sent_at = Column(DateTime, nullable=True)
     verified_at = Column(DateTime, nullable=True)
+    pending_email = Column(String(255), nullable=True)
     
     # Password reset
     reset_token = Column(String(255), nullable=True)

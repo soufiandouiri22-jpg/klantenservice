@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { Building2, Shield, CreditCard, Users, User, Key, Trash2, Mail, Clock, Check } from 'lucide-react'
+import { Building2, Shield, CreditCard, Users, User, Key, Trash2, Mail, Clock, Check, RefreshCw, Pencil } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { Header } from '@/components/layout/Header'
@@ -44,6 +44,14 @@ function SettingsContent() {
       setActiveTab(tabParam)
     }
   }, [searchParams])
+  // Email change modal state
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false)
+  const [emailStep, setEmailStep] = useState<1 | 2>(1)
+  const [newEmail, setNewEmail] = useState('')
+  const [emailCode, setEmailCode] = useState(['', '', '', '', '', ''])
+  const [emailCooldown, setEmailCooldown] = useState(0)
+  const emailCodeRefs = useRef<(HTMLInputElement | null)[]>([])
+
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false)
   const [newUserData, setNewUserData] = useState({
     email: '',
@@ -202,6 +210,102 @@ function SettingsContent() {
     },
   })
 
+  // Email change cooldown timer
+  useEffect(() => {
+    if (emailCooldown > 0) {
+      const timer = setTimeout(() => setEmailCooldown(emailCooldown - 1), 1000)
+      return () => clearTimeout(timer)
+    }
+  }, [emailCooldown])
+
+  const requestEmailChangeMutation = useMutation({
+    mutationFn: (email: string) => authApi.changeEmailRequest(email),
+    onSuccess: () => {
+      toast.success('Verificatiecode verzonden naar uw huidige e-mailadres')
+      setEmailStep(2)
+      setEmailCooldown(60)
+      // Focus first code input after step transition
+      setTimeout(() => emailCodeRefs.current[0]?.focus(), 100)
+    },
+    onError: (error: any) => {
+      const detail = error.response?.data?.detail
+      if (detail?.includes('Wacht nog')) {
+        const match = detail.match(/(\d+) seconden/)
+        if (match) setEmailCooldown(parseInt(match[1]))
+      }
+      toast.error(detail || 'Kon verificatiecode niet versturen')
+    },
+  })
+
+  const verifyEmailChangeMutation = useMutation({
+    mutationFn: (code: string) => authApi.changeEmailVerify(code),
+    onSuccess: (updatedUser) => {
+      queryClient.invalidateQueries({ queryKey: ['auth-me'] })
+      if (updatedUser) {
+        setUser({
+          id: updatedUser.id,
+          email: updatedUser.email,
+          first_name: updatedUser.first_name,
+          last_name: updatedUser.last_name,
+          role: updatedUser.role,
+          company_id: updatedUser.company_id,
+          oauth_provider: updatedUser.oauth_provider,
+          is_verified: updatedUser.is_verified,
+          is_superadmin: updatedUser.is_superadmin,
+        })
+      }
+      toast.success('E-mailadres succesvol gewijzigd')
+      closeEmailModal()
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Verificatie mislukt')
+      setEmailCode(['', '', '', '', '', ''])
+      emailCodeRefs.current[0]?.focus()
+    },
+  })
+
+  const closeEmailModal = () => {
+    setIsEmailModalOpen(false)
+    setEmailStep(1)
+    setNewEmail('')
+    setEmailCode(['', '', '', '', '', ''])
+    setEmailCooldown(0)
+  }
+
+  const handleEmailCodeChange = (index: number, value: string) => {
+    if (value && !/^\d$/.test(value)) return
+    const newCode = [...emailCode]
+    newCode[index] = value
+    setEmailCode(newCode)
+    if (value && index < 5) {
+      emailCodeRefs.current[index + 1]?.focus()
+    }
+    if (value && index === 5 && newCode.every(d => d !== '')) {
+      verifyEmailChangeMutation.mutate(newCode.join(''))
+    }
+  }
+
+  const handleEmailCodeKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' && !emailCode[index] && index > 0) {
+      emailCodeRefs.current[index - 1]?.focus()
+    }
+  }
+
+  const handleEmailCodePaste = (e: React.ClipboardEvent) => {
+    e.preventDefault()
+    const pastedData = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6)
+    if (pastedData.length === 6) {
+      setEmailCode(pastedData.split(''))
+      emailCodeRefs.current[5]?.focus()
+      verifyEmailChangeMutation.mutate(pastedData)
+    }
+  }
+
+  const handleResendEmailCode = () => {
+    if (emailCooldown > 0) return
+    requestEmailChangeMutation.mutate(newEmail)
+  }
+
   const handleUpgrade = (plan: string, interval: 'monthly' | 'yearly' = 'monthly') => {
     checkoutMutation.mutate({ plan, interval })
   }
@@ -284,17 +388,23 @@ function SettingsContent() {
                         }}
                       />
                     </div>
-                    <Input
-                      label="E-mailadres"
-                      type="email"
-                      defaultValue={currentUser?.email}
-                      onBlur={(e) => {
-                        const v = e.target.value.trim()
-                        if (v !== currentUser?.email) {
-                          updateProfileMutation.mutate({ email: v })
-                        }
-                      }}
-                    />
+                    <div>
+                      <label className="label">E-mailadres</label>
+                      <div className="flex gap-3 items-center">
+                        <div className="flex-1 input bg-gray-50 text-gray-700 cursor-not-allowed">
+                          {currentUser?.email}
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setIsEmailModalOpen(true)}
+                          className="flex-shrink-0"
+                        >
+                          <Pencil className="h-4 w-4 mr-1.5" />
+                          Wijzigen
+                        </Button>
+                      </div>
+                    </div>
                     <Input
                       label="Telefoonnummer"
                       defaultValue={currentUser?.phone ?? ''}
@@ -844,6 +954,105 @@ function SettingsContent() {
                 </Modal>
               </motion.div>
             )}
+
+            {/* Email Change Verification Modal */}
+            <Modal
+              isOpen={isEmailModalOpen}
+              onClose={closeEmailModal}
+              title="E-mailadres wijzigen"
+              description={
+                emailStep === 1
+                  ? 'Voer uw nieuwe e-mailadres in. We sturen een verificatiecode naar uw huidige e-mailadres.'
+                  : `We hebben een 6-cijferige code gestuurd naar ${currentUser?.email}. Voer de code in om de wijziging te bevestigen.`
+              }
+            >
+              {emailStep === 1 ? (
+                <div className="space-y-4">
+                  <Input
+                    label="Nieuw e-mailadres"
+                    type="email"
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    placeholder="nieuw@email.nl"
+                  />
+                  <div className="flex gap-3 pt-2">
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      onClick={closeEmailModal}
+                    >
+                      Annuleren
+                    </Button>
+                    <Button
+                      className="flex-1"
+                      onClick={() => requestEmailChangeMutation.mutate(newEmail)}
+                      disabled={!newEmail || requestEmailChangeMutation.isPending}
+                      isLoading={requestEmailChangeMutation.isPending}
+                    >
+                      Verstuur code
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Nieuw e-mailadres:</p>
+                    <p className="font-medium text-gray-900">{newEmail}</p>
+                  </div>
+
+                  {/* Code Input */}
+                  <div className="flex justify-center gap-2">
+                    {emailCode.map((digit, index) => (
+                      <input
+                        key={index}
+                        ref={(el) => { emailCodeRefs.current[index] = el }}
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={1}
+                        value={digit}
+                        onChange={(e) => handleEmailCodeChange(index, e.target.value)}
+                        onKeyDown={(e) => handleEmailCodeKeyDown(index, e)}
+                        onPaste={index === 0 ? handleEmailCodePaste : undefined}
+                        className="w-12 h-14 text-center text-2xl font-bold border-2 border-gray-300 rounded-lg focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none transition-all"
+                        disabled={verifyEmailChangeMutation.isPending}
+                      />
+                    ))}
+                  </div>
+
+                  {/* Verify Button */}
+                  <Button
+                    onClick={() => verifyEmailChangeMutation.mutate(emailCode.join(''))}
+                    className="w-full"
+                    isLoading={verifyEmailChangeMutation.isPending}
+                    disabled={emailCode.some(d => d === '')}
+                  >
+                    Bevestigen
+                  </Button>
+
+                  {/* Resend */}
+                  <div className="text-center">
+                    <p className="text-sm text-gray-600 mb-2">
+                      Geen code ontvangen?
+                    </p>
+                    <button
+                      onClick={handleResendEmailCode}
+                      disabled={requestEmailChangeMutation.isPending || emailCooldown > 0}
+                      className="inline-flex items-center text-sm text-primary-600 hover:text-primary-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <RefreshCw className={`mr-2 h-4 w-4 ${requestEmailChangeMutation.isPending ? 'animate-spin' : ''}`} />
+                      {emailCooldown > 0
+                        ? `Opnieuw versturen (${emailCooldown}s)`
+                        : 'Opnieuw versturen'}
+                    </button>
+                  </div>
+
+                  {/* Help text */}
+                  <p className="text-xs text-center text-gray-500">
+                    De code is 10 minuten geldig. Controleer ook uw spam folder.
+                  </p>
+                </div>
+              )}
+            </Modal>
 
             {activeTab === 'security' && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
