@@ -133,36 +133,42 @@ export default function CallsPage() {
               <div className="flex items-center gap-4 pt-2 border-t border-gray-100">
                 <div className="flex-1">
                   <label className="text-xs font-medium text-gray-500 mb-1 block">Status</label>
-                  <select
-                    className="input text-sm"
-                    value={statusFilter}
-                    onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }}
-                  >
-                    <option value="">Alle statussen</option>
-                    <option value="completed">Afgerond</option>
-                    <option value="missed">Gemist</option>
-                    <option value="voicemail">Voicemail</option>
-                    <option value="failed">Mislukt</option>
-                    <option value="abandoned">Afgebroken</option>
-                  </select>
+                  <div className="relative">
+                    <select
+                      className="input text-sm appearance-none pr-10"
+                      value={statusFilter}
+                      onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }}
+                    >
+                      <option value="">Alle statussen</option>
+                      <option value="completed">Afgerond</option>
+                      <option value="missed">Gemist</option>
+                      <option value="voicemail">Voicemail</option>
+                      <option value="failed">Mislukt</option>
+                      <option value="abandoned">Afgebroken</option>
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  </div>
                 </div>
                 <div className="flex-1">
                   <label className="text-xs font-medium text-gray-500 mb-1 block">Uitkomst</label>
-                  <select
-                    className="input text-sm"
-                    value={outcomeFilter}
-                    onChange={(e) => { setOutcomeFilter(e.target.value); setPage(1) }}
-                  >
-                    <option value="">Alle uitkomsten</option>
-                    <option value="handled">Afgehandeld</option>
-                    <option value="appointment_made">Afspraak gemaakt</option>
-                    <option value="appointment_cancelled">Afspraak geannuleerd</option>
-                    <option value="info_provided">Info verstrekt</option>
-                    <option value="note_left">Notitie achtergelaten</option>
-                    <option value="callback_requested">Terugbelverzoek</option>
-                    <option value="transferred">Doorverbonden</option>
-                    <option value="no_action">Geen actie</option>
-                  </select>
+                  <div className="relative">
+                    <select
+                      className="input text-sm appearance-none pr-10"
+                      value={outcomeFilter}
+                      onChange={(e) => { setOutcomeFilter(e.target.value); setPage(1) }}
+                    >
+                      <option value="">Alle uitkomsten</option>
+                      <option value="handled">Afgehandeld</option>
+                      <option value="appointment_made">Afspraak gemaakt</option>
+                      <option value="appointment_cancelled">Afspraak geannuleerd</option>
+                      <option value="info_provided">Info verstrekt</option>
+                      <option value="note_left">Notitie achtergelaten</option>
+                      <option value="callback_requested">Terugbelverzoek</option>
+                      <option value="transferred">Doorverbonden</option>
+                      <option value="no_action">Geen actie</option>
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  </div>
                 </div>
                 {activeFilterCount > 0 && (
                   <Button
