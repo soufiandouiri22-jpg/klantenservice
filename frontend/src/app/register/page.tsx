@@ -83,6 +83,7 @@ function RegisterContent() {
   } = useForm<RegisterForm>({
     resolver: zodResolver(registerSchema),
     defaultValues: { terms_accepted: true, marketing_consent: false },
+    mode: 'onTouched',
   })
 
   const handleNextStep = async () => {
@@ -259,6 +260,7 @@ function RegisterContent() {
                       label="Wachtwoord"
                       type="password"
                       placeholder="••••••••"
+                      autoComplete="new-password"
                       error={errors.password?.message}
                       helperText="Minimaal 8 karakters met hoofdletter, kleine letter en cijfer"
                       {...register('password')}
@@ -267,6 +269,7 @@ function RegisterContent() {
                       label="Wachtwoord bevestigen"
                       type="password"
                       placeholder="••••••••"
+                      autoComplete="new-password"
                       error={errors.confirm_password?.message}
                       {...register('confirm_password')}
                     />
