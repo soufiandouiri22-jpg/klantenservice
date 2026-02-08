@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useEffect, useRef, Suspense } from 'react'
+import { useState, useEffect, useRef, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { Building2, Shield, CreditCard, Users, User, Key, Trash2, Mail, Clock, Check, RefreshCw, Pencil } from 'lucide-react'
+import { Building2, Shield, CreditCard, Users, User, Key, Trash2, Mail, Clock, Check, RefreshCw, Pencil, Loader2, CheckCircle, XCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { Header } from '@/components/layout/Header'
@@ -16,7 +16,7 @@ import { Badge } from '@/components/ui/Badge'
 import { PageLoader } from '@/components/ui/Spinner'
 import { Modal } from '@/components/ui/Modal'
 import { Select } from '@/components/ui/Select'
-import { companyApi, usersApi, authApi, paymentsApi } from '@/lib/api'
+import { companyApi, usersApi, authApi, paymentsApi, kvkApi } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 
 const tabs = [
@@ -51,6 +51,17 @@ function SettingsContent() {
   const [emailCode, setEmailCode] = useState(['', '', '', '', '', ''])
   const [emailCooldown, setEmailCooldown] = useState(0)
   const emailCodeRefs = useRef<(HTMLInputElement | null)[]>([])
+
+  // KVK autocomplete state (settings company tab)
+  const [kvkResults, setKvkResults] = useState<any[]>([])
+  const [isKvkSearching, setIsKvkSearching] = useState(false)
+  const [showKvkDropdown, setShowKvkDropdown] = useState(false)
+  const kvkSettingsRef = useRef<HTMLDivElement>(null)
+  const kvkDebounceRef = useRef<NodeJS.Timeout | null>(null)
+  const companyNameRef = useRef<HTMLInputElement>(null)
+
+  // BTW validation state
+  const [btwStatus, setBtwStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle')
 
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false)
   const [newUserData, setNewUserData] = useState({
@@ -306,6 +317,74 @@ function SettingsContent() {
     requestEmailChangeMutation.mutate(newEmail)
   }
 
+  // Close KVK dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (kvkSettingsRef.current && !kvkSettingsRef.current.contains(e.target as Node)) {
+        setShowKvkDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const handleKvkSearch = useCallback((value: string) => {
+    if (kvkDebounceRef.current) clearTimeout(kvkDebounceRef.current)
+    if (value.length < 2) {
+      setKvkResults([])
+      setShowKvkDropdown(false)
+      return
+    }
+    kvkDebounceRef.current = setTimeout(async () => {
+      setIsKvkSearching(true)
+      try {
+        const data = await kvkApi.search(value, 5)
+        setKvkResults(data.resultaten || [])
+        setShowKvkDropdown((data.resultaten || []).length > 0)
+      } catch {
+        setKvkResults([])
+      } finally {
+        setIsKvkSearching(false)
+      }
+    }, 400)
+  }, [])
+
+  const handleSelectKvkCompany = useCallback((result: any) => {
+    // Build update payload from KVK data
+    const update: any = { name: result.naam, kvk_number: result.kvk_nummer }
+    if (result.adres) {
+      if (result.adres.straatnaam) {
+        update.address = result.adres.huisnummer
+          ? `${result.adres.straatnaam} ${result.adres.huisnummer}`
+          : result.adres.straatnaam
+      }
+      if (result.adres.postcode) update.postal_code = result.adres.postcode
+      if (result.adres.plaats) update.city = result.adres.plaats
+    }
+    updateCompanyMutation.mutate(update)
+    setShowKvkDropdown(false)
+    // Update the input visually
+    if (companyNameRef.current) companyNameRef.current.value = result.naam
+    toast.success(`Bedrijfsgegevens bijgewerkt vanuit KVK (${result.kvk_nummer})`)
+  }, [updateCompanyMutation])
+
+  const handleBtwValidation = useCallback(async (btwNummer: string) => {
+    if (!btwNummer || btwNummer.length < 4) {
+      setBtwStatus('idle')
+      return
+    }
+    setBtwStatus('checking')
+    try {
+      const result = await kvkApi.validateBtw(btwNummer)
+      setBtwStatus(result.geldig ? 'valid' : 'invalid')
+      if (!result.geldig) {
+        toast.error(result.melding || 'BTW-nummer is ongeldig')
+      }
+    } catch {
+      setBtwStatus('idle')
+    }
+  }, [])
+
   const handleUpgrade = (plan: string, interval: 'monthly' | 'yearly' = 'monthly') => {
     checkoutMutation.mutate({ plan, interval })
   }
@@ -428,15 +507,55 @@ function SettingsContent() {
                     <CardDescription>Algemene informatie over uw bedrijf.</CardDescription>
                   </CardHeader>
                   <CardBody className="space-y-4">
-                    <Input
-                      label="Bedrijfsnaam"
-                      defaultValue={companyData?.name}
-                      onBlur={(e) => {
-                        if (e.target.value !== companyData?.name) {
-                          updateCompanyMutation.mutate({ name: e.target.value })
-                        }
-                      }}
-                    />
+                    <div className="relative" ref={kvkSettingsRef}>
+                      <Input
+                        ref={companyNameRef}
+                        label="Bedrijfsnaam"
+                        defaultValue={companyData?.name}
+                        autoComplete="off"
+                        onChange={(e) => handleKvkSearch(e.target.value)}
+                        onBlur={(e) => {
+                          const v = e.target.value.trim()
+                          if (v !== companyData?.name) {
+                            updateCompanyMutation.mutate({ name: v })
+                          }
+                        }}
+                      />
+                      {isKvkSearching && (
+                        <div className="absolute right-3 top-9 text-gray-400">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        </div>
+                      )}
+                      {showKvkDropdown && kvkResults.length > 0 && (
+                        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white rounded-lg border border-gray-200 shadow-lg overflow-hidden">
+                          <p className="px-4 py-2 text-xs text-gray-500 bg-gray-50 border-b border-gray-100">
+                            Selecteer om gegevens automatisch in te vullen
+                          </p>
+                          {kvkResults.map((result: any, index: number) => (
+                            <button
+                              key={`${result.kvk_nummer}-${index}`}
+                              type="button"
+                              onMouseDown={(e) => {
+                                e.preventDefault() // Prevent input blur
+                                handleSelectKvkCompany(result)
+                              }}
+                              className="w-full flex items-start gap-3 px-4 py-3 hover:bg-gray-50 text-left transition-colors border-b border-gray-50 last:border-0"
+                            >
+                              <Building2 className="h-5 w-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-900 truncate">{result.naam}</p>
+                                <p className="text-xs text-gray-500 mt-0.5">
+                                  KvK {result.kvk_nummer}
+                                  {result.adres?.plaats && ` · ${result.adres.plaats}`}
+                                  {result.adres?.straatnaam && `, ${result.adres.straatnaam}`}
+                                  {result.adres?.huisnummer && ` ${result.adres.huisnummer}`}
+                                </p>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     <Input
                       label="E-mailadres voor facturatie"
                       type="email"
@@ -467,15 +586,36 @@ function SettingsContent() {
                           }
                         }}
                       />
-                      <Input
-                        label="BTW-nummer"
-                        defaultValue={companyData?.btw_number}
-                        onBlur={(e) => {
-                          if (e.target.value !== companyData?.btw_number) {
-                            updateCompanyMutation.mutate({ btw_number: e.target.value })
-                          }
-                        }}
-                      />
+                      <div className="relative">
+                        <Input
+                          label="BTW-nummer"
+                          defaultValue={companyData?.btw_number}
+                          placeholder="NL123456789B01"
+                          onBlur={(e) => {
+                            const v = e.target.value.trim()
+                            if (v !== companyData?.btw_number) {
+                              updateCompanyMutation.mutate({ btw_number: v })
+                              if (v) handleBtwValidation(v)
+                              else setBtwStatus('idle')
+                            }
+                          }}
+                        />
+                        {btwStatus === 'checking' && (
+                          <Loader2 className="absolute right-3 top-9 h-4 w-4 animate-spin text-gray-400" />
+                        )}
+                        {btwStatus === 'valid' && (
+                          <div className="mt-1 flex items-center gap-1 text-xs text-green-600">
+                            <CheckCircle className="h-3.5 w-3.5" />
+                            BTW-nummer is geldig
+                          </div>
+                        )}
+                        {btwStatus === 'invalid' && (
+                          <div className="mt-1 flex items-center gap-1 text-xs text-red-600">
+                            <XCircle className="h-3.5 w-3.5" />
+                            BTW-nummer is ongeldig
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </CardBody>
                 </Card>

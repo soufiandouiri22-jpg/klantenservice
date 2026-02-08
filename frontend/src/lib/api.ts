@@ -834,6 +834,19 @@ export const paymentsApi = {
   },
 }
 
+// KVK API
+export const kvkApi = {
+  search: async (naam: string, limit: number = 5) => {
+    const response = await api.get('/kvk/zoeken', { params: { naam, limit } })
+    return response.data
+  },
+
+  validateBtw: async (btwNummer: string) => {
+    const response = await api.get('/kvk/valideer-btw', { params: { btw_nummer: btwNummer } })
+    return response.data
+  },
+}
+
 // Search API
 export const searchApi = {
   search: async (q: string, limit: number = 10) => {

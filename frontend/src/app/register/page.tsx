@@ -1,16 +1,16 @@
 'use client'
 
-import { Suspense, useState } from 'react'
+import { Suspense, useState, useRef, useEffect, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
-import { Headphones, ArrowLeft, Check, Loader2 } from 'lucide-react'
+import { Headphones, ArrowLeft, Check, Loader2, Building2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { api, authApi } from '@/lib/api'
+import { api, authApi, kvkApi } from '@/lib/api'
 
 // Google icon SVG component
 function GoogleIcon({ className }: { className?: string }) {
@@ -71,6 +71,14 @@ function RegisterContent() {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
   const [step, setStep] = useState(1)
   
+  // KVK autocomplete state
+  const [kvkResults, setKvkResults] = useState<any[]>([])
+  const [isKvkSearching, setIsKvkSearching] = useState(false)
+  const [showKvkDropdown, setShowKvkDropdown] = useState(false)
+  const [selectedKvkData, setSelectedKvkData] = useState<any>(null)
+  const kvkRef = useRef<HTMLDivElement>(null)
+  const kvkDebounceRef = useRef<NodeJS.Timeout | null>(null)
+  
   // Get redirect URL from query params (used for checkout flow)
   const redirectUrl = searchParams.get('redirect') || '/dashboard'
 
@@ -81,6 +89,7 @@ function RegisterContent() {
     trigger,
     getValues,
     watch,
+    setValue,
   } = useForm<RegisterForm>({
     resolver: zodResolver(registerSchema),
     defaultValues: { terms_accepted: true, marketing_consent: false },
@@ -90,6 +99,51 @@ function RegisterContent() {
   const watchPassword = watch('password', '')
   const watchConfirmPassword = watch('confirm_password', '')
   const passwordsMismatch = watchConfirmPassword.length > 0 && watchPassword !== watchConfirmPassword
+
+  // Close KVK dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (kvkRef.current && !kvkRef.current.contains(e.target as Node)) {
+        setShowKvkDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const handleCompanyNameChange = useCallback((value: string) => {
+    // Clear any previous timer
+    if (kvkDebounceRef.current) clearTimeout(kvkDebounceRef.current)
+
+    if (value.length < 2) {
+      setKvkResults([])
+      setShowKvkDropdown(false)
+      setSelectedKvkData(null)
+      return
+    }
+
+    // Debounce the KVK search
+    kvkDebounceRef.current = setTimeout(async () => {
+      setIsKvkSearching(true)
+      try {
+        const data = await kvkApi.search(value, 5)
+        setKvkResults(data.resultaten || [])
+        setShowKvkDropdown((data.resultaten || []).length > 0)
+      } catch {
+        setKvkResults([])
+      } finally {
+        setIsKvkSearching(false)
+      }
+    }, 400)
+  }, [])
+
+  const handleSelectKvkResult = useCallback((result: any) => {
+    // Fill in company name from KVK
+    setValue('company_name', result.naam, { shouldValidate: true })
+    // Store the full KVK data for sending to backend
+    setSelectedKvkData(result)
+    setShowKvkDropdown(false)
+  }, [setValue])
 
   const handleNextStep = async () => {
     const isValid = await trigger(['company_name', 'company_email'])
@@ -101,11 +155,27 @@ function RegisterContent() {
   const onSubmit = async (data: RegisterForm) => {
     setIsLoading(true)
     try {
+      // Build company data — include KVK info if selected
+      const companyPayload: any = {
+        name: data.company_name,
+        email: data.company_email,
+      }
+      if (selectedKvkData) {
+        companyPayload.kvk_number = selectedKvkData.kvk_nummer
+        if (selectedKvkData.adres) {
+          const addr = selectedKvkData.adres
+          if (addr.straatnaam) {
+            companyPayload.address = addr.huisnummer
+              ? `${addr.straatnaam} ${addr.huisnummer}`
+              : addr.straatnaam
+          }
+          if (addr.postcode) companyPayload.postal_code = addr.postcode
+          if (addr.plaats) companyPayload.city = addr.plaats
+        }
+      }
+
       const response = await api.post('/auth/register', {
-        company_data: {
-          name: data.company_name,
-          email: data.company_email,
-        },
+        company_data: companyPayload,
         user_data: {
           email: data.company_email,
           password: data.password,
@@ -223,12 +293,52 @@ function RegisterContent() {
               <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
                 {step === 1 ? (
                   <>
-                    <Input
-                      label="Bedrijfsnaam"
-                      placeholder="Uw bedrijf B.V."
-                      error={errors.company_name?.message}
-                      {...register('company_name')}
-                    />
+                    <div className="relative" ref={kvkRef}>
+                      <Input
+                        label="Bedrijfsnaam"
+                        placeholder="Zoek uw bedrijf..."
+                        autoComplete="off"
+                        error={errors.company_name?.message}
+                        {...register('company_name', {
+                          onChange: (e) => handleCompanyNameChange(e.target.value),
+                        })}
+                      />
+                      {isKvkSearching && (
+                        <div className="absolute right-3 top-9 text-gray-400">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        </div>
+                      )}
+                      {selectedKvkData && (
+                        <p className="mt-1 text-xs text-green-600 flex items-center gap-1">
+                          <Building2 className="h-3 w-3" />
+                          KvK {selectedKvkData.kvk_nummer}
+                          {selectedKvkData.adres?.plaats && ` · ${selectedKvkData.adres.plaats}`}
+                        </p>
+                      )}
+                      {showKvkDropdown && kvkResults.length > 0 && (
+                        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white rounded-lg border border-gray-200 shadow-lg overflow-hidden">
+                          {kvkResults.map((result: any, index: number) => (
+                            <button
+                              key={`${result.kvk_nummer}-${index}`}
+                              type="button"
+                              onClick={() => handleSelectKvkResult(result)}
+                              className="w-full flex items-start gap-3 px-4 py-3 hover:bg-gray-50 text-left transition-colors border-b border-gray-50 last:border-0"
+                            >
+                              <Building2 className="h-5 w-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-900 truncate">{result.naam}</p>
+                                <p className="text-xs text-gray-500 mt-0.5">
+                                  KvK {result.kvk_nummer}
+                                  {result.adres?.plaats && ` · ${result.adres.plaats}`}
+                                  {result.adres?.straatnaam && `, ${result.adres.straatnaam}`}
+                                  {result.adres?.huisnummer && ` ${result.adres.huisnummer}`}
+                                </p>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     <Input
                       label="E-mailadres"
                       type="email"

@@ -21,6 +21,7 @@ from app.api.v1.endpoints import (
     payments,
     search,
     notifications,
+    kvk,
 )
 
 api_router = APIRouter()
@@ -142,4 +143,11 @@ api_router.include_router(
     notifications.router,
     prefix="/notifications",
     tags=["Notificaties"]
+)
+
+# KVK (Kamer van Koophandel) & BTW Validatie
+api_router.include_router(
+    kvk.router,
+    prefix="/kvk",
+    tags=["KVK"]
 )
