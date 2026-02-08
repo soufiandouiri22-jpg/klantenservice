@@ -167,6 +167,18 @@ export const aiWorkersApi = {
     const response = await api.get(`/ai-workers/${id}/stats`)
     return response.data
   },
+
+  getVoices: async () => {
+    const response = await api.get('/ai-workers/voices')
+    return response.data
+  },
+
+  getVoicePreview: async (voiceId: string): Promise<Blob> => {
+    const response = await api.get(`/ai-workers/voice-preview/${voiceId}`, {
+      responseType: 'blob',
+    })
+    return response.data
+  },
 }
 
 // Phone Numbers API

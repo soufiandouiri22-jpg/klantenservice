@@ -1,6 +1,7 @@
 """
 klantenservice.ai - AI Worker Endpoints
 """
+import logging
 from datetime import datetime, timedelta
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -9,6 +10,8 @@ from sqlalchemy import func
 from uuid import UUID, uuid4
 
 from app.core.database import get_db
+from app.core.config import get_settings
+from app.core.voices import CUSTOMER_VOICES, TTS_SUPPORTED_VOICES, VOICE_SAMPLE_TEXT
 from app.models.user import User
 from app.models.company import Company
 from app.models.ai_worker import AIWorker, AIWorkerStatus
@@ -16,8 +19,71 @@ from app.models.call_log import CallLog
 from app.schemas.ai_worker import AIWorkerCreate, AIWorkerUpdate, AIWorkerResponse, AIWorkerStats
 from app.api.deps import get_current_user, get_current_company, get_current_company_with_subscription, require_manager
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
+
+# ── Voice endpoints (must be before /{worker_id} to avoid path conflicts) ──
+
+@router.get("/voices")
+async def list_customer_voices(
+    current_user: User = Depends(get_current_user),
+):
+    """
+    List voices available for customers to choose.
+    Only returns voices that support TTS preview (no Realtime-only voices).
+    """
+    return {"voices": CUSTOMER_VOICES}
+
+
+@router.get("/voice-preview/{voice_id}")
+async def preview_customer_voice(
+    voice_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Generate a voice preview using OpenAI TTS API.
+    Only available for TTS-supported voices.
+    """
+    from fastapi.responses import Response
+    import openai
+
+    if voice_id not in TTS_SUPPORTED_VOICES:
+        valid_ids = [v["id"] for v in CUSTOMER_VOICES]
+        raise HTTPException(
+            status_code=400,
+            detail=f"Ongeldige stem: {voice_id}. Kies uit: {', '.join(valid_ids)}",
+        )
+
+    settings = get_settings()
+    if not settings.OPENAI_API_KEY:
+        raise HTTPException(status_code=500, detail="OPENAI_API_KEY niet geconfigureerd")
+
+    try:
+        client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
+        response = client.audio.speech.create(
+            model="tts-1-hd",
+            voice=voice_id,
+            input=VOICE_SAMPLE_TEXT,
+            response_format="mp3",
+        )
+
+        audio_bytes = response.content
+        return Response(
+            content=audio_bytes,
+            media_type="audio/mpeg",
+            headers={
+                "Content-Disposition": f'inline; filename="preview-{voice_id}.mp3"',
+                "Cache-Control": "public, max-age=86400",
+            },
+        )
+    except Exception as e:
+        logger.error(f"Voice preview error for {voice_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Kon preview niet genereren: {str(e)}")
+
+
+# ── AI Worker CRUD endpoints ──────────────────────────────────────
 
 @router.get("", response_model=List[AIWorkerResponse])
 async def list_ai_workers(

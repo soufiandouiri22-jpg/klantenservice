@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { Plus, Headphones, MoreVertical, Settings, Trash2, Power } from 'lucide-react'
+import { Plus, Headphones, Settings, Trash2, Mic, Play, Square, Loader2, Sparkles } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { Header } from '@/components/layout/Header'
@@ -19,6 +19,13 @@ import { aiWorkersApi } from '@/lib/api'
 import { getStatusLabel, getStatusColor } from '@/lib/utils'
 import { useAuthStore } from '@/lib/store'
 
+interface Voice {
+  id: string
+  name: string
+  description: string
+  gender: string
+}
+
 export default function AIWorkersPage() {
   const queryClient = useQueryClient()
   const { company } = useAuthStore()
@@ -27,10 +34,25 @@ export default function AIWorkersPage() {
   const [newWorkerName, setNewWorkerName] = useState('')
   const [newWorkerRole, setNewWorkerRole] = useState('Klantenservice medewerker')
 
+  // Voice preview state
+  const [previewLoading, setPreviewLoading] = useState<string | null>(null)
+  const [playingVoice, setPlayingVoice] = useState<string | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const blobUrlRef = useRef<string | null>(null)
+
   const { data: workers, isLoading } = useQuery({
     queryKey: ['ai-workers'],
     queryFn: aiWorkersApi.list,
   })
+
+  // Fetch voices for the settings modal
+  const { data: voicesData } = useQuery({
+    queryKey: ['worker-voices'],
+    queryFn: aiWorkersApi.getVoices,
+    enabled: !!selectedWorker,
+  })
+
+  const voices: Voice[] = voicesData?.voices || []
 
   const createMutation = useMutation({
     mutationFn: aiWorkersApi.create,
@@ -80,10 +102,70 @@ export default function AIWorkersPage() {
     },
   })
 
+  // Cleanup audio on unmount or modal close
+  useEffect(() => {
+    return () => {
+      if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current)
+      if (audioRef.current) audioRef.current.pause()
+    }
+  }, [])
+
+  // Stop playback when modal closes
+  useEffect(() => {
+    if (!selectedWorker) {
+      stopPlayback()
+    }
+  }, [selectedWorker])
+
+  const stopPlayback = () => {
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.currentTime = 0
+    }
+    if (blobUrlRef.current) {
+      URL.revokeObjectURL(blobUrlRef.current)
+      blobUrlRef.current = null
+    }
+    setPlayingVoice(null)
+  }
+
+  const playVoiceSample = async (voiceId: string) => {
+    stopPlayback()
+    if (playingVoice === voiceId) return
+
+    setPreviewLoading(voiceId)
+    try {
+      const blob = await aiWorkersApi.getVoicePreview(voiceId)
+      const url = URL.createObjectURL(blob)
+      blobUrlRef.current = url
+
+      const audio = new Audio(url)
+      audioRef.current = audio
+
+      audio.onended = () => {
+        setPlayingVoice(null)
+        if (blobUrlRef.current) {
+          URL.revokeObjectURL(blobUrlRef.current)
+          blobUrlRef.current = null
+        }
+      }
+      audio.onerror = () => {
+        toast.error('Kon audio niet afspelen')
+        setPlayingVoice(null)
+      }
+
+      await audio.play()
+      setPlayingVoice(voiceId)
+    } catch {
+      toast.error('Kon voice preview niet laden')
+    } finally {
+      setPreviewLoading(null)
+    }
+  }
+
   const handleSettingChange = (field: string, value: any) => {
     if (!selectedWorker) return
     
-    // Check if it's a behavior setting or a direct field
     if (field.startsWith('behavior_settings.')) {
       const settingKey = field.replace('behavior_settings.', '')
       const newBehaviorSettings = {
@@ -278,6 +360,83 @@ export default function AIWorkersPage() {
       >
         {selectedWorker && (
           <div className="space-y-6">
+            {/* Voice Selection */}
+            <div className="space-y-3">
+              <h4 className="font-medium text-gray-900">Stem</h4>
+              <p className="text-sm text-gray-500">Kies de stem voor deze AI-medewerker.</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                {voices.map((voice) => (
+                  <div
+                    key={voice.id}
+                    onClick={() => handleSettingChange('voice_id', voice.id)}
+                    className={`relative flex flex-col p-3 rounded-xl border-2 cursor-pointer transition-all ${
+                      selectedWorker.voice_id === voice.id
+                        ? 'border-primary-500 bg-primary-50 shadow-sm'
+                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {/* Selected indicator */}
+                    {selectedWorker.voice_id === voice.id && (
+                      <div className="absolute top-2 right-2">
+                        <Sparkles className="h-4 w-4 text-primary-500" />
+                      </div>
+                    )}
+
+                    {/* Voice info */}
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <div className={`flex items-center justify-center h-7 w-7 rounded-full ${
+                        selectedWorker.voice_id === voice.id ? 'bg-primary-100' : 'bg-gray-100'
+                      }`}>
+                        <Mic className={`h-3.5 w-3.5 ${
+                          selectedWorker.voice_id === voice.id ? 'text-primary-600' : 'text-gray-500'
+                        }`} />
+                      </div>
+                      <div>
+                        <span className="text-sm font-semibold text-gray-900">{voice.name}</span>
+                        <span className="ml-1 text-xs text-gray-400">
+                          {voice.gender === 'male' ? '♂' : voice.gender === 'female' ? '♀' : '◎'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-gray-500 mb-2">{voice.description}</p>
+
+                    {/* Play button */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        playVoiceSample(voice.id)
+                      }}
+                      disabled={previewLoading !== null}
+                      className={`flex items-center justify-center gap-1.5 w-full py-1.5 rounded-lg text-xs font-medium transition-all ${
+                        playingVoice === voice.id
+                          ? 'bg-red-50 text-red-600 border border-red-200'
+                          : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50 hover:text-gray-900'
+                      } disabled:opacity-50 disabled:cursor-not-allowed`}
+                    >
+                      {previewLoading === voice.id ? (
+                        <>
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          Laden...
+                        </>
+                      ) : playingVoice === voice.id ? (
+                        <>
+                          <Square className="h-3 w-3" />
+                          Stop
+                        </>
+                      ) : (
+                        <>
+                          <Play className="h-3 w-3" />
+                          Beluister
+                        </>
+                      )}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Behavior Settings */}
             <div className="space-y-4">
               <h4 className="font-medium text-gray-900">Gedragsinstellingen</h4>
               <Toggle
@@ -300,6 +459,7 @@ export default function AIWorkersPage() {
               />
             </div>
 
+            {/* Permissions */}
             <div className="space-y-4">
               <h4 className="font-medium text-gray-900">Rechten</h4>
               <Toggle

@@ -39,6 +39,7 @@ class AIWorkerUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     role_title: Optional[str] = Field(None, max_length=100)
     tone_of_voice: Optional[str] = None
+    voice_id: Optional[str] = None
     address_form: Optional[AddressForm] = None
     behavior_settings: Optional[BehaviorSettings] = None
     can_make_appointments: Optional[bool] = None
@@ -52,6 +53,7 @@ class AIWorkerResponse(AIWorkerBase):
     """Schema for AI worker response."""
     id: UUID
     company_id: UUID
+    voice_id: Optional[str] = None
     address_form: AddressForm
     behavior_settings: Dict[str, Any]
     can_make_appointments: bool
