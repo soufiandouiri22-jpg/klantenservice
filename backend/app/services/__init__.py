@@ -1,16 +1,20 @@
 """
 klantenservice.ai - Services
 """
-from app.services.personaplex_service import personaplex_service
-from app.services.audio_utils import AudioConverter
+from app.services.openai_realtime_service import (
+    OpenAIRealtimeSession,
+    build_realtime_tools,
+    build_system_instructions,
+)
 from app.services.question_detector import (
     QuestionDetectorService,
     analyze_call_transcript,
 )
 
 __all__ = [
-    "personaplex_service",
-    "AudioConverter",
+    "OpenAIRealtimeSession",
+    "build_realtime_tools",
+    "build_system_instructions",
     "QuestionDetectorService",
     "analyze_call_transcript",
 ]

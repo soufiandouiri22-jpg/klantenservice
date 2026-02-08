@@ -18,7 +18,7 @@ from app.websockets.voice_handler import voice_websocket_handler
 
 # ── Logging ──────────────────────────────────────────────────────────
 # Ensure the root logger has a StreamHandler to stdout so that ALL
-# application loggers (personaplex_service, voice_handler, etc.) have
+# application loggers (voice_handler, openai_realtime_service, etc.) have
 # their output captured by Render / Docker / systemd.
 _root = logging.getLogger()
 if not any(isinstance(h, logging.StreamHandler) for h in _root.handlers):
@@ -69,18 +69,11 @@ async def lifespan(app: FastAPI):
         )
         logger.info("Sentry initialized")
     
-    # Pre-load PersonaPlex and start warm keepalive loop
-    if settings.PERSONAPLEX_POD_URL:
-        try:
-            import asyncio
-            from app.services.personaplex_service import personaplex_service
-            logger.info("PersonaPlex service initialized")
-            
-            # Start the keepalive loop - handles initial pre-warm + periodic health checks
-            asyncio.create_task(personaplex_service._warm_keepalive_loop())
-            logger.info("PersonaPlex warm keepalive loop started")
-        except Exception as e:
-            logger.warning(f"PersonaPlex not available: {e}")
+    # OpenAI Realtime API — no startup needed (sessions are created per call)
+    if settings.OPENAI_API_KEY:
+        logger.info("OpenAI Realtime API configured (sessions created on demand per call)")
+    else:
+        logger.warning("OPENAI_API_KEY not set — voice calls will fail")
     
     yield
     
@@ -121,22 +114,20 @@ async def health_check():
 @app.get("/ready")
 async def readiness_check():
     """
-    Readiness check — returns 200 only when at least one warm session is available.
-    Use this for external monitoring; Render health check should use /health.
+    Readiness check — returns 200 when the service is ready to handle calls.
+    With OpenAI Realtime API, we're always ready if the API key is configured.
     """
     try:
-        from app.services.personaplex_service import personaplex_service
-        warm_count = len(personaplex_service._warm_sessions)
-        if warm_count >= 1:
-            return {"status": "ready", "warm_sessions": warm_count}
+        if settings.OPENAI_API_KEY:
+            return {"status": "ready", "engine": "openai_realtime"}
         return JSONResponse(
             status_code=503,
-            content={"status": "not_ready", "warm_sessions": warm_count},
+            content={"status": "not_ready", "reason": "OPENAI_API_KEY not configured"},
         )
     except Exception:
         return JSONResponse(
             status_code=503,
-            content={"status": "not_ready", "warm_sessions": 0},
+            content={"status": "not_ready", "reason": "unknown"},
         )
 
 
@@ -151,7 +142,7 @@ async def websocket_voice_endpoint(websocket: WebSocket):
     WebSocket endpoint for Twilio Media Streams.
     
     Twilio connects here when a call is answered and streams audio
-    bidirectionally through PersonaPlex-7B for AI conversation.
+    bidirectionally through OpenAI Realtime API for AI conversation.
     
     TwiML should include:
     <Stream url="wss://your-domain.com/ws/voice">

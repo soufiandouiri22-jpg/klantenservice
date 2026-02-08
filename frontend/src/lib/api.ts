@@ -764,6 +764,19 @@ export const adminApi = {
     return response.data
   },
   
+  // Voices (OpenAI Realtime)
+  getVoices: async () => {
+    const response = await api.get('/admin/voices')
+    return response.data
+  },
+
+  getVoicePreview: async (voiceId: string): Promise<Blob> => {
+    const response = await api.get(`/admin/voice-preview/${voiceId}`, {
+      responseType: 'blob',
+    })
+    return response.data
+  },
+  
   // Logs
   getRecentCalls: async (limit: number = 50, companyId?: string) => {
     const response = await api.get('/admin/calls/recent', { params: { limit, company_id: companyId } })

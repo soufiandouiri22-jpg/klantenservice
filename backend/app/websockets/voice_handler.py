@@ -1,32 +1,31 @@
 """
-klantenservice.ai - Voice WebSocket Handler
-Handles Twilio Media Streams and routes audio through PersonaPlex-7B
+klantenservice.ai - Voice WebSocket Handler (OpenAI Realtime API)
 
-Architecture (Orchestrator Integration):
-1. Twilio sends audio chunks (20ms each)
-2. We buffer chunks into "utterance segments" (2-3 seconds)
-3. Each segment gets a turn_id
-4. When segment is ready:
-   a. Send start_turn(turn_id) to pod
-   b. Send audio segment to pod -> receive transcript_final + audio
-   c. Run STT (Whisper) on user audio to get user_transcript
-   d. Run orchestrator (LLM + tools) -> get facts + instructions
-   e. Send update_context(turn_id, facts, instructions) to pod
-   f. Send audio response to Twilio
+Bridges Twilio Media Streams with OpenAI Realtime API for AI conversations.
 
-Goal: PersonaPlex NEVER hallucinates. Prices, availability, policies
-come ONLY from orchestrator tool results.
+Architecture:
+1. Twilio sends mulaw audio (g711_ulaw, 8kHz)
+2. We forward it directly to OpenAI Realtime API (same format — no conversion!)
+3. OpenAI returns audio + handles STT, LLM, TTS, and function calling
+4. We forward audio back to Twilio and handle function calls via call_tools.py
+
+Key features:
+- Full-duplex: AI listens while talking
+- Barge-in: AI stops when caller speaks
+- No audio conversion needed (Twilio and OpenAI both use g711_ulaw)
+- No warm pool / GPU pod required
+- Function calling for availability, booking, knowledge, prices, notes
+- Instant response — no initialization delay
 
 Reference: https://www.twilio.com/docs/voice/media-streams
 """
 import asyncio
 import base64
-import io
 import json
 import logging
 import time
 from datetime import datetime
-from typing import Optional, List, Tuple
+from typing import Optional
 
 from fastapi import WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
@@ -38,154 +37,116 @@ from app.models.call_log import CallLog, CallStatus, CallOutcome
 from app.models.phone_number import PhoneNumber
 from app.models.website_knowledge import WebsiteKnowledge
 from app.models.training import TrainingRule, ExampleAnswer
-from app.models.latency_log import LatencyLog
-from app.models.usage_log import UsageLog
 from app.models.global_config import GlobalConfig
-from app.services.personaplex_service import personaplex_service
+from app.services.openai_realtime_service import (
+    OpenAIRealtimeSession,
+    build_realtime_tools,
+    build_system_instructions,
+    get_system_prompts,
+)
+from app.services.orchestrator import _run_tool
 from app.services.question_detector import analyze_call_transcript
-from app.services.audio_utils import AudioConverter
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
 
-# Configuration for audio buffering
-SEGMENT_DURATION_SECONDS = 2.5  # Buffer audio for this long before processing
-SILENCE_THRESHOLD_SECONDS = 0.8  # Detect end of utterance after this silence
-MIN_SEGMENT_DURATION_SECONDS = 0.5  # Minimum segment to process
 
-# ── Fallback audio ─────────────────────────────────────────────────────
-# Try to load a pre-recorded mulaw clip (8kHz, 1 byte/sample).
-# If the file doesn't exist, fall back to 2 seconds of silence.
-import os as _os
-_FALLBACK_AUDIO_PATH = _os.path.join(
-    _os.path.dirname(__file__), "fallback_audio.raw"
-)
-try:
-    with open(_FALLBACK_AUDIO_PATH, "rb") as _f:
-        _FALLBACK_AUDIO_CLIP = _f.read()
-    logger.info("[FALLBACK] Loaded fallback_audio.raw (%d bytes)", len(_FALLBACK_AUDIO_CLIP))
-except FileNotFoundError:
-    # 2 seconds of mulaw silence at 8kHz
-    _FALLBACK_AUDIO_CLIP = b'\xff' * (8000 * 2)
-    logger.info("[FALLBACK] fallback_audio.raw not found, using 2s silence")
-
-
-class VoiceCallHandler:
+class RealtimeCallHandler:
     """
-    Handles a single voice call through Twilio Media Streams.
-    
-    This class manages:
-    - The WebSocket connection with Twilio
-    - Audio conversion (mulaw <-> PCM)
-    - Audio buffering into utterance segments
-    - Turn-based communication with PersonaPlex
-    - STT + Orchestrator integration for context injection
-    - Call logging and transcription
+    Handles a single voice call by bridging Twilio <-> OpenAI Realtime API.
+
+    The handler:
+    1. Looks up the AI worker and company from the phone number
+    2. Builds system instructions with persona, knowledge, rules
+    3. Opens an OpenAI Realtime session with tools
+    4. Runs two parallel loops:
+       a) twilio_to_openai: forward caller audio to OpenAI
+       b) openai_to_twilio: forward AI audio to Twilio + handle function calls
+    5. Saves transcripts and call metadata on cleanup
     """
-    
+
     def __init__(
         self,
         websocket: WebSocket,
         db: Session,
         call_sid: str,
-        stream_sid: str
+        stream_sid: str,
     ):
         self.websocket = websocket
         self.db = db
         self.call_sid = call_sid
         self.stream_sid = stream_sid
-        
-        # Will be set after initialization
+
+        # Will be populated in initialize_from_phone_number
         self.phone_number: Optional[PhoneNumber] = None
         self.ai_worker: Optional[AIWorker] = None
         self.company: Optional[Company] = None
         self.call_log: Optional[CallLog] = None
         self.session_id: Optional[str] = None
-        
-        # Audio converter
-        self.audio_converter = AudioConverter()
-        
-        # Queue for sending audio back to Twilio
-        self.send_queue: asyncio.Queue[bytes] = asyncio.Queue()
-        
-        # Running flag
+
+        # OpenAI Realtime session
+        self.openai_session: Optional[OpenAIRealtimeSession] = None
+
+        # State
         self.is_running = False
-        
-        # Turn-based processing
-        self._turn_id: int = 0
-        self._audio_buffer: List[bytes] = []
-        self._buffer_start_time: Optional[float] = None
-        self._last_audio_time: Optional[float] = None
-        
-        # Conversation history for orchestrator
-        self._user_transcripts: List[str] = []
-        self._assistant_transcripts: List[str] = []
-        
-        # Calendar ID (if known from availability check)
-        self._calendar_id: Optional[str] = None
-        
-        # Auto-respond setting (from GlobalConfig, set in initialize)
-        self._auto_respond: bool = True
-        
-        # Per-call metrics (logged in cleanup)
-        self._metrics_warm_pool_available: int = 0
-        self._metrics_warm_claim_latency_ms: int = 0
-        self._metrics_fallback_used: bool = False
-        
-        # Media frame counters (for diagnosing "no audio" issues)
-        self._inbound_media_frames: int = 0   # Twilio -> us
-        self._outbound_media_frames: int = 0  # us -> Twilio
-        self._pod_timeouts: int = 0           # process_audio_segment timeouts
-    
+
+        # Transcript collection
+        self._user_transcript_parts: list[str] = []
+        self._ai_transcript_parts: list[str] = []
+
+        # Metrics
+        self._inbound_media_frames = 0
+        self._outbound_media_frames = 0
+        self._function_calls_count = 0
+        self._openai_errors = 0
+
     async def initialize_from_phone_number(self, to_number: str, from_number: str):
         """
-        Initialize the call handler with phone number lookup.
-        
-        Args:
-            to_number: The Twilio number that received the call
-            from_number: The caller's phone number
+        Look up the phone number, AI worker, and company.
+        Create or find the call log.
         """
         # Find the phone number in the database
         self.phone_number = self.db.query(PhoneNumber).filter(
             PhoneNumber.number == to_number,
-            PhoneNumber.is_active == True
+            PhoneNumber.is_active == True,
         ).first()
-        
+
         if not self.phone_number:
             logger.error(f"Phone number {to_number} not found in database")
             raise ValueError(f"Unknown phone number: {to_number}")
-        
+
         # Get the assigned AI worker
         self.ai_worker = self.db.query(AIWorker).filter(
             AIWorker.id == self.phone_number.ai_worker_id,
-            AIWorker.status != AIWorkerStatus.OFFLINE
+            AIWorker.status != AIWorkerStatus.OFFLINE,
         ).first()
-        
+
         if not self.ai_worker:
             logger.error(f"No active AI worker for phone number {to_number}")
             raise ValueError("No AI worker available")
-        
+
         # Get the company
         self.company = self.db.query(Company).filter(
             Company.id == self.ai_worker.company_id
         ).first()
-        
+
         if not self.company:
             logger.error(f"Company not found for AI worker {self.ai_worker.id}")
             raise ValueError("Company not found")
-        
+
         # Check kill switch
         if self.company.is_kill_switched:
-            logger.warning(f"Call rejected in WS handler: kill switch active for {self.company.name}")
+            logger.warning(
+                f"Call rejected in WS handler: kill switch active for {self.company.name}"
+            )
             raise ValueError("Company is kill-switched")
-        
+
         # Look up existing call log (created by webhook) or create new one
         self.call_log = self.db.query(CallLog).filter(
             CallLog.twilio_call_sid == self.call_sid
         ).first()
-        
+
         if not self.call_log:
-            # Create call log if webhook didn't create one
             self.call_log = CallLog(
                 company_id=self.company.id,
                 ai_worker_id=self.ai_worker.id,
@@ -200,703 +161,403 @@ class VoiceCallHandler:
             self.db.refresh(self.call_log)
         else:
             logger.info(f"Found existing call log for {self.call_sid}")
-        
+
         self.session_id = str(self.call_log.id)
-        
-        # Get auto-respond setting from GlobalConfig (platform-wide)
-        auto_respond_config = self.db.query(GlobalConfig).filter(
-            GlobalConfig.key == "voice_auto_respond"
-        ).first()
-        self._auto_respond = auto_respond_config.value if auto_respond_config else True
-        
+
         logger.info(
             f"Call initialized: {from_number} -> {to_number}, "
-            f"AI Worker: {self.ai_worker.name}, Company: {self.company.name}, "
-            f"Auto-respond: {self._auto_respond}"
+            f"AI Worker: {self.ai_worker.name}, Company: {self.company.name}"
         )
-    
-    async def get_knowledge_context(self) -> Optional[str]:
-        """
-        Get relevant knowledge context from website scraping.
-        """
+
+    async def _get_knowledge_context(self) -> Optional[str]:
+        """Get relevant knowledge context from website scraping."""
         from app.models.website_knowledge import KnowledgeChunk
-        
-        # Get active website knowledge for this company
+
         knowledge_sources = self.db.query(WebsiteKnowledge).filter(
             WebsiteKnowledge.company_id == self.company.id,
             WebsiteKnowledge.is_active == True,
-            WebsiteKnowledge.status == "completed"
+            WebsiteKnowledge.status == "completed",
         ).all()
-        
+
         if not knowledge_sources:
             return None
-        
-        # Combine knowledge content from chunks
+
         context_parts = []
         for source in knowledge_sources:
-            # Get chunks for this website (limit to most relevant)
             chunks = self.db.query(KnowledgeChunk).filter(
                 KnowledgeChunk.website_id == source.id
             ).limit(10).all()
-            
+
             for chunk in chunks:
                 if chunk.content:
-                    context_parts.append(chunk.content[:500])  # Limit per chunk
-        
+                    context_parts.append(chunk.content[:500])
+
         if context_parts:
-            return "\n\n---\n\n".join(context_parts)[:8000]  # Total limit
-        
+            return "\n\n---\n\n".join(context_parts)[:8000]
         return None
-    
-    def get_training_rules(self) -> list:
-        """
-        Get enabled training rules for this company.
-        """
+
+    def _get_training_rules(self) -> list:
+        """Get enabled training rules for this company."""
         rules = self.db.query(TrainingRule).filter(
             TrainingRule.company_id == self.company.id,
-            TrainingRule.is_enabled == True
+            TrainingRule.is_enabled == True,
         ).order_by(TrainingRule.display_order).all()
-        
+
         return [
             {
                 "key": rule.rule_key,
                 "name": rule.rule_name,
-                "description": rule.rule_description
+                "description": rule.rule_description,
             }
             for rule in rules
         ]
-    
-    def get_example_answers(self) -> list:
-        """
-        Get active example Q&A pairs for this company.
-        """
+
+    def _get_example_answers(self) -> list:
+        """Get active example Q&A pairs for this company."""
         examples = self.db.query(ExampleAnswer).filter(
             ExampleAnswer.company_id == self.company.id,
             ExampleAnswer.is_active == True,
-            ExampleAnswer.is_verified == True
+            ExampleAnswer.is_verified == True,
         ).all()
-        
+
         return [
             {
                 "question": ex.question,
                 "answer": ex.answer,
-                "category": ex.category
+                "category": ex.category,
             }
             for ex in examples
         ]
-    
-    async def _send_twilio_silence(self, duration_seconds: float = 1.0):
-        """Send silence audio to Twilio to keep the connection alive."""
-        # Generate mulaw silence (8kHz, 1 byte per sample)
-        num_samples = int(8000 * duration_seconds)
-        # mulaw silence byte is 0xFF (127 in mulaw = ~0 in linear)
-        silence_mulaw = b'\xff' * num_samples
-        
-        media_message = {
-            "event": "media",
-            "streamSid": self.stream_sid,
-            "media": {
-                "payload": base64.b64encode(silence_mulaw).decode("utf-8")
-            }
-        }
-        await self.websocket.send_text(json.dumps(media_message))
-    
-    async def _keepalive_loop(self, stop_event: asyncio.Event):
-        """Send silence to Twilio every 5 seconds until stop_event is set."""
-        while not stop_event.is_set():
-            try:
-                await self._send_twilio_silence(0.5)
-                await asyncio.sleep(5)
-            except Exception:
-                break
-    
+
     async def start(self):
         """
-        Start handling the voice call.
-        
-        CRITICAL DESIGN:
-        - The Twilio WS is already accepted.
-        - We IMMEDIATELY start receive/send loops so the WS never idles.
-        - Session preparation (claim warm / fresh init) runs in a background task.
-        - While the session is not ready, incoming audio frames are buffered
-          (up to a limit) and a keepalive silence is sent to Twilio.
-        - Once ready, the initial greeting is generated and normal flow begins.
+        Start the voice call: connect to OpenAI and bridge audio.
+
+        1. Gather context and build system instructions
+        2. Connect to OpenAI Realtime API
+        3. Run twilio_to_openai and openai_to_twilio in parallel
         """
         t_start = time.time()
         self.is_running = True
-        self._upstream_ready = asyncio.Event()  # set once PersonaPlex session is live
-        
+
         # Update AI worker status
         self.ai_worker.status = AIWorkerStatus.BUSY
         self.db.commit()
-        
-        # Launch upstream preparation in background (never blocks WS)
-        prep_task = asyncio.create_task(self._prepare_upstream())
-        
-        # Start tasks for receiving and sending audio
-        receive_task = asyncio.create_task(self._receive_audio_loop())
-        send_task = asyncio.create_task(self._send_audio_loop())
-        keepalive_task = asyncio.create_task(self._ws_keepalive_while_preparing())
-        
-        logger.info(
-            f"[TIMING] Call {self.call_sid}: loops launched at "
-            f"+{int((time.time() - t_start)*1000)}ms"
-        )
-        
+
         try:
-            await asyncio.gather(receive_task, send_task)
-        except WebSocketDisconnect:
-            logger.info(f"WebSocket disconnected for call {self.call_sid}")
-        except Exception as e:
-            logger.error(f"Error in voice call handler: {e}", exc_info=True)
-        finally:
-            # Cancel background tasks
-            for task in (prep_task, keepalive_task):
+            # ── 1. Build system instructions ──────────────────────
+            knowledge_context = await self._get_knowledge_context()
+            training_rules = self._get_training_rules()
+            example_answers = self._get_example_answers()
+            system_prompts = get_system_prompts(self.db)
+
+            # Get disclosure message from company settings
+            disclosure_message = None
+            if self.company.disclosure_message:
+                disclosure_message = self.company.disclosure_message
+
+            instructions = build_system_instructions(
+                worker=self.ai_worker,
+                company_name=self.company.name,
+                disclosure_message=disclosure_message,
+                knowledge_context=knowledge_context,
+                training_rules=training_rules,
+                example_answers=example_answers,
+                system_prompts=system_prompts,
+            )
+
+            t_instructions = time.time()
+            logger.info(
+                f"[TIMING] Instructions built in {int((t_instructions - t_start) * 1000)}ms "
+                f"({len(instructions)} chars)"
+            )
+
+            # ── 2. Get voice setting ─────────────────────────────
+            # Use worker-specific voice if configured, otherwise use global default
+            voice = settings.OPENAI_REALTIME_VOICE
+            if self.ai_worker.voice_id:
+                voice = self.ai_worker.voice_id
+
+            # ── 3. Build tools ───────────────────────────────────
+            tools = build_realtime_tools()
+
+            # ── 4. Connect to OpenAI Realtime API ────────────────
+            self.openai_session = OpenAIRealtimeSession(
+                instructions=instructions,
+                voice=voice,
+                tools=tools,
+            )
+            await self.openai_session.connect()
+
+            t_connected = time.time()
+            logger.info(
+                f"[TIMING] OpenAI Realtime connected in "
+                f"{int((t_connected - t_instructions) * 1000)}ms"
+            )
+
+            # ── 5. Run parallel bridge loops ─────────────────────
+            twilio_task = asyncio.create_task(self._twilio_to_openai())
+            openai_task = asyncio.create_task(self._openai_to_twilio())
+
+            logger.info(
+                f"[TIMING] Call {self.call_sid}: bridge started at "
+                f"+{int((time.time() - t_start) * 1000)}ms"
+            )
+
+            # Wait for either loop to finish (call ended or error)
+            done, pending = await asyncio.wait(
+                [twilio_task, openai_task],
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+
+            # Cancel the other task
+            for task in pending:
                 task.cancel()
                 try:
                     await task
                 except (asyncio.CancelledError, Exception):
                     pass
+
+            # Check for errors in completed tasks
+            for task in done:
+                if task.exception():
+                    logger.error(
+                        f"Bridge task error: {task.exception()}", exc_info=task.exception()
+                    )
+
+        except WebSocketDisconnect:
+            logger.info(f"WebSocket disconnected for call {self.call_sid}")
+        except Exception as e:
+            logger.error(f"Error in RealtimeCallHandler.start: {e}", exc_info=True)
+        finally:
             await self.cleanup()
 
-    async def _ws_keepalive_while_preparing(self):
+    async def _twilio_to_openai(self):
         """
-        Send silence to Twilio every 3s until upstream is ready.
-        After 1500ms without a ready session, send a fallback audio clip
-        so the caller hears *something* while they wait.
-        """
-        FALLBACK_DELAY = 1.5  # seconds before sending fallback clip
-        fallback_sent = False
-        t0 = time.time()
-        try:
-            while not self._upstream_ready.is_set():
-                elapsed = time.time() - t0
-                if not fallback_sent and elapsed >= FALLBACK_DELAY:
-                    await self._send_fallback_audio()
-                    self._metrics_fallback_used = True
-                    fallback_sent = True
-                await self._send_twilio_silence(0.5)
-                await asyncio.sleep(3)
-        except asyncio.CancelledError:
-            pass
-        except Exception:
-            pass
+        Forward audio from Twilio to OpenAI Realtime API.
 
-    async def _send_fallback_audio(self):
-        """Send the pre-loaded fallback mulaw clip to Twilio."""
-        media_message = {
-            "event": "media",
-            "streamSid": self.stream_sid,
-            "media": {
-                "payload": base64.b64encode(_FALLBACK_AUDIO_CLIP).decode("utf-8")
-            }
-        }
-        try:
-            await self.websocket.send_text(json.dumps(media_message))
-            logger.info("[FALLBACK] Sent fallback audio (%d bytes) for call %s",
-                        len(_FALLBACK_AUDIO_CLIP), self.call_sid)
-        except Exception as e:
-            logger.error("[FALLBACK] Failed to send fallback audio: %s", e)
-
-    async def _prepare_upstream(self):
-        """
-        Prepare PersonaPlex session (background task).
-        1. Try to claim a pre-warmed session (instant).
-        2. Fall back to fresh init with full context.
-           NOTE: step_system_prompts runs ONLY during:
-             (a) pod startup pre-warm,
-             (b) keepalive loop re-warm,
-             (c) this fallback fresh init (unavoidable, caller hears fallback audio).
-        3. Generate initial greeting.
-        4. Signal _upstream_ready so normal audio flow starts.
-        """
-        t0 = time.time()
-        worker_id = str(self.ai_worker.id)
-        
-        # Record pool snapshot before claim attempt
-        self._metrics_warm_pool_available = len(personaplex_service._warm_sessions)
-        
-        try:
-            # ── 1. Try warm session ──────────────────────────────
-            warm_session = await personaplex_service.claim_warm_session(
-                worker_id, self.session_id
-            )
-            t_claim = time.time()
-            self._metrics_warm_claim_latency_ms = int((t_claim - t0) * 1000)
-            
-            if warm_session:
-                logger.info(
-                    f"[TIMING] Warm session claimed in {int((t_claim - t0)*1000)}ms "
-                    f"for worker {self.ai_worker.name}"
-                )
-            else:
-                # ── 2. Fresh init (step_system_prompts will run on the pod) ──
-                logger.warning(
-                    f"[TIMING] No warm session, starting fresh init "
-                    f"for worker {self.ai_worker.name} "
-                    f"(step_system_prompts will run - expect ~30-50s latency)"
-                )
-                
-                knowledge_context = await self.get_knowledge_context()
-                training_rules = self.get_training_rules()
-                example_answers = self.get_example_answers()
-                system_prompts = personaplex_service.get_system_prompts(self.db)
-                
-                t_ctx = time.time()
-                logger.info(
-                    f"[TIMING] Context gathered in {int((t_ctx - t_claim)*1000)}ms"
-                )
-                
-                await personaplex_service.create_session(
-                    session_id=self.session_id,
-                    worker=self.ai_worker,
-                    company=self.company,
-                    db=self.db,
-                    voice_prompt_path=None,
-                    knowledge_context=knowledge_context,
-                    training_rules=training_rules,
-                    example_answers=example_answers,
-                    system_prompts=system_prompts
-                )
-                t_session = time.time()
-                fresh_init_ms = int((t_session - t_claim) * 1000)
-                logger.info(
-                    f"[TIMING] Fresh session created in {fresh_init_ms}ms"
-                )
-                if fresh_init_ms > 50_000:
-                    logger.warning(
-                        f"[TIMING] Fresh init took {fresh_init_ms}ms — close to "
-                        f"Twilio 60s WS timeout. Pre-warming should prevent this."
-                    )
-            
-            # ── 3. Generate initial greeting ─────────────────────
-            t_greet0 = time.time()
-            try:
-                await personaplex_service.start_turn(self.session_id, turn_id=0)
-                silence_samples = int(24000 * 0.5)
-                silence_audio = b'\x00\x00' * silence_samples
-                
-                initial_audio, initial_text, _ = await personaplex_service.process_audio_segment(
-                    self.session_id, silence_audio, turn_id=0
-                )
-                
-                if initial_audio:
-                    chunk_size = 4800
-                    for i in range(0, len(initial_audio), chunk_size):
-                        await self.send_queue.put(initial_audio[i:i+chunk_size])
-                    logger.info(
-                        f"[TIMING] Greeting generated in {int((time.time() - t_greet0)*1000)}ms: "
-                        f"{initial_text[:50] if initial_text else '(no text)'}"
-                    )
-                else:
-                    logger.warning("No initial greeting audio received from PersonaPlex")
-            except Exception as e:
-                logger.error(f"Failed to generate initial greeting: {e}", exc_info=True)
-            
-            # ── 4. Signal ready ──────────────────────────────────
-            self._upstream_ready.set()
-            logger.info(
-                f"[TIMING] Upstream ready, total prep={int((time.time() - t0)*1000)}ms"
-            )
-            
-        except Exception as e:
-            logger.error(f"_prepare_upstream failed: {e}", exc_info=True)
-            # Signal ready anyway so the WS loops can detect the missing session
-            # and handle gracefully (error responses / silence) rather than hanging.
-            self._upstream_ready.set()
-    
-    async def _receive_audio_loop(self):
-        """
-        Receive audio from Twilio and buffer into utterance segments.
-        
-        While upstream is NOT ready, audio frames are still received (keeping
-        the WS alive) but dropped. Once ready, normal buffering + processing
-        begins.
+        Twilio sends media events with base64-encoded g711_ulaw audio.
+        We forward them directly — no conversion needed.
         """
         while self.is_running:
             try:
-                # Receive message from Twilio
                 message = await self.websocket.receive_text()
                 data = json.loads(message)
-                
+
                 event_type = data.get("event")
-                
+
                 if event_type == "media":
                     self._inbound_media_frames += 1
-                    
-                    # Drop audio if upstream not ready yet (WS stays open)
-                    if not self._upstream_ready.is_set():
-                        continue
-                    
-                    # Audio data from caller
                     payload = data.get("media", {}).get("payload", "")
-                    mulaw_audio = base64.b64decode(payload)
-                    
-                    # Convert mulaw to PCM for PersonaPlex
-                    pcm_audio = self.audio_converter.mulaw_to_pcm(mulaw_audio)
-                    
-                    # Buffer the audio
-                    now = time.time()
-                    self._audio_buffer.append(pcm_audio)
-                    self._last_audio_time = now
-                    
-                    if self._buffer_start_time is None:
-                        self._buffer_start_time = now
-                    
-                    # Check if segment is ready
-                    segment_ready = False
-                    elapsed = now - self._buffer_start_time
-                    
-                    if self._auto_respond:
-                        if elapsed >= SEGMENT_DURATION_SECONDS:
-                            segment_ready = True
-                    
-                    # Process segment if ready
-                    if segment_ready and elapsed >= MIN_SEGMENT_DURATION_SECONDS:
-                        await self._process_segment()
-                
+                    if payload and self.openai_session:
+                        await self.openai_session.send_audio(payload)
+
                 elif event_type == "stop":
-                    # Process any remaining buffer before stopping
-                    if self._upstream_ready.is_set() and self._audio_buffer and self._buffer_start_time:
-                        elapsed = time.time() - self._buffer_start_time
-                        if elapsed >= MIN_SEGMENT_DURATION_SECONDS:
-                            await self._process_segment()
-                    
-                    logger.info(f"Received stop event for call {self.call_sid}")
+                    logger.info(f"Twilio stream stopped for call {self.call_sid}")
                     self.is_running = False
                     break
-                
+
                 elif event_type == "mark":
-                    mark_name = data.get("mark", {}).get("name", "")
-                    logger.debug(f"Mark received: {mark_name}")
-                    
-                    if not self._auto_respond and mark_name == "process_segment":
-                        if self._upstream_ready.is_set() and self._audio_buffer and self._buffer_start_time:
-                            elapsed = time.time() - self._buffer_start_time
-                            if elapsed >= MIN_SEGMENT_DURATION_SECONDS:
-                                await self._process_segment()
-                
+                    # Marks are used for synchronization, log but don't act
+                    pass
+
             except WebSocketDisconnect:
+                logger.info(f"Twilio WS disconnected for call {self.call_sid}")
                 self.is_running = False
                 break
             except Exception as e:
-                logger.error(f"Error receiving audio: {e}")
+                logger.error(f"Error in twilio_to_openai: {e}")
                 continue
-    
-    async def _process_segment(self):
+
+    async def _openai_to_twilio(self):
         """
-        Process a buffered audio segment through the full pipeline:
-        1. Increment turn_id
-        2. Send start_turn to pod
-        3. Send audio segment to pod -> get transcript_final + response audio
-        4. Run STT on user audio -> get user_transcript
-        5. Run orchestrator (LLM + tools) -> get facts + instructions
-        6. Send update_context to pod
-        7. Queue response audio for Twilio
-        8. Log latencies
+        Receive events from OpenAI Realtime API and handle them.
+
+        - Audio deltas → forward to Twilio
+        - Function calls → execute via call_tools.py → send result back
+        - Transcripts → collect for call log
+        - Speech events → clear Twilio queue (barge-in)
         """
-        if not self._audio_buffer:
+        if not self.openai_session:
             return
-        
-        # Combine buffered chunks into one segment
-        segment = b"".join(self._audio_buffer)
-        self._audio_buffer = []
-        self._buffer_start_time = None
-        
-        # Increment turn_id
-        self._turn_id += 1
-        turn_id = self._turn_id
-        
-        logger.info(f"Processing segment for turn {turn_id} ({len(segment)} bytes)")
-        
-        # Track latencies
-        total_start = time.time()
-        stt_latency_ms = 0
-        orchestrator_latency_ms = 0
-        pod_latency_ms = 0
-        
-        try:
-            # 1. Start turn on pod
-            await personaplex_service.start_turn(self.session_id, turn_id)
-            
-            # 2. Send segment to pod and get response (timed)
-            pod_start = time.time()
-            response_audio, assistant_text, recv_turn_id = await personaplex_service.process_audio_segment(
-                self.session_id,
-                segment,
-                turn_id
-            )
-            pod_latency_ms = int((time.time() - pod_start) * 1000)
-            
-            if response_audio is None:
-                self._pod_timeouts += 1
-                logger.warning(
-                    "[POD_NO_RESPONSE] call=%s turn=%d pod_latency_ms=%d "
-                    "pod_timeouts_total=%d — no audio returned from pod",
-                    self.call_sid, turn_id, pod_latency_ms, self._pod_timeouts
-                )
-            
-            # Store assistant transcript
-            if assistant_text:
-                self._assistant_transcripts.append(assistant_text)
-            
-            # 3. Run STT on user segment to get user_transcript (timed)
-            stt_start = time.time()
-            user_transcript, stt_seconds = await self._transcribe_audio(segment)
-            stt_latency_ms = int((time.time() - stt_start) * 1000)
-            
-            if user_transcript:
-                self._user_transcripts.append(user_transcript)
-            
-            logger.debug(f"Turn {turn_id} - User: {user_transcript[:50] if user_transcript else '(none)'}...")
-            logger.debug(f"Turn {turn_id} - Assistant: {assistant_text[:50] if assistant_text else '(none)'}...")
-            
-            # 4. Run orchestrator to get context injection (timed)
-            orchestrator_start = time.time()
-            facts, instructions = await self._run_orchestrator(
-                user_transcript or "",
-                " ".join(self._assistant_transcripts),
-                turn_id
-            )
-            orchestrator_latency_ms = int((time.time() - orchestrator_start) * 1000)
-            
-            # 5. Send context update to pod (for next turn)
-            if facts or instructions:
-                await personaplex_service.update_context(
-                    self.session_id,
-                    turn_id,
-                    facts,
-                    instructions
-                )
-                logger.debug(f"Turn {turn_id} - Context: facts={facts[:50] if facts else ''}...")
-            
-            # 6. Queue response audio for Twilio
-            if response_audio:
-                # Send in chunks for smoother playback
-                chunk_size = 4800  # 100ms at 24kHz (will be resampled)
-                for i in range(0, len(response_audio), chunk_size):
-                    chunk = response_audio[i:i+chunk_size]
-                    await self.send_queue.put(chunk)
-            
-            # 7. Log latencies and STT usage
-            total_latency_ms = int((time.time() - total_start) * 1000)
-            
+
+        async for event in self.openai_session.receive_events():
+            if not self.is_running:
+                break
+
+            event_type = event.get("type", "")
+
             try:
-                if self.call_log:
-                    # Log latency
-                    latency_log = LatencyLog(
-                        call_log_id=self.call_log.id,
-                        turn_id=turn_id,
-                        stt_latency_ms=stt_latency_ms,
-                        orchestrator_latency_ms=orchestrator_latency_ms,
-                        pod_latency_ms=pod_latency_ms,
-                        total_latency_ms=total_latency_ms,
-                    )
-                    self.db.add(latency_log)
-                    
-                    # Log STT usage
-                    if stt_seconds > 0:
-                        usage_log = UsageLog(
-                            company_id=self.company.id,
-                            call_log_id=self.call_log.id,
-                            turn_id=turn_id,
-                            stt_seconds=stt_seconds,
-                            stt_model="whisper-1",
+                if event_type == "response.audio.delta":
+                    # Forward audio chunk to Twilio
+                    audio_b64 = event.get("delta", "")
+                    if audio_b64 and self.stream_sid:
+                        media_msg = {
+                            "event": "media",
+                            "streamSid": self.stream_sid,
+                            "media": {"payload": audio_b64},
+                        }
+                        await self.websocket.send_text(json.dumps(media_msg))
+                        self._outbound_media_frames += 1
+
+                elif event_type == "response.audio_transcript.done":
+                    # Complete AI transcript for this response
+                    transcript = event.get("transcript", "")
+                    if transcript:
+                        self._ai_transcript_parts.append(transcript)
+                        logger.info(
+                            f"[AI] {self.call_sid}: {transcript[:100]}..."
+                            if len(transcript) > 100
+                            else f"[AI] {self.call_sid}: {transcript}"
                         )
-                        usage_log.calculate_costs()
-                        self.db.add(usage_log)
-                    
-                    self.db.commit()
-            except Exception as log_err:
-                logger.warning(f"Failed to log latency/usage: {log_err}")
-            
-            logger.info(f"Turn {turn_id} completed: STT={stt_latency_ms}ms, Orch={orchestrator_latency_ms}ms, Pod={pod_latency_ms}ms, Total={total_latency_ms}ms")
-                    
-        except Exception as e:
-            logger.error(f"Error processing segment for turn {turn_id}: {e}", exc_info=True)
-    
-    async def _transcribe_audio(self, pcm_audio: bytes) -> Tuple[str, float]:
-        """
-        Transcribe PCM audio using OpenAI Whisper API.
-        
-        Args:
-            pcm_audio: Raw PCM audio bytes (24kHz, 16-bit, mono)
-            
-        Returns:
-            Tuple of (transcribed_text, audio_seconds)
-        """
-        if not settings.OPENAI_API_KEY:
-            logger.warning("OPENAI_API_KEY not configured - STT disabled")
-            return "", 0.0
-        
-        try:
-            from openai import OpenAI
-            import wave
-            
-            # Calculate audio duration (24kHz, 16-bit mono = 48000 bytes/second)
-            audio_seconds = len(pcm_audio) / 48000
-            
-            # Convert PCM to WAV format for Whisper
-            wav_buffer = io.BytesIO()
-            with wave.open(wav_buffer, 'wb') as wav:
-                wav.setnchannels(1)
-                wav.setsampwidth(2)  # 16-bit
-                wav.setframerate(24000)  # PersonaPlex uses 24kHz
-                wav.writeframes(pcm_audio)
-            wav_buffer.seek(0)
-            wav_buffer.name = "audio.wav"
-            
-            # Call Whisper API
-            client = OpenAI(api_key=settings.OPENAI_API_KEY)
-            transcript = client.audio.transcriptions.create(
-                model="whisper-1",
-                file=wav_buffer,
-                language="nl",  # Dutch
-                response_format="text"
-            )
-            
-            return (transcript.strip() if transcript else ""), audio_seconds
-            
-        except Exception as e:
-            logger.error(f"STT error: {e}")
-            return "", 0.0
-    
-    async def _run_orchestrator(
-        self,
-        user_transcript: str,
-        assistant_transcript_so_far: str,
-        turn_id: int
-    ) -> Tuple[str, str]:
-        """
-        Run the orchestrator to get context injection.
-        
-        Args:
-            user_transcript: What the user said this turn
-            assistant_transcript_so_far: Full assistant transcript
-            turn_id: Current turn ID
-            
-        Returns:
-            Tuple of (facts, instructions)
-        """
-        if not user_transcript.strip():
-            return "", ""
-        
-        try:
-            from app.services.orchestrator import build_context_payload
-            import asyncio
-            
-            # Get caller phone from call log
-            customer_phone = self.call_log.caller_number if self.call_log else None
-            
-            # Run orchestrator in thread pool (it's sync + does LLM calls)
-            loop = asyncio.get_event_loop()
-            facts, instructions = await loop.run_in_executor(
-                None,
-                build_context_payload,
-                self.db,
-                str(self.company.id),
-                str(self.call_log.id) if self.call_log else None,
-                self._calendar_id,
-                user_transcript,
-                assistant_transcript_so_far,
-                customer_phone,
-                turn_id,
-            )
-            
-            return facts, instructions
-            
-        except Exception as e:
-            logger.error(f"Orchestrator error: {e}", exc_info=True)
-            return "", ""
-    
-    async def _send_audio_loop(self):
-        """
-        Send audio from PersonaPlex back to Twilio.
-        """
-        while self.is_running:
-            try:
-                # Get audio from queue (with timeout)
-                try:
-                    pcm_audio = await asyncio.wait_for(
-                        self.send_queue.get(), 
-                        timeout=0.1
+
+                elif event_type == "conversation.item.input_audio_transcription.completed":
+                    # User (caller) transcript
+                    transcript = event.get("transcript", "")
+                    if transcript:
+                        self._user_transcript_parts.append(transcript)
+                        logger.info(
+                            f"[CALLER] {self.call_sid}: {transcript[:100]}..."
+                            if len(transcript) > 100
+                            else f"[CALLER] {self.call_sid}: {transcript}"
+                        )
+
+                elif event_type == "response.function_call_arguments.done":
+                    # Function call ready — execute tool
+                    await self._handle_function_call(event)
+
+                elif event_type == "input_audio_buffer.speech_started":
+                    # Caller started speaking — barge-in
+                    # Clear Twilio's audio queue so the AI audio stops
+                    if self.stream_sid:
+                        clear_msg = {
+                            "event": "clear",
+                            "streamSid": self.stream_sid,
+                        }
+                        await self.websocket.send_text(json.dumps(clear_msg))
+                        logger.debug(f"[BARGE-IN] Cleared Twilio queue for {self.call_sid}")
+
+                elif event_type == "error":
+                    self._openai_errors += 1
+                    error_info = event.get("error", {})
+                    logger.error(
+                        f"OpenAI Realtime error for {self.call_sid}: "
+                        f"{error_info.get('type', 'unknown')}: {error_info.get('message', '')}"
                     )
-                except asyncio.TimeoutError:
-                    continue
-                
-                # Convert PCM to mulaw for Twilio
-                mulaw_audio = self.audio_converter.pcm_to_mulaw(pcm_audio)
-                
-                # Send to Twilio
-                media_message = {
-                    "event": "media",
-                    "streamSid": self.stream_sid,
-                    "media": {
-                        "payload": base64.b64encode(mulaw_audio).decode("utf-8")
-                    }
-                }
-                
-                await self.websocket.send_text(json.dumps(media_message))
-                self._outbound_media_frames += 1
-                
+
+                elif event_type == "response.done":
+                    # Full response completed — log for debugging
+                    response = event.get("response", {})
+                    status = response.get("status", "unknown")
+                    if status != "completed":
+                        logger.warning(
+                            f"OpenAI response status: {status} for {self.call_sid}"
+                        )
+
             except WebSocketDisconnect:
+                logger.info(f"Twilio WS disconnected during openai_to_twilio")
                 self.is_running = False
                 break
             except Exception as e:
-                logger.error(f"Error sending audio: {e}")
+                logger.error(f"Error handling OpenAI event {event_type}: {e}", exc_info=True)
                 continue
-    
+
+    async def _handle_function_call(self, event: dict):
+        """
+        Execute a function call from OpenAI and send the result back.
+        """
+        call_id = event.get("call_id", "")
+        fn_name = event.get("name", "")
+        fn_args_str = event.get("arguments", "{}")
+
+        self._function_calls_count += 1
+        t0 = time.time()
+
+        logger.info(f"[TOOL] {self.call_sid}: {fn_name}({fn_args_str})")
+
+        try:
+            fn_args = json.loads(fn_args_str)
+        except json.JSONDecodeError:
+            fn_args = {}
+
+        # Build context for tool execution
+        context = {
+            "db": self.db,
+            "company_id": str(self.company.id),
+            "call_log_id": self.session_id,
+            "calendar_id": None,
+            "customer_phone": self.call_log.caller_number if self.call_log else None,
+        }
+
+        # Execute tool (synchronous DB operations — run in executor)
+        loop = asyncio.get_event_loop()
+        try:
+            result = await loop.run_in_executor(
+                None, _run_tool, fn_name, fn_args, context
+            )
+        except Exception as e:
+            logger.error(f"Tool execution error for {fn_name}: {e}", exc_info=True)
+            result = {"ok": False, "reason": "error", "message": str(e)}
+
+        result_str = json.dumps(result, ensure_ascii=False, default=str)
+        elapsed_ms = int((time.time() - t0) * 1000)
+        logger.info(
+            f"[TOOL] {self.call_sid}: {fn_name} completed in {elapsed_ms}ms "
+            f"-> {result_str[:200]}"
+        )
+
+        # Send result back to OpenAI
+        if self.openai_session:
+            await self.openai_session.send_function_result(call_id, result_str)
+
     async def cleanup(self):
         """
-        Cleanup after call ends.
+        Cleanup after call ends: save transcripts, update call log, close sessions.
         """
         self.is_running = False
-        
-        # Log WebSocket close reason if available
-        try:
-            ws_state = self.websocket.client_state
-            logger.info(f"[WS-CLOSE] call={self.call_sid} ws_state={ws_state}")
-        except Exception:
-            pass
-        
-        # Get transcript from PersonaPlex and close session
-        transcript = await personaplex_service.end_session(self.session_id)
-        
+
+        # Close OpenAI session
+        if self.openai_session:
+            await self.openai_session.close()
+            self.openai_session = None
+
+        # Combine transcript parts
+        user_transcript = " ".join(self._user_transcript_parts).strip()
+        ai_transcript = " ".join(self._ai_transcript_parts).strip()
+
         # Update call log
         if self.call_log:
             self.call_log.status = CallStatus.COMPLETED
             self.call_log.outcome = CallOutcome.HANDLED
             self.call_log.ended_at = datetime.utcnow()
-            
+
             # Save transcript entries
-            if transcript:
+            if user_transcript or ai_transcript:
                 from app.models.call_log import CallTranscript
-                
-                # Save user (caller) transcript
-                if transcript.get("user"):
-                    caller_transcript = CallTranscript(
+
+                if user_transcript:
+                    caller_entry = CallTranscript(
                         call_log_id=self.call_log.id,
                         speaker="caller",
-                        message=transcript["user"]
+                        message=user_transcript,
                     )
-                    self.db.add(caller_transcript)
-                
-                # Save AI (assistant) transcript
-                if transcript.get("assistant"):
-                    ai_transcript = CallTranscript(
+                    self.db.add(caller_entry)
+
+                if ai_transcript:
+                    ai_entry = CallTranscript(
                         call_log_id=self.call_log.id,
                         speaker="ai",
-                        message=transcript["assistant"]
+                        message=ai_transcript,
                     )
-                    self.db.add(ai_transcript)
-                
+                    self.db.add(ai_entry)
+
                 # Analyze transcript for unanswered questions
                 try:
                     detected_questions = analyze_call_transcript(
                         db=self.db,
                         company_id=str(self.company.id),
-                        user_transcript=transcript.get("user", ""),
-                        assistant_transcript=transcript.get("assistant", "")
+                        user_transcript=user_transcript,
+                        assistant_transcript=ai_transcript,
                     )
                     if detected_questions:
                         logger.info(
@@ -905,127 +566,120 @@ class VoiceCallHandler:
                         )
                 except Exception as e:
                     logger.error(f"Error analyzing transcript for questions: {e}")
-            
+
             self.db.commit()
-        
+
         # Update AI worker status back to available
         if self.ai_worker:
             self.ai_worker.status = AIWorkerStatus.AVAILABLE
             self.db.commit()
-        
+
         logger.info(f"Call {self.call_sid} cleaned up successfully")
-        
-        # ── Per-call metrics ─────────────────────────────────────
+
+        # ── Per-call metrics ──────────────────────────────────────
         logger.info(
-            "[METRICS] call=%s warm_pool_available=%d warm_claim_latency_ms=%d "
-            "fallback_used=%s inbound_frames=%d outbound_frames=%d pod_timeouts=%d",
+            "[METRICS] call=%s inbound_frames=%d outbound_frames=%d "
+            "function_calls=%d openai_errors=%d "
+            "user_transcript_len=%d ai_transcript_len=%d",
             self.call_sid,
-            self._metrics_warm_pool_available,
-            self._metrics_warm_claim_latency_ms,
-            self._metrics_fallback_used,
             self._inbound_media_frames,
             self._outbound_media_frames,
-            self._pod_timeouts,
+            self._function_calls_count,
+            self._openai_errors,
+            len(user_transcript),
+            len(ai_transcript),
         )
-        
-        # Explicit diagnostic if no audio was ever sent to the caller
+
+        # Diagnostic if no audio was ever sent to the caller
         if self._outbound_media_frames == 0:
             reason = "unknown"
-            if self._pod_timeouts > 0:
-                reason = "pod_timeout"
-            elif not self._upstream_ready.is_set():
-                reason = "upstream_never_ready"
+            if self._openai_errors > 0:
+                reason = "openai_errors"
             elif self._inbound_media_frames == 0:
                 reason = "no_inbound_audio"
             else:
-                reason = "no_tts_response"
+                reason = "no_ai_response"
             logger.error(
                 "[NO_AUDIO_SENT_TO_TWILIO] call=%s reason=%s "
-                "inbound_frames=%d pod_timeouts=%d",
-                self.call_sid, reason,
-                self._inbound_media_frames, self._pod_timeouts,
+                "inbound_frames=%d openai_errors=%d",
+                self.call_sid,
+                reason,
+                self._inbound_media_frames,
+                self._openai_errors,
             )
-        
-        # Now that the call is done and the pod's models are free,
-        # pre-warm a new session for the next incoming call.
-        asyncio.create_task(personaplex_service.pre_warm_available_workers(self.db))
 
 
 async def voice_websocket_handler(
     websocket: WebSocket,
-    db: Session
+    db: Session,
 ):
     """
     Main WebSocket handler for Twilio Media Streams.
-    
+
     CRITICAL: accept() must happen immediately so Twilio gets HTTP 101.
-    All heavy work (session init, upstream connect) happens AFTER accept.
+    All heavy work (OpenAI connection, context building) happens AFTER accept.
     """
     t_enter = time.time()
-    
+
     await websocket.accept()
     t_accept = time.time()
-    logger.info(
-        f"[WS] accept() done in {int((t_accept - t_enter)*1000)}ms"
-    )
-    
+    logger.info(f"[WS] accept() done in {int((t_accept - t_enter) * 1000)}ms")
+
     # Variables to store call info
     call_sid = None
     stream_sid = None
     to_number = None
     from_number = None
-    handler: Optional[VoiceCallHandler] = None
-    
+    handler: Optional[RealtimeCallHandler] = None
+
     try:
-        # First message should be "connected" with metadata
         while True:
             message = await websocket.receive_text()
             data = json.loads(message)
-            
+
             event_type = data.get("event")
-            
+
             if event_type == "connected":
                 t_connected = time.time()
                 logger.info(
-                    f"[WS] Twilio 'connected' event at +{int((t_connected - t_accept)*1000)}ms"
+                    f"[WS] Twilio 'connected' event at "
+                    f"+{int((t_connected - t_accept) * 1000)}ms"
                 )
                 continue
-            
+
             elif event_type == "start":
                 t_start = time.time()
-                # Extract call metadata
                 start_data = data.get("start", {})
                 call_sid = start_data.get("callSid")
                 stream_sid = start_data.get("streamSid")
-                
-                # Get custom parameters (set in TwiML)
+
                 custom_params = start_data.get("customParameters", {})
                 to_number = custom_params.get("to") or start_data.get("to")
                 from_number = custom_params.get("from") or start_data.get("from")
-                
+
                 logger.info(
-                    f"[WS] Twilio 'start' at +{int((t_start - t_accept)*1000)}ms "
+                    f"[WS] Twilio 'start' at +{int((t_start - t_accept) * 1000)}ms "
                     f"CallSid={call_sid} From={from_number} To={to_number}"
                 )
-                
+
                 # Create and initialize handler
-                handler = VoiceCallHandler(
+                handler = RealtimeCallHandler(
                     websocket=websocket,
                     db=db,
                     call_sid=call_sid,
-                    stream_sid=stream_sid
+                    stream_sid=stream_sid,
                 )
-                
+
                 await handler.initialize_from_phone_number(to_number, from_number)
-                
-                # Start processing (this will block until call ends)
+
+                # Start processing (blocks until call ends)
                 await handler.start()
                 break
-            
+
             elif event_type == "stop":
                 logger.info("Stream stopped before starting")
                 break
-                
+
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected for call {call_sid}")
     except Exception as e:
@@ -1036,5 +690,5 @@ async def voice_websocket_handler(
         t_end = time.time()
         logger.info(
             f"[WS] handler finished for call {call_sid}, "
-            f"total={int((t_end - t_enter)*1000)}ms"
+            f"total={int((t_end - t_enter) * 1000)}ms"
         )

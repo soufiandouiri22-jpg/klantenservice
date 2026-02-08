@@ -941,21 +941,8 @@ async def toggle_kill_switch(
     
     db.commit()
     
-    # If kill switch is enabled, also tear down any warm sessions for these workers
-    if data.enabled:
-        try:
-            from app.services.personaplex_service import personaplex_service
-            for worker in workers:
-                worker_id = str(worker.id)
-                session = personaplex_service._warm_sessions.pop(worker_id, None)
-                if session:
-                    try:
-                        await personaplex_service.end_session(session.session_id)
-                    except Exception:
-                        pass
-                    logger.info(f"Killed warm session for worker {worker.name} ({worker_id[:8]})")
-        except Exception as e:
-            logger.error(f"Error cleaning up warm sessions during kill switch: {e}")
+    # With OpenAI Realtime API, no warm sessions to tear down.
+    # Active calls will be rejected on the next check in voice_handler.
     
     action = "ingeschakeld" if data.enabled else "uitgeschakeld"
     logger.warning(
@@ -1111,6 +1098,83 @@ async def seed_global_configs(
     db.commit()
     
     return {"status": "seeded", "created": created}
+
+
+# ==================== VOICE PREVIEW ENDPOINT ====================
+
+# OpenAI voices with metadata
+OPENAI_VOICES = [
+    {"id": "alloy", "name": "Alloy", "description": "Neutraal en veelzijdig", "gender": "neutral"},
+    {"id": "ash", "name": "Ash", "description": "Warm en kalm", "gender": "male"},
+    {"id": "ballad", "name": "Ballad", "description": "Zacht en expressief", "gender": "male"},
+    {"id": "coral", "name": "Coral", "description": "Helder en vriendelijk", "gender": "female"},
+    {"id": "echo", "name": "Echo", "description": "Diep en professioneel", "gender": "male"},
+    {"id": "sage", "name": "Sage", "description": "Warm en autoritair", "gender": "female"},
+    {"id": "shimmer", "name": "Shimmer", "description": "Licht en energiek", "gender": "female"},
+    {"id": "verse", "name": "Verse", "description": "Dynamisch en levendig", "gender": "male"},
+]
+
+VOICE_SAMPLE_TEXT = (
+    "Goedemiddag, u spreekt met de klantenservice. "
+    "Waarmee kan ik u vandaag helpen?"
+)
+
+
+@router.get("/voices")
+async def list_voices(
+    current_user: User = Depends(require_superadmin),
+):
+    """
+    List available OpenAI Realtime voices with metadata.
+    """
+    return {"voices": OPENAI_VOICES}
+
+
+@router.get("/voice-preview/{voice_id}")
+async def preview_voice(
+    voice_id: str,
+    current_user: User = Depends(require_superadmin),
+):
+    """
+    Generate a voice preview using OpenAI TTS API.
+    Returns MP3 audio as base64 for browser playback.
+    """
+    from fastapi.responses import Response
+    import openai
+
+    valid_ids = [v["id"] for v in OPENAI_VOICES]
+    if voice_id not in valid_ids:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Ongeldige stem: {voice_id}. Kies uit: {', '.join(valid_ids)}",
+        )
+
+    settings = get_settings()
+    if not settings.OPENAI_API_KEY:
+        raise HTTPException(status_code=500, detail="OPENAI_API_KEY niet geconfigureerd")
+
+    try:
+        client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
+        response = client.audio.speech.create(
+            model="tts-1",
+            voice=voice_id,
+            input=VOICE_SAMPLE_TEXT,
+            response_format="mp3",
+        )
+
+        # Return MP3 audio directly
+        audio_bytes = response.content
+        return Response(
+            content=audio_bytes,
+            media_type="audio/mpeg",
+            headers={
+                "Content-Disposition": f'inline; filename="preview-{voice_id}.mp3"',
+                "Cache-Control": "public, max-age=86400",  # Cache for 24h
+            },
+        )
+    except Exception as e:
+        logger.error(f"Voice preview error for {voice_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Kon preview niet genereren: {str(e)}")
 
 
 # ==================== LOGS ENDPOINTS ====================

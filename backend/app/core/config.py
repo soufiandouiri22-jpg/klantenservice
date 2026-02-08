@@ -34,9 +34,11 @@ class Settings(BaseSettings):
     LLM_MAX_TOKENS: int = 2048
     LLM_TEMPERATURE: float = 0.7
     
-    # OpenAI (for Orchestrator + STT)
+    # OpenAI (for Orchestrator + STT + Realtime Voice)
     OPENAI_API_KEY: str = ""
     ORCHESTRATOR_MODEL: str = "gpt-4o-mini"  # Model for intent detection + function calling
+    OPENAI_REALTIME_MODEL: str = "gpt-4o-realtime-preview-2024-12-17"
+    OPENAI_REALTIME_VOICE: str = "alloy"  # alloy, echo, shimmer, ash, ballad, coral, sage, verse
     
     # Hugging Face (for PersonaPlex model)
     HUGGINGFACE_TOKEN: str = ""

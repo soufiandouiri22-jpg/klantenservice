@@ -91,48 +91,12 @@ DEFAULT_CONFIGS = [
         "description": "Rate limit: requests per minuut"
     },
     
-    # Voice / Audio Tuning
+    # Voice / Audio (OpenAI Realtime API)
     {
-        "key": "voice_default_preset",
-        "value": "NATF0",
+        "key": "voice_default",
+        "value": "alloy",
         "category": "voice",
-        "description": "Standaard PersonaPlex voice preset voor alle gesprekken"
-    },
-    {
-        "key": "voice_auto_respond",
-        "value": True,
-        "category": "voice",
-        "description": "VAD/auto-respond standaard aan voor nieuwe bedrijven"
-    },
-    {
-        "key": "voice_segment_ms",
-        "value": 2500,
-        "category": "voice",
-        "description": "Audio segment lengte in milliseconden"
-    },
-    {
-        "key": "voice_vad_sensitivity",
-        "value": 0.5,
-        "category": "voice",
-        "description": "Voice Activity Detection gevoeligheid (0-1)"
-    },
-    {
-        "key": "voice_interrupt_policy",
-        "value": "allow",
-        "category": "voice",
-        "description": "Interrupt policy: allow, queue, ignore"
-    },
-    {
-        "key": "voice_max_latency_ms",
-        "value": 3000,
-        "category": "voice",
-        "description": "Maximum latency budget in ms"
-    },
-    {
-        "key": "voice_queue_max_size",
-        "value": 5,
-        "category": "voice",
-        "description": "Maximum queue grootte voor backpressure"
+        "description": "Standaard OpenAI stem voor nieuwe AI medewerkers (alloy, ash, ballad, coral, echo, sage, shimmer, verse)"
     },
     
     # Thresholds
