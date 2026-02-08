@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { Phone, Search, Filter, Play, Clock, User, MessageSquare } from 'lucide-react'
+import { Phone, Search, Filter, Play, Clock, User, MessageSquare, X, ChevronDown } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { Header } from '@/components/layout/Header'
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card'
@@ -19,10 +19,21 @@ export default function CallsPage() {
   const [page, setPage] = useState(1)
   const [selectedCall, setSelectedCall] = useState<any>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [showFilters, setShowFilters] = useState(false)
+  const [statusFilter, setStatusFilter] = useState('')
+  const [outcomeFilter, setOutcomeFilter] = useState('')
+
+  const activeFilterCount = [statusFilter, outcomeFilter].filter(Boolean).length
 
   const { data: callsData, isLoading } = useQuery({
-    queryKey: ['calls', page, searchQuery],
-    queryFn: () => callsApi.list({ page, page_size: 20, search: searchQuery || undefined }),
+    queryKey: ['calls', page, searchQuery, statusFilter, outcomeFilter],
+    queryFn: () => callsApi.list({
+      page,
+      page_size: 20,
+      search: searchQuery || undefined,
+      status: statusFilter || undefined,
+      outcome: outcomeFilter || undefined,
+    }),
   })
 
   const { data: callDetail, isLoading: detailLoading } = useQuery({
@@ -86,7 +97,7 @@ export default function CallsPage() {
 
         {/* Search & Filter */}
         <Card>
-          <CardBody>
+          <CardBody className="space-y-4">
             <div className="flex items-center gap-4">
               <div className="flex-1 relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -95,13 +106,66 @@ export default function CallsPage() {
                   placeholder="Zoek op telefoonnummer of naam..."
                   className="input pl-10"
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => { setSearchQuery(e.target.value); setPage(1) }}
                 />
               </div>
-              <Button variant="outline" leftIcon={<Filter className="h-4 w-4" />}>
-                Filters
+              <Button
+                variant={activeFilterCount > 0 ? 'primary' : 'outline'}
+                leftIcon={<Filter className="h-4 w-4" />}
+                onClick={() => setShowFilters(!showFilters)}
+              >
+                Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
               </Button>
             </div>
+
+            {showFilters && (
+              <div className="flex items-center gap-4 pt-2 border-t border-gray-100">
+                <div className="flex-1">
+                  <label className="text-xs font-medium text-gray-500 mb-1 block">Status</label>
+                  <select
+                    className="input text-sm"
+                    value={statusFilter}
+                    onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }}
+                  >
+                    <option value="">Alle statussen</option>
+                    <option value="completed">Afgerond</option>
+                    <option value="missed">Gemist</option>
+                    <option value="voicemail">Voicemail</option>
+                    <option value="failed">Mislukt</option>
+                    <option value="abandoned">Afgebroken</option>
+                  </select>
+                </div>
+                <div className="flex-1">
+                  <label className="text-xs font-medium text-gray-500 mb-1 block">Uitkomst</label>
+                  <select
+                    className="input text-sm"
+                    value={outcomeFilter}
+                    onChange={(e) => { setOutcomeFilter(e.target.value); setPage(1) }}
+                  >
+                    <option value="">Alle uitkomsten</option>
+                    <option value="handled">Afgehandeld</option>
+                    <option value="appointment_made">Afspraak gemaakt</option>
+                    <option value="appointment_cancelled">Afspraak geannuleerd</option>
+                    <option value="info_provided">Info verstrekt</option>
+                    <option value="note_left">Notitie achtergelaten</option>
+                    <option value="callback_requested">Terugbelverzoek</option>
+                    <option value="transferred">Doorverbonden</option>
+                    <option value="no_action">Geen actie</option>
+                  </select>
+                </div>
+                {activeFilterCount > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="mt-5"
+                    onClick={() => { setStatusFilter(''); setOutcomeFilter(''); setPage(1) }}
+                  >
+                    <X className="h-4 w-4 mr-1" />
+                    Wissen
+                  </Button>
+                )}
+              </div>
+            )}
           </CardBody>
         </Card>
 
