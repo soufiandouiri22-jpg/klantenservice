@@ -144,7 +144,7 @@ export function VoiceTab() {
                     </div>
                   </div>
 
-                  <p className="text-xs text-gray-500 mb-3">{voice.description}</p>
+                  <p className="text-xs text-gray-500 mb-3 flex-1">{voice.description}</p>
 
                   {/* Play button */}
                   <button

@@ -170,11 +170,12 @@ class RealtimeCallHandler:
         )
 
     async def _get_knowledge_context(self) -> Optional[str]:
-        """Get relevant knowledge context from website scraping."""
+        """Get relevant knowledge context from the website linked to this AI worker."""
         from app.models.website_knowledge import KnowledgeChunk
 
+        # Only fetch website knowledge linked to this specific AI worker (strict 1:1)
         knowledge_sources = self.db.query(WebsiteKnowledge).filter(
-            WebsiteKnowledge.company_id == self.company.id,
+            WebsiteKnowledge.ai_worker_id == self.ai_worker.id,
             WebsiteKnowledge.is_active == True,
             WebsiteKnowledge.status == "completed",
         ).all()
@@ -492,6 +493,7 @@ class RealtimeCallHandler:
         context = {
             "db": self.db,
             "company_id": str(self.company.id),
+            "ai_worker_id": str(self.ai_worker.id) if self.ai_worker else None,
             "call_log_id": self.session_id,
             "calendar_id": None,
             "customer_phone": self.call_log.caller_number if self.call_log else None,

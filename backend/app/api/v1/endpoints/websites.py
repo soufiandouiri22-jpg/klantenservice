@@ -12,6 +12,7 @@ import secrets
 from app.core.database import get_db
 from app.models.user import User
 from app.models.company import Company
+from app.models.ai_worker import AIWorker
 from app.models.website_knowledge import WebsiteKnowledge, KnowledgeChunk, IndexStatus
 from app.schemas.website import (
     WebsiteKnowledgeCreate,
@@ -70,8 +71,37 @@ async def create_website(
 ):
     """
     Add a new website to index.
+    Requires an ai_worker_id — each website is linked to exactly one AI worker.
     """
     from app.core.config import settings
+    
+    # Validate ai_worker_id
+    if not data.ai_worker_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Selecteer een AI-medewerker om deze website aan te koppelen.",
+        )
+    
+    ai_worker = db.query(AIWorker).filter(
+        AIWorker.id == data.ai_worker_id,
+        AIWorker.company_id == company.id,
+    ).first()
+    if not ai_worker:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="AI-medewerker niet gevonden.",
+        )
+    
+    # Check: this worker already has a website linked
+    existing_link = db.query(WebsiteKnowledge).filter(
+        WebsiteKnowledge.ai_worker_id == data.ai_worker_id,
+        WebsiteKnowledge.company_id == company.id,
+    ).first()
+    if existing_link:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"AI-medewerker '{ai_worker.name}' heeft al een website gekoppeld ({existing_link.base_url}). Ontkoppel deze eerst.",
+        )
     
     # Check if URL already exists for this company
     existing = db.query(WebsiteKnowledge).filter(
@@ -88,6 +118,7 @@ async def create_website(
     website = WebsiteKnowledge(
         id=uuid4(),
         company_id=company.id,
+        ai_worker_id=data.ai_worker_id,
         base_url=str(data.base_url),
         sitemap_url=str(data.sitemap_url) if data.sitemap_url else None,
         crawl_settings=data.crawl_settings.model_dump() if data.crawl_settings else {},

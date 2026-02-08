@@ -205,22 +205,28 @@ def _run_tool(
                 start = date_parser.parse(start_str)
             except:
                 start = datetime.now()
+            ai_worker_id = context.get("ai_worker_id")
             return tool_check_availability(
                 db, company_id,
                 start_date=start,
                 duration_minutes=int(arguments.get("duration_minutes", 30)),
+                ai_worker_id=ai_worker_id,
             )
         
         if name == "book_appointment":
             from dateutil import parser as date_parser
-            # Need calendar_id - get from availability result or use first calendar
+            ai_worker_id = context.get("ai_worker_id")
+            # Need calendar_id - get from the AI worker's linked calendar
             cal_id = calendar_id
             if not cal_id:
                 from app.models.calendar_integration import CalendarIntegration
-                calendar = db.query(CalendarIntegration).filter(
+                query = db.query(CalendarIntegration).filter(
                     CalendarIntegration.company_id == company_id,
                     CalendarIntegration.is_active == True,
-                ).first()
+                )
+                if ai_worker_id:
+                    query = query.filter(CalendarIntegration.ai_worker_id == ai_worker_id)
+                calendar = query.first()
                 cal_id = str(calendar.id) if calendar else None
             
             if not cal_id:

@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { Plus, Headphones, Settings, Trash2, Mic, Play, Square, Loader2, Sparkles } from 'lucide-react'
+import { Plus, Headphones, Settings, Trash2, Mic, Play, Square, Loader2, Sparkles, Phone, Globe, Calendar } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { Header } from '@/components/layout/Header'
@@ -264,7 +264,30 @@ export default function AIWorkersPage() {
                       </Badge>
                     </div>
 
-                    <div className="mt-6 grid grid-cols-2 gap-4 text-center">
+                    {/* Linked resources */}
+                    <div className="mt-4 space-y-2">
+                      <div className="flex items-center gap-2.5 text-sm">
+                        <Phone className={`h-4 w-4 ${worker.linked_phone ? 'text-green-500' : 'text-gray-300'}`} />
+                        <span className={worker.linked_phone ? 'text-gray-700' : 'text-gray-400'}>
+                          {worker.linked_phone ? worker.linked_phone.number : 'Geen nummer gekoppeld'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2.5 text-sm">
+                        <Globe className={`h-4 w-4 ${worker.linked_website ? 'text-green-500' : 'text-gray-300'}`} />
+                        <span className={`${worker.linked_website ? 'text-gray-700' : 'text-gray-400'} truncate`}>
+                          {worker.linked_website ? worker.linked_website.base_url.replace(/^https?:\/\//, '') : 'Geen website gekoppeld'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2.5 text-sm">
+                        <Calendar className={`h-4 w-4 ${worker.linked_calendar ? 'text-green-500' : 'text-gray-300'}`} />
+                        <span className={worker.linked_calendar ? 'text-gray-700' : 'text-gray-400'}>
+                          {worker.linked_calendar ? worker.linked_calendar.name : 'Geen agenda gekoppeld'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Stats */}
+                    <div className="mt-4 grid grid-cols-2 gap-4 text-center">
                       <div className="rounded-lg bg-gray-50 p-3">
                         <p className="text-2xl font-bold text-gray-900">{worker.total_calls_handled}</p>
                         <p className="text-xs text-gray-500">Gesprekken</p>
@@ -275,7 +298,7 @@ export default function AIWorkersPage() {
                       </div>
                     </div>
 
-                    <div className="mt-6 flex items-center justify-between pt-4 border-t border-gray-100">
+                    <div className="mt-4 flex items-center justify-between pt-4 border-t border-gray-100">
                       <Toggle
                         enabled={worker.is_active}
                         onChange={() => toggleMutation.mutate(worker.id)}
@@ -399,7 +422,7 @@ export default function AIWorkersPage() {
                       </div>
                     </div>
 
-                    <p className="text-xs text-gray-500 mb-2">{voice.description}</p>
+                    <p className="text-xs text-gray-500 mb-2 flex-1">{voice.description}</p>
 
                     {/* Play button */}
                     <button

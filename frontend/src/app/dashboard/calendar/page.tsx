@@ -14,7 +14,7 @@ import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
 import { PageLoader } from '@/components/ui/Spinner'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { calendarsApi } from '@/lib/api'
+import { calendarsApi, aiWorkersApi } from '@/lib/api'
 import { formatRelativeTime } from '@/lib/utils'
 
 const providers = [
@@ -53,15 +53,26 @@ export default function CalendarPage() {
   const [caldavUsername, setCaldavUsername] = useState('')
   const [caldavPassword, setCaldavPassword] = useState('')
 
+  const [selectedWorkerId, setSelectedWorkerId] = useState<string>('')
+
   const { data: calendars, isLoading } = useQuery({
     queryKey: ['calendars'],
     queryFn: calendarsApi.list,
   })
 
+  const { data: workers } = useQuery({
+    queryKey: ['ai-workers'],
+    queryFn: aiWorkersApi.list,
+  })
+
+  // Filter workers that don't already have a calendar linked
+  const availableWorkers = workers?.filter((w: any) => !w.linked_calendar) || []
+
   const createMutation = useMutation({
     mutationFn: calendarsApi.create,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['calendars'] })
+      queryClient.invalidateQueries({ queryKey: ['ai-workers'] })
       toast.success('Agenda toegevoegd')
       setIsAddModalOpen(false)
       resetForm()
@@ -99,6 +110,7 @@ export default function CalendarPage() {
 
   const resetForm = () => {
     setSelectedProvider(null)
+    setSelectedWorkerId('')
     setCaldavName('')
     setCaldavUrl('')
     setCaldavUsername('')
@@ -121,9 +133,14 @@ export default function CalendarPage() {
       toast.error('Vul alle velden in')
       return
     }
+    if (!selectedWorkerId) {
+      toast.error('Selecteer een AI-medewerker')
+      return
+    }
     createMutation.mutate({
       name: caldavName,
       provider: 'caldav',
+      ai_worker_id: selectedWorkerId,
       caldav_url: caldavUrl,
       caldav_username: caldavUsername,
       caldav_password: caldavPassword,
@@ -222,6 +239,9 @@ export default function CalendarPage() {
                                 {calendar.external_calendar_name}
                               </p>
                             )}
+                            <p className="text-xs text-gray-400 mt-1">
+                              Gekoppeld aan: {workers?.find((w: any) => w.id === calendar.ai_worker_id)?.name || 'Geen medewerker'}
+                            </p>
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
@@ -323,28 +343,56 @@ export default function CalendarPage() {
         size="lg"
       >
         {!selectedProvider ? (
-          <div className="grid grid-cols-1 gap-4">
-            {providers.map((provider) => (
-              <button
-                key={provider.id}
-                onClick={() => {
-                  if (provider.id === 'caldav') {
-                    setSelectedProvider('caldav')
-                  } else {
-                    handleConnectOAuth(provider.id)
-                  }
-                }}
-                className="flex items-center gap-4 p-4 rounded-lg border border-gray-200 hover:border-primary-300 hover:bg-primary-50 transition-colors text-left"
-              >
-                <div className={`flex h-12 w-12 items-center justify-center rounded-lg text-2xl ${provider.color}`}>
-                  {provider.icon}
-                </div>
-                <div>
-                  <h4 className="font-medium text-gray-900">{provider.name}</h4>
-                  <p className="text-sm text-gray-500">{provider.description}</p>
-                </div>
-              </button>
-            ))}
+          <div className="space-y-5">
+            {/* Worker selector */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Koppel aan AI-medewerker
+              </label>
+              {availableWorkers.length === 0 ? (
+                <p className="text-sm text-amber-600 bg-amber-50 rounded-lg p-3">
+                  Alle AI-medewerkers hebben al een agenda gekoppeld. Maak eerst een nieuwe medewerker aan of ontkoppel een bestaande agenda.
+                </p>
+              ) : (
+                <select
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
+                  value={selectedWorkerId}
+                  onChange={(e) => setSelectedWorkerId(e.target.value)}
+                >
+                  <option value="">Selecteer een medewerker...</option>
+                  {availableWorkers.map((w: any) => (
+                    <option key={w.id} value={w.id}>{w.name} — {w.role_title}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            {/* Provider selection */}
+            {selectedWorkerId && (
+              <div className="grid grid-cols-1 gap-4">
+                {providers.map((provider) => (
+                  <button
+                    key={provider.id}
+                    onClick={() => {
+                      if (provider.id === 'caldav') {
+                        setSelectedProvider('caldav')
+                      } else {
+                        handleConnectOAuth(provider.id)
+                      }
+                    }}
+                    className="flex items-center gap-4 p-4 rounded-lg border border-gray-200 hover:border-primary-300 hover:bg-primary-50 transition-colors text-left"
+                  >
+                    <div className={`flex h-12 w-12 items-center justify-center rounded-lg text-2xl ${provider.color}`}>
+                      {provider.icon}
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-gray-900">{provider.name}</h4>
+                      <p className="text-sm text-gray-500">{provider.description}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         ) : (
           <div className="space-y-4">

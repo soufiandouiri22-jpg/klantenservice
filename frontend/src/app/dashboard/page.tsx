@@ -103,7 +103,10 @@ export default function DashboardPage() {
   const showOnboarding = !hideOnboarding && completedSteps < totalSteps
 
   // Check if user needs to activate subscription
+  // Show banner for: pending, canceled, past_due - regardless of whether they have a stripe_customer_id
   const needsSubscription = subscription?.status === 'pending' || 
+    subscription?.status === 'canceled' ||
+    subscription?.status === 'past_due' ||
     (subscription?.status !== 'trialing' && subscription?.status !== 'active' && !subscription?.has_stripe)
 
   const isLoading = statsLoading || callsLoading || appointmentsLoading || actionsLoading || workersLoading
@@ -159,26 +162,33 @@ export default function DashboardPage() {
         {/* Subscription Activation Banner */}
         {needsSubscription && (
           <motion.div variants={item}>
-            <Card className="border-amber-300 bg-gradient-to-r from-amber-50 to-orange-50">
+            <Card className={`border-${subscription?.status === 'canceled' || subscription?.status === 'past_due' ? 'red-300 bg-gradient-to-r from-red-50 to-orange-50' : 'amber-300 bg-gradient-to-r from-amber-50 to-orange-50'}`}>
               <CardBody className="p-6">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-100">
-                      <CreditCard className="h-6 w-6 text-amber-600" />
+                    <div className={`flex h-12 w-12 items-center justify-center rounded-full ${subscription?.status === 'canceled' || subscription?.status === 'past_due' ? 'bg-red-100' : 'bg-amber-100'}`}>
+                      <CreditCard className={`h-6 w-6 ${subscription?.status === 'canceled' || subscription?.status === 'past_due' ? 'text-red-600' : 'text-amber-600'}`} />
                     </div>
                     <div>
                       <h3 className="font-semibold text-gray-900">
-                        Activeer uw abonnement
+                        {subscription?.status === 'canceled'
+                          ? 'Uw abonnement is beëindigd'
+                          : subscription?.status === 'past_due'
+                          ? 'Betaling mislukt'
+                          : 'Activeer uw abonnement'}
                       </h3>
                       <p className="text-sm text-gray-600 mt-1">
-                        Start vandaag nog met uw 14-dagen gratis proefperiode. 
-                        Na de proefperiode wordt uw abonnement automatisch geactiveerd.
+                        {subscription?.status === 'canceled'
+                          ? 'Uw abonnement is opgezegd. Neem een nieuw abonnement om uw AI-medewerkers weer te activeren.'
+                          : subscription?.status === 'past_due'
+                          ? 'Uw laatste betaling is mislukt. Werk uw betaalgegevens bij om uw dienst te behouden.'
+                          : 'Start vandaag nog met uw 14-dagen gratis proefperiode. Na de proefperiode wordt uw abonnement automatisch geactiveerd.'}
                       </p>
                     </div>
                   </div>
                   <Link href="/dashboard/settings?tab=subscription">
                     <Button size="lg" className="whitespace-nowrap">
-                      Abonnement kiezen
+                      {subscription?.status === 'canceled' ? 'Opnieuw abonneren' : subscription?.status === 'past_due' ? 'Betaling bijwerken' : 'Abonnement kiezen'}
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Button>
                   </Link>

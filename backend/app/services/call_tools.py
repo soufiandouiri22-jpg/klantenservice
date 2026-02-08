@@ -35,9 +35,10 @@ def tool_check_availability(
     start_date: datetime,
     end_date: Optional[datetime] = None,
     duration_minutes: int = 30,
+    ai_worker_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Get available time slots from the company's calendar.
+    Get available time slots from the AI worker's linked calendar.
     
     Args:
         db: Database session
@@ -45,15 +46,19 @@ def tool_check_availability(
         start_date: Start of availability window
         end_date: End of availability window (default: 7 days from start)
         duration_minutes: Appointment duration in minutes
+        ai_worker_id: AI worker UUID (used to find worker-specific calendar)
         
     Returns:
         Dict with ok, slots (list of datetime strings), calendar_name
     """
-    # Get first active calendar for this company
-    calendar = db.query(CalendarIntegration).filter(
+    # Get the calendar linked to this AI worker (strict 1:1)
+    query = db.query(CalendarIntegration).filter(
         CalendarIntegration.company_id == company_id,
         CalendarIntegration.is_active == True,
-    ).first()
+    )
+    if ai_worker_id:
+        query = query.filter(CalendarIntegration.ai_worker_id == ai_worker_id)
+    calendar = query.first()
     
     if not calendar:
         return {

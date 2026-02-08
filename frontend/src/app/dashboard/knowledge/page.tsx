@@ -14,7 +14,7 @@ import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
 import { PageLoader } from '@/components/ui/Spinner'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { websitesApi } from '@/lib/api'
+import { websitesApi, aiWorkersApi } from '@/lib/api'
 import { formatRelativeTime, getStatusLabel } from '@/lib/utils'
 
 export default function KnowledgePage() {
@@ -23,6 +23,7 @@ export default function KnowledgePage() {
   const [isTestModalOpen, setIsTestModalOpen] = useState(false)
   const [selectedWebsite, setSelectedWebsite] = useState<any>(null)
   const [newUrl, setNewUrl] = useState('')
+  const [selectedWorkerId, setSelectedWorkerId] = useState<string>('')
   const [testQuestion, setTestQuestion] = useState('')
   const [testResult, setTestResult] = useState<any>(null)
 
@@ -31,13 +32,23 @@ export default function KnowledgePage() {
     queryFn: websitesApi.list,
   })
 
+  const { data: workers } = useQuery({
+    queryKey: ['ai-workers'],
+    queryFn: aiWorkersApi.list,
+  })
+
+  // Filter workers that don't already have a website linked
+  const availableWorkers = workers?.filter((w: any) => !w.linked_website) || []
+
   const createMutation = useMutation({
     mutationFn: websitesApi.create,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['websites'] })
+      queryClient.invalidateQueries({ queryKey: ['ai-workers'] })
       toast.success('Website toegevoegd en indexering gestart')
       setIsAddModalOpen(false)
       setNewUrl('')
+      setSelectedWorkerId('')
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Fout bij toevoegen')
@@ -79,6 +90,10 @@ export default function KnowledgePage() {
       toast.error('Voer een URL in')
       return
     }
+    if (!selectedWorkerId) {
+      toast.error('Selecteer een AI-medewerker')
+      return
+    }
     
     // Auto-add https:// if no protocol specified
     let url = newUrl.trim()
@@ -86,7 +101,7 @@ export default function KnowledgePage() {
       url = 'https://' + url
     }
     
-    createMutation.mutate({ base_url: url })
+    createMutation.mutate({ base_url: url, ai_worker_id: selectedWorkerId })
   }
 
   const handleTestQuestion = () => {
@@ -196,6 +211,9 @@ export default function KnowledgePage() {
                               Laatst geïndexeerd: {formatRelativeTime(website.last_indexed_at)}
                             </p>
                           )}
+                          <p className="mt-1 text-xs text-gray-400">
+                            Gekoppeld aan: {workers?.find((w: any) => w.id === website.ai_worker_id)?.name || 'Geen medewerker'}
+                          </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
@@ -273,10 +291,31 @@ export default function KnowledgePage() {
             value={newUrl}
             onChange={(e) => setNewUrl(e.target.value)}
           />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Koppel aan AI-medewerker
+            </label>
+            {availableWorkers.length === 0 ? (
+              <p className="text-sm text-amber-600 bg-amber-50 rounded-lg p-3">
+                Alle AI-medewerkers hebben al een website gekoppeld. Maak eerst een nieuwe medewerker aan of ontkoppel een bestaande website.
+              </p>
+            ) : (
+              <select
+                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
+                value={selectedWorkerId}
+                onChange={(e) => setSelectedWorkerId(e.target.value)}
+              >
+                <option value="">Selecteer een medewerker...</option>
+                {availableWorkers.map((w: any) => (
+                  <option key={w.id} value={w.id}>{w.name} — {w.role_title}</option>
+                ))}
+              </select>
+            )}
+          </div>
           <div className="rounded-lg bg-gray-50 p-4">
             <p className="text-sm text-gray-600">
               <strong>Let op:</strong> De AI respecteert uw robots.txt en indexeert alleen publieke pagina's. 
-              Admin-pagina's, login-pagina's en andere afgeschermde content worden niet geïndexeerd.
+              Elke AI-medewerker kan aan maximaal 1 website worden gekoppeld.
             </p>
           </div>
           <div className="flex gap-3 pt-4">
@@ -291,6 +330,7 @@ export default function KnowledgePage() {
               className="flex-1"
               onClick={handleAddWebsite}
               isLoading={createMutation.isPending}
+              disabled={!selectedWorkerId || availableWorkers.length === 0}
             >
               Toevoegen & Indexeren
             </Button>

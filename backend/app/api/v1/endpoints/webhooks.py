@@ -77,6 +77,19 @@ async def twilio_voice_webhook(
         </Response>"""
         return Response(content=twiml, media_type="text/xml")
     
+    # Check subscription status - reject calls for inactive subscriptions
+    if company and company.subscription_status not in ("trialing", "active"):
+        logger.warning(
+            f"Call rejected: inactive subscription ({company.subscription_status}) "
+            f"for {company.name} (call_sid={call_sid})"
+        )
+        twiml = """<?xml version="1.0" encoding="UTF-8"?>
+        <Response>
+            <Say language="nl-NL">Dit nummer is momenteel niet bereikbaar. Probeert u het later nog eens.</Say>
+            <Hangup/>
+        </Response>"""
+        return Response(content=twiml, media_type="text/xml")
+    
     # Check if within business hours
     if not phone.is_within_business_hours():
         twiml = f"""<?xml version="1.0" encoding="UTF-8"?>

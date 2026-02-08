@@ -61,6 +61,7 @@ async def get_subscription_info(
         "ends_at": company.subscription_ends_at,
         "has_stripe": bool(company.stripe_customer_id),
         "stripe_subscription_id": company.stripe_subscription_id,
+        "trial_used": company.trial_used or False,
     }
 
 

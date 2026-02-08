@@ -97,6 +97,16 @@ async def create_phone_number(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="AI-medewerker niet gevonden",
             )
+        # Check: this worker already has a phone number linked
+        existing_phone = db.query(PhoneNumber).filter(
+            PhoneNumber.ai_worker_id == data.ai_worker_id,
+            PhoneNumber.company_id == company.id,
+        ).first()
+        if existing_phone:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"AI-medewerker '{ai_worker.name}' heeft al een telefoonnummer gekoppeld ({existing_phone.number}). Ontkoppel dit eerst.",
+            )
     
     # Automatically purchase an AI number from Twilio
     client = get_twilio_client()
@@ -231,6 +241,17 @@ async def update_phone_number(
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="AI-medewerker niet gevonden",
+            )
+        # Check: this worker already has a different phone number linked
+        existing_phone = db.query(PhoneNumber).filter(
+            PhoneNumber.ai_worker_id == update_data["ai_worker_id"],
+            PhoneNumber.company_id == company.id,
+            PhoneNumber.id != phone_id,  # Exclude current phone being updated
+        ).first()
+        if existing_phone:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"AI-medewerker '{ai_worker.name}' heeft al een ander telefoonnummer gekoppeld ({existing_phone.number}).",
             )
     
     # Handle business_hours separately
@@ -382,6 +403,16 @@ async def purchase_phone_number(
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="AI-medewerker niet gevonden",
+            )
+        # Check: this worker already has a phone number linked
+        existing_phone = db.query(PhoneNumber).filter(
+            PhoneNumber.ai_worker_id == data.ai_worker_id,
+            PhoneNumber.company_id == company.id,
+        ).first()
+        if existing_phone:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"AI-medewerker '{ai_worker.name}' heeft al een telefoonnummer gekoppeld ({existing_phone.number}).",
             )
     
     try:

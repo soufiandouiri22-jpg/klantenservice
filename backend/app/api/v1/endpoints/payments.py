@@ -100,8 +100,10 @@ async def create_checkout_session(
         cancel_url = request.cancel_url or f"{settings.FRONTEND_URL}/dashboard/settings?payment=cancelled"
         
         # Create checkout session
-        # Add 14-day trial for starter and business plans
-        trial_days = 14 if request.plan in ["starter", "business"] else None
+        # Add 14-day trial for starter and business plans — but only if they haven't used their trial yet
+        trial_days = None
+        if request.plan in ["starter", "business"] and not company.trial_used:
+            trial_days = 14
         
         checkout_session = stripe.checkout.Session.create(
             customer=customer_id,
@@ -188,6 +190,8 @@ async def get_subscription_status(
         "max_ai_workers": company.ai_worker_limit,
         "has_stripe": bool(company.stripe_customer_id),
         "stripe_subscription_id": company.stripe_subscription_id,
+        "ends_at": company.subscription_ends_at.isoformat() if company.subscription_ends_at else None,
+        "trial_used": company.trial_used or False,
     }
     
     # Get more details from Stripe if available
@@ -287,12 +291,20 @@ async def handle_checkout_completed(session: dict, db: Session):
         try:
             subscription = stripe.Subscription.retrieve(subscription_id)
             company.subscription_status = subscription.status  # "trialing" or "active"
+            
+            # Mark trial as used when they start trialing
+            if subscription.status == "trialing":
+                company.trial_used = True
+                
             logger.info(f"Subscription status from Stripe: {subscription.status}")
         except stripe.error.StripeError as e:
             logger.warning(f"Could not fetch subscription status: {e}")
             company.subscription_status = "active"
     else:
         company.subscription_status = "active"
+    
+    from datetime import datetime
+    company.subscription_started_at = datetime.utcnow()
     
     db.commit()
     
@@ -345,6 +357,23 @@ async def handle_subscription_updated(subscription: dict, db: Session):
     # Update status
     company.subscription_status = subscription["status"]
     
+    # Track cancel_at_period_end (grace period for paying customers)
+    # When a paying customer cancels, Stripe sets cancel_at_period_end=True
+    # but keeps the subscription active until the period ends.
+    # When the period ends, Stripe fires subscription.deleted.
+    if subscription.get("cancel_at_period_end") and subscription.get("current_period_end"):
+        from datetime import datetime
+        company.subscription_ends_at = datetime.utcfromtimestamp(
+            subscription["current_period_end"]
+        )
+        logger.info(
+            f"Subscription will cancel at period end for {company.name}, "
+            f"ends_at: {company.subscription_ends_at}"
+        )
+    elif not subscription.get("cancel_at_period_end"):
+        # Customer re-activated (un-canceled), clear the end date
+        company.subscription_ends_at = None
+    
     # Check for plan change
     plan = subscription.get("metadata", {}).get("plan")
     if plan and hasattr(SubscriptionPlan, plan):
@@ -357,7 +386,16 @@ async def handle_subscription_updated(subscription: dict, db: Session):
 
 
 async def handle_subscription_deleted(subscription: dict, db: Session):
-    """Handle subscription cancellation."""
+    """
+    Handle subscription deletion (final cancellation).
+    
+    This fires when:
+    - A trial is canceled (immediate)
+    - A paid subscription reaches the end of its billing period after cancel_at_period_end
+    - You manually delete a subscription from Stripe dashboard
+    
+    In all cases, the subscription is now truly over — block access.
+    """
     subscription_id = subscription["id"]
     
     company = db.query(Company).filter(
@@ -368,14 +406,14 @@ async def handle_subscription_deleted(subscription: dict, db: Session):
         logger.warning(f"Company not found for subscription: {subscription_id}")
         return
     
-    # Set status to canceled (Stripe spelling)
-    # Keep the current plan but mark as canceled - they lose access
+    # Set status to canceled — they lose access immediately
     company.subscription_status = "canceled"
     company.stripe_subscription_id = None
+    company.subscription_ends_at = None  # Period has ended
     
     db.commit()
     
-    logger.info(f"Subscription cancelled for company {company.name}")
+    logger.info(f"Subscription deleted/cancelled for company {company.name}")
 
 
 async def handle_invoice_paid(invoice: dict, db: Session):

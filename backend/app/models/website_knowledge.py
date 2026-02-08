@@ -29,6 +29,7 @@ class WebsiteKnowledge(Base):
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     company_id = Column(UUID(as_uuid=True), ForeignKey("companies.id"), nullable=False)
+    ai_worker_id = Column(UUID(as_uuid=True), ForeignKey("ai_workers.id"), nullable=True)
     
     # Website details
     base_url = Column(String(500), nullable=False)
@@ -70,6 +71,7 @@ class WebsiteKnowledge(Base):
     
     # Relationships
     company = relationship("Company", back_populates="website_knowledge")
+    ai_worker = relationship("AIWorker", back_populates="website_knowledge")
     chunks = relationship("KnowledgeChunk", back_populates="website", cascade="all, delete-orphan")
     
     def __repr__(self):

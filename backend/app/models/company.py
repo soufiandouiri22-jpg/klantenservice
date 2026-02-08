@@ -56,6 +56,9 @@ class Company(Base):
     stripe_customer_id = Column(String(255), nullable=True, unique=True)
     stripe_subscription_id = Column(String(255), nullable=True)
     
+    # Trial tracking - once True, company cannot start another trial
+    trial_used = Column(Boolean, default=False)
+    
     # AI Worker limits based on plan
     max_ai_workers = Column(Integer, default=1)
     

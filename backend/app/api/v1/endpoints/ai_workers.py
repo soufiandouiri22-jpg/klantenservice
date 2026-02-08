@@ -3,7 +3,7 @@ klantenservice.ai - AI Worker Endpoints
 """
 import logging
 from datetime import datetime, timedelta
-from typing import List
+from typing import Dict, List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -12,10 +12,16 @@ from uuid import UUID, uuid4
 from app.core.database import get_db
 from app.core.config import get_settings
 from app.core.voices import CUSTOMER_VOICES, TTS_SUPPORTED_VOICES, VOICE_SAMPLE_TEXT
+
+# In-memory cache for voice previews (shared with admin endpoint via import)
+_voice_preview_cache: Dict[str, bytes] = {}
 from app.models.user import User
 from app.models.company import Company
 from app.models.ai_worker import AIWorker, AIWorkerStatus
 from app.models.call_log import CallLog
+from app.models.phone_number import PhoneNumber
+from app.models.website_knowledge import WebsiteKnowledge
+from app.models.calendar_integration import CalendarIntegration
 from app.schemas.ai_worker import AIWorkerCreate, AIWorkerUpdate, AIWorkerResponse, AIWorkerStats
 from app.api.deps import get_current_user, get_current_company, get_current_company_with_subscription, require_manager
 
@@ -56,6 +62,18 @@ async def preview_customer_voice(
             detail=f"Ongeldige stem: {voice_id}. Kies uit: {', '.join(valid_ids)}",
         )
 
+    # Return cached audio if available
+    if voice_id in _voice_preview_cache:
+        from fastapi.responses import Response as Resp
+        return Resp(
+            content=_voice_preview_cache[voice_id],
+            media_type="audio/mpeg",
+            headers={
+                "Content-Disposition": f'inline; filename="preview-{voice_id}.mp3"',
+                "Cache-Control": "public, max-age=86400",
+            },
+        )
+
     settings = get_settings()
     if not settings.OPENAI_API_KEY:
         raise HTTPException(status_code=500, detail="OPENAI_API_KEY niet geconfigureerd")
@@ -63,13 +81,14 @@ async def preview_customer_voice(
     try:
         client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
         response = client.audio.speech.create(
-            model="tts-1-hd",
+            model="tts-1",
             voice=voice_id,
             input=VOICE_SAMPLE_TEXT,
             response_format="mp3",
         )
 
         audio_bytes = response.content
+        _voice_preview_cache[voice_id] = audio_bytes  # Cache for next request
         return Response(
             content=audio_bytes,
             media_type="audio/mpeg",
@@ -85,17 +104,55 @@ async def preview_customer_voice(
 
 # ── AI Worker CRUD endpoints ──────────────────────────────────────
 
-@router.get("", response_model=List[AIWorkerResponse])
+@router.get("")
 async def list_ai_workers(
     current_user: User = Depends(get_current_user),
     company: Company = Depends(get_current_company),
     db: Session = Depends(get_db)
 ):
     """
-    List all AI workers for the current company.
+    List all AI workers for the current company, enriched with linked resources.
     """
     workers = db.query(AIWorker).filter(AIWorker.company_id == company.id).all()
-    return workers
+    
+    # Enrich each worker with linked resources
+    result = []
+    for worker in workers:
+        worker_dict = AIWorkerResponse.model_validate(worker).model_dump()
+        
+        # Find linked phone number
+        phone = db.query(PhoneNumber).filter(
+            PhoneNumber.ai_worker_id == worker.id,
+        ).first()
+        worker_dict["linked_phone"] = {
+            "id": str(phone.id),
+            "number": phone.business_number or phone.number,
+            "friendly_name": phone.friendly_name,
+        } if phone else None
+        
+        # Find linked website
+        website = db.query(WebsiteKnowledge).filter(
+            WebsiteKnowledge.ai_worker_id == worker.id,
+        ).first()
+        worker_dict["linked_website"] = {
+            "id": str(website.id),
+            "base_url": website.base_url,
+            "status": website.status.value if website.status else None,
+        } if website else None
+        
+        # Find linked calendar
+        calendar = db.query(CalendarIntegration).filter(
+            CalendarIntegration.ai_worker_id == worker.id,
+        ).first()
+        worker_dict["linked_calendar"] = {
+            "id": str(calendar.id),
+            "name": calendar.name,
+            "provider": calendar.provider.value if calendar.provider else None,
+        } if calendar else None
+        
+        result.append(worker_dict)
+    
+    return result
 
 
 @router.post("", response_model=AIWorkerResponse, status_code=status.HTTP_201_CREATED)

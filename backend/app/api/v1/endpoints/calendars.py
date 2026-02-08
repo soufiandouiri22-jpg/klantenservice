@@ -11,6 +11,7 @@ from app.core.database import get_db
 from app.core.security import encrypt_value, decrypt_value
 from app.models.user import User
 from app.models.company import Company
+from app.models.ai_worker import AIWorker
 from app.models.calendar_integration import CalendarIntegration, CalendarProvider
 from app.schemas.calendar import (
     CalendarIntegrationCreate,
@@ -51,11 +52,40 @@ async def create_calendar(
 ):
     """
     Create a new calendar integration.
-    For OAuth providers (Google, Microsoft), this initiates the OAuth flow.
+    Requires an ai_worker_id — each calendar is linked to exactly one AI worker.
     """
+    # Validate ai_worker_id
+    if not data.ai_worker_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Selecteer een AI-medewerker om deze agenda aan te koppelen.",
+        )
+    
+    ai_worker = db.query(AIWorker).filter(
+        AIWorker.id == data.ai_worker_id,
+        AIWorker.company_id == company.id,
+    ).first()
+    if not ai_worker:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="AI-medewerker niet gevonden.",
+        )
+    
+    # Check: this worker already has a calendar linked
+    existing_link = db.query(CalendarIntegration).filter(
+        CalendarIntegration.ai_worker_id == data.ai_worker_id,
+        CalendarIntegration.company_id == company.id,
+    ).first()
+    if existing_link:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"AI-medewerker '{ai_worker.name}' heeft al een agenda gekoppeld ({existing_link.name}). Ontkoppel deze eerst.",
+        )
+    
     calendar = CalendarIntegration(
         id=uuid4(),
         company_id=company.id,
+        ai_worker_id=data.ai_worker_id,
         name=data.name,
         provider=data.provider,
         is_active=True,

@@ -41,6 +41,7 @@ class CalendarIntegrationBase(BaseModel):
 
 class CalendarIntegrationCreate(CalendarIntegrationBase):
     """Schema for creating a calendar integration."""
+    ai_worker_id: Optional[UUID] = None
     provider: CalendarProvider
     # CalDAV specific
     caldav_url: Optional[str] = None
@@ -61,6 +62,7 @@ class CalendarIntegrationResponse(CalendarIntegrationBase):
     """Schema for calendar integration response."""
     id: UUID
     company_id: UUID
+    ai_worker_id: Optional[UUID] = None
     provider: CalendarProvider
     external_calendar_name: Optional[str]
     availability_rules: Dict[str, Any]

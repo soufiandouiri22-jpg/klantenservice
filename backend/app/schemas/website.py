@@ -25,6 +25,7 @@ class WebsiteKnowledgeBase(BaseModel):
 
 class WebsiteKnowledgeCreate(WebsiteKnowledgeBase):
     """Schema for creating website knowledge."""
+    ai_worker_id: Optional[UUID] = None
     sitemap_url: Optional[HttpUrl] = None
     crawl_settings: Optional[CrawlSettings] = None
 
@@ -42,6 +43,7 @@ class WebsiteKnowledgeResponse(BaseModel):
     """Schema for website knowledge response."""
     id: UUID
     company_id: UUID
+    ai_worker_id: Optional[UUID] = None
     base_url: str
     sitemap_url: Optional[str]
     crawl_settings: Dict[str, Any]

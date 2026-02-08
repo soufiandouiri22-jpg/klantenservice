@@ -26,6 +26,7 @@ class CalendarIntegration(Base):
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     company_id = Column(UUID(as_uuid=True), ForeignKey("companies.id"), nullable=False)
+    ai_worker_id = Column(UUID(as_uuid=True), ForeignKey("ai_workers.id"), nullable=True)
     
     # Integration details
     name = Column(String(100), nullable=False)  # e.g., "Hoofdagenda", "Team Agenda"
@@ -85,6 +86,7 @@ class CalendarIntegration(Base):
     
     # Relationships
     company = relationship("Company", back_populates="calendar_integrations")
+    ai_worker = relationship("AIWorker", back_populates="calendar_integrations")
     appointments = relationship("Appointment", back_populates="calendar_integration")
     
     def __repr__(self):

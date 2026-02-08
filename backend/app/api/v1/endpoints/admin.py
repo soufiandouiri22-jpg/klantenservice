@@ -1138,6 +1138,19 @@ async def preview_voice(
             detail=f"Preview niet beschikbaar voor '{voice_id}'. Deze stem werkt wel tijdens gesprekken, maar ondersteunt geen TTS preview.",
         )
 
+    # Use shared voice preview cache
+    from app.api.v1.endpoints.ai_workers import _voice_preview_cache
+
+    if voice_id in _voice_preview_cache:
+        return Response(
+            content=_voice_preview_cache[voice_id],
+            media_type="audio/mpeg",
+            headers={
+                "Content-Disposition": f'inline; filename="preview-{voice_id}.mp3"',
+                "Cache-Control": "public, max-age=86400",
+            },
+        )
+
     settings = get_settings()
     if not settings.OPENAI_API_KEY:
         raise HTTPException(status_code=500, detail="OPENAI_API_KEY niet geconfigureerd")
@@ -1145,13 +1158,14 @@ async def preview_voice(
     try:
         client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
         response = client.audio.speech.create(
-            model="tts-1-hd",
+            model="tts-1",
             voice=voice_id,
             input=VOICE_SAMPLE_TEXT,
             response_format="mp3",
         )
 
         audio_bytes = response.content
+        _voice_preview_cache[voice_id] = audio_bytes  # Cache for next request
         return Response(
             content=audio_bytes,
             media_type="audio/mpeg",
