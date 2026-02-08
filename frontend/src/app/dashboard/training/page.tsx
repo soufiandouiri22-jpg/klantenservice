@@ -85,6 +85,17 @@ export default function TrainingPage() {
     },
   })
 
+  const dismissQuestionMutation = useMutation({
+    mutationFn: trainingApi.dismissDetectedQuestion,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['detected-questions'] })
+      toast.success('Vraag genegeerd')
+    },
+    onError: () => {
+      toast.error('Fout bij negeren van vraag')
+    },
+  })
+
   const resetForm = () => {
     setNewQuestion('')
     setNewAnswer('')
@@ -192,6 +203,14 @@ export default function TrainingPage() {
                         <p className="text-sm text-gray-500">{q.occurrences}x gevraagd</p>
                       </div>
                       <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => dismissQuestionMutation.mutate(q.id)}
+                          disabled={dismissQuestionMutation.isPending}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
                         <Button
                           size="sm"
                           onClick={() => {

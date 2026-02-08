@@ -472,6 +472,11 @@ export const trainingApi = {
       ]
     }
   },
+
+  dismissDetectedQuestion: async (questionId: string) => {
+    const response = await api.post(`/training/detected-questions/${questionId}/dismiss`)
+    return response.data
+  },
 }
 
 // Calls API
