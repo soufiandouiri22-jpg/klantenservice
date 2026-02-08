@@ -7,8 +7,8 @@ from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers
-revision = "016"
-down_revision = "015"
+revision = "016_add_trial_used_column"
+down_revision = "015_cleanup_old_system_prompts"
 branch_labels = None
 depends_on = None
 
