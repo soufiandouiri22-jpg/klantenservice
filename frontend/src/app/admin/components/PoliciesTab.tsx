@@ -196,6 +196,27 @@ export function PoliciesTab() {
             Optionele beleidsregels die worden meegegeven aan alle AI-medewerkers.
           </p>
         </div>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            onClick={() => setIsPreviewModalOpen(true)}
+          >
+            <Eye className="h-4 w-4 mr-2" />
+            Preview
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => seedMutation.mutate()}
+            disabled={seedMutation.isPending}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${seedMutation.isPending ? 'animate-spin' : ''}`} />
+            Standaard laden
+          </Button>
+          <Button onClick={() => setIsCreateModalOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Nieuwe beleidsregel
+          </Button>
+        </div>
       </div>
 
       {/* Info Card */}
@@ -214,29 +235,6 @@ export function PoliciesTab() {
           </div>
         </CardBody>
       </Card>
-
-      {/* Actions Bar */}
-      <div className="flex items-center justify-end gap-3">
-        <Button
-          variant="outline"
-          onClick={() => setIsPreviewModalOpen(true)}
-        >
-          <Eye className="h-4 w-4 mr-2" />
-          Preview
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() => seedMutation.mutate()}
-          disabled={seedMutation.isPending}
-        >
-          <RefreshCw className={`h-4 w-4 mr-2 ${seedMutation.isPending ? 'animate-spin' : ''}`} />
-          Standaard laden
-        </Button>
-        <Button onClick={() => setIsCreateModalOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Nieuwe beleidsregel
-        </Button>
-      </div>
 
       {/* Empty State */}
       {prompts.length === 0 && (
