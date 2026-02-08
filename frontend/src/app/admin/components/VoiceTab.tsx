@@ -108,15 +108,13 @@ export function VoiceTab() {
       </div>
 
       {/* Info card */}
-      <Card>
-        <CardBody>
+      <Card className="border-blue-200 bg-blue-50/50">
+        <CardBody className="p-4">
           <div className="flex gap-3">
-            <div className="flex-shrink-0 mt-0.5">
-              <Sparkles className="h-5 w-5 text-primary-500" />
-            </div>
-            <div className="text-sm text-gray-600">
-              <p className="font-medium text-gray-900 mb-1">OpenAI gpt-realtime</p>
-              <p>
+            <Sparkles className="h-5 w-5 text-blue-600 mt-0.5 shrink-0" />
+            <div className="text-sm text-blue-800">
+              <p className="font-medium mb-1">OpenAI gpt-realtime</p>
+              <p className="text-blue-700">
                 Alle stemmen ondersteunen Nederlands en zijn full-duplex:
                 de AI kan luisteren terwijl het spreekt en stopt automatisch als de beller
                 iets zegt (barge-in). Sommige stemmen hebben geen preview maar werken wel tijdens gesprekken.
