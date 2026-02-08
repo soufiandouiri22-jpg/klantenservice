@@ -42,7 +42,6 @@ from app.services.openai_realtime_service import (
     OpenAIRealtimeSession,
     build_realtime_tools,
     build_system_instructions,
-    get_system_prompts,
 )
 from app.services.orchestrator import _run_tool
 from app.services.question_detector import analyze_call_transcript
@@ -250,7 +249,6 @@ class RealtimeCallHandler:
             knowledge_context = await self._get_knowledge_context()
             training_rules = self._get_training_rules()
             example_answers = self._get_example_answers()
-            system_prompts = get_system_prompts(self.db)
 
             # Get disclosure message from company settings
             disclosure_message = None
@@ -264,7 +262,7 @@ class RealtimeCallHandler:
                 knowledge_context=knowledge_context,
                 training_rules=training_rules,
                 example_answers=example_answers,
-                system_prompts=system_prompts,
+                db=self.db,
             )
 
             t_instructions = time.time()

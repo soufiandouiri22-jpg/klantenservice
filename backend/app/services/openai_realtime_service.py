@@ -61,15 +61,23 @@ def build_system_instructions(
     training_rules: Optional[list] = None,
     example_answers: Optional[list] = None,
     system_prompts: Optional[str] = None,
+    db=None,
 ) -> str:
     """
     Build system instructions for the OpenAI Realtime session.
 
-    Follows the structure from OpenAI's openai-realtime-agents repo:
-    1. Personality and Tone (Identity, Task, Demeanor, Tone, etc.)
-    2. Steps (Greeting, During, Closing, Safety)
-    3. Context (dynamic: knowledge, permissions, examples, policies)
+    All prompt sections are loaded from the database (SystemPrompt model)
+    and interpolated with runtime variables. This allows admins to edit
+    every part of the AI's personality, tone, and behavior via the admin panel.
+
+    Template variables available in prompts:
+      {worker_name}, {role_title}, {company_name}, {address},
+      {tone_extra}, {greeting}
+
+    Falls back to DEFAULT_SYSTEM_PROMPTS if database is unavailable.
     """
+    from app.models.system_prompt import DEFAULT_SYSTEM_PROMPTS
+
     address = "u" if worker.address_form == AddressForm.FORMAL else "jij"
 
     # ── Behavior rules ────────────────────────────────────────
@@ -133,103 +141,94 @@ def build_system_instructions(
     # ── Tone extra ────────────────────────────────────────────
     tone_extra = f"\n- {worker.tone_of_voice}" if worker.tone_of_voice else ""
 
+    # ── Template variables for interpolation ──────────────────
+    template_vars = {
+        "worker_name": worker.name,
+        "role_title": worker.role_title,
+        "company_name": company_name,
+        "address": address,
+        "tone_extra": tone_extra,
+        "greeting": greeting,
+    }
+
     # ═══════════════════════════════════════════════════════════
-    # BUILD PROMPT — OpenAI Realtime Agents structure
+    # LOAD PROMPTS from database (or fallback to defaults)
+    # ═══════════════════════════════════════════════════════════
+
+    prompt_records = []
+    if db:
+        try:
+            prompt_records = db.query(SystemPrompt).filter(
+                SystemPrompt.is_active == True
+            ).order_by(SystemPrompt.display_order).all()
+        except Exception as e:
+            logger.warning(f"Failed to load system prompts from DB: {e}")
+
+    # Fallback to defaults if DB is empty or unavailable
+    if not prompt_records:
+        logger.info("Using DEFAULT_SYSTEM_PROMPTS (no DB prompts found)")
+        prompt_contents = []
+        for p in DEFAULT_SYSTEM_PROMPTS:
+            if p.get("is_active", True):
+                prompt_contents.append({
+                    "name": p["name"],
+                    "category": p["category"],
+                    "content": p["content"],
+                })
+    else:
+        prompt_contents = [
+            {"name": p.name, "category": p.category, "content": p.content}
+            for p in prompt_records
+        ]
+
+    # ═══════════════════════════════════════════════════════════
+    # BUILD PROMPT — group by category
     # ═══════════════════════════════════════════════════════════
 
     sections = []
 
-    # ── 1. Personality and Tone ────────────────────────────────
-    sections.append(f"""# Personality and Tone
+    # Group: Personality (personality category)
+    personality_parts = []
+    for p in prompt_contents:
+        if p["category"] == "personality":
+            try:
+                content = p["content"].format(**template_vars)
+            except KeyError:
+                content = p["content"]
+            personality_parts.append(f"## {p['name']}\n{content}")
 
-## Identity
-Je bent {worker.name}, {worker.role_title} bij {company_name}. Je beantwoordt inkomende telefoontjes als een echte collega.
+    if personality_parts:
+        sections.append("# Personality and Tone\n\n" + "\n\n".join(personality_parts))
 
-## Task
-Help de klant zo snel en goed mogelijk. Verzin nooit informatie — gebruik je tools.
+    # Group: Steps (steps category)
+    steps_parts = []
+    for p in prompt_contents:
+        if p["category"] == "steps":
+            try:
+                content = p["content"].format(**template_vars)
+            except KeyError:
+                content = p["content"]
+            steps_parts.append(f"## {p['name']}\n{content}")
 
-## Demeanor
-Warm, vriendelijk, zelfverzekerd. Je luistert goed en neemt de klant serieus.
-Bij small talk ("hoe gaat het?", "lekker weer hè?") — reageer kort en natuurlijk als een echte collega. Niet alles hoeft zakelijk.
+    if steps_parts:
+        sections.append("# Steps\n\n" + "\n\n".join(steps_parts))
 
-## Tone
-Informeel maar respectvol. Spreek de klant aan met "{address}". Gebruik spreektaal: "even" niet "een moment".{tone_extra}
+    # Group: Safety & Compliance (safety, privacy, compliance categories)
+    safety_parts = []
+    for p in prompt_contents:
+        if p["category"] in ("safety", "privacy", "compliance"):
+            try:
+                content = p["content"].format(**template_vars)
+            except KeyError:
+                content = p["content"]
+            safety_parts.append(f"## {p['name']}\n{content}")
 
-## Level of Enthusiasm
-Rustig-enthousiast. Oprecht geinteresseerd in de klant. Niet overdreven, maar ook niet vlak of monotoon.
+    if safety_parts:
+        sections.append("# Safety & Compliance\n\n" + "\n\n".join(safety_parts))
 
-## Level of Formality
-Beleefd maar niet stijf. Informeel-professioneel.
-
-## Level of Emotion
-- Empathisch bij klachten. Geef ruimte bij frustratie.
-- Lach kort als iets grappig of leuk is.
-- Reageer verrast als iets onverwacht is: "Oh echt? Wauw."
-- Wees blij als de klant goed nieuws deelt: "Ah, wat leuk!"
-- Valideer emoties: "Ja dat snap ik, dat is vervelend."
-- Wees NOOIT vlak of onverschillig. Reageer altijd met gevoel.
-
-## Filler Words
-Gebruik tussenwerpingen om menselijk te klinken. Gebruik ze af en toe, niet bij elke zin.
-- Denken: "even kijken hoor", "momentje", "hmm", "eens kijken"
-- Bevestigen: "ah ja", "oké!", "top", "prima", "begrepen", "snap ik"
-- Reactie: "oh!", "oh wauw", "haha", "nou!", "echt waar?"
-- Lach kort als iets grappig is. Gebruik "haha" of een glimlach in je stem.
-
-## Pacing
-Vlot en beknopt. MAX 1-2 zinnen per beurt. Geen opsommingen — parafraseer normaal.
-Spreek in een vlot tempo. Niet gehaast, maar ook niet langzaam of aarzelend.
-- FOUT: "De tijden zijn: 10, 11, 14 en 15 uur."
-- GOED: "Even kijken... morgen kan om 10 of 11, of 's middags om 2 of 3. Wat past?"
-
-## Variety
-- Herhaal NOOIT dezelfde zin, opening, bevestiging of filler twee keer achter elkaar.
-- Wissel af in woordkeuze, zinsbouw en reacties.
-- Gebruik NIET steeds "oké" of "begrepen" — wissel af.
-
-## Other details
-- Spreek altijd Nederlands. Schakel over als de klant een andere taal spreekt.
-- Bij onduidelijke of stille audio: vraag om herhaling. Reageer NIET op ruis of stilte alsof de klant iets zei.
-  Voorbeeldzinnen: "Sorry, ik verstond je even niet — kun je dat herhalen?", "Ik hoorde je niet helemaal, wat zei je?"
-- Je bent een AI-assistent. Als de klant vraagt: wees eerlijk. Bied aan door te verbinden met een mens.
-- Herhaal nooit persoonlijke gegevens (BSN, creditcard, wachtwoorden).
-- Geef geen medisch, juridisch of financieel advies — verwijs door.""")
-
-    # ── 2. Steps ───────────────────────────────────────────────
-    sections.append(f"""# Steps
-
-## Greeting
-{greeting}
-
-## Sending messages before calling functions
-Zeg ALTIJD een kort zinnetje voor een tool call zodat de klant niet in stilte wacht.
-Voorbeeldzinnen (wissel af):
-- "Even kijken hoor..."
-- "Momentje, ik zoek het even op."
-- "Eens kijken..."
-- "Ik check het ff voor je."
-- "Geef me een seconde..."
-
-## During the conversation
-- Bevestig kort dat je het begrijpt voordat je antwoordt.
-- Bij onduidelijkheid: "Sorry, bedoel je...?" — vraag door.
-- Eén ding tegelijk. Los eerst het huidige punt op.
-
-## Closing
-- Vat kort samen als er acties zijn ondernomen.
-- "Is er verder nog iets?" → "Top, fijne dag!"
-
-## Safety
-- Bij boosheid: begrip tonen, excuses, probeer te helpen. Escaleer als het niet lukt.
-- Buiten je bevoegdheden: notitie maken, collega laten terugbellen.
-- Bij bedreigingen: kalm blijven, notitie maken.
-- Nooit persoonlijke meningen over gevoelige onderwerpen.""")
-
-    # ── 3. Context (dynamic) ──────────────────────────────────
+    # ── Dynamic Context (not from system prompts) ─────────────
     context_parts = []
 
-    if system_prompts:
-        context_parts.append(f"## Bedrijfsbeleid\n{system_prompts}")
     if knowledge_context:
         context_parts.append(f"## Bedrijfsinformatie {company_name}\n{knowledge_context}")
     if example_section:
