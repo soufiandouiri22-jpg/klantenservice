@@ -86,7 +86,7 @@ class Settings(BaseSettings):
     
     # Resend (Email)
     RESEND_API_KEY: str = ""
-    RESEND_FROM_EMAIL: str = "noreply@klantenservice.ai"
+    RESEND_FROM_EMAIL: str = "no-reply@klantenservice.ai"
     
     # Stripe
     STRIPE_SECRET_KEY: str = ""
