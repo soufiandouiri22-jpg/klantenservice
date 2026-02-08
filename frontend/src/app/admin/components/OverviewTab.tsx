@@ -3,7 +3,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { 
   Phone, 
-  Server, 
   AlertTriangle, 
   HelpCircle,
   DollarSign,
@@ -125,11 +124,11 @@ export function OverviewTab() {
         />
         
         <MetricCard
-          title="Pod Status"
-          value={overview?.pod_online ? 'Online' : 'Offline'}
-          subtitle={overview?.pod_url ? 'RunPod GPU' : 'Niet geconfigureerd'}
-          icon={<Server className="h-6 w-6" />}
-          status={overview?.pod_online ? 'success' : 'error'}
+          title="Gem. Gespreksduur"
+          value={overview?.avg_duration_today ? `${Math.floor(overview.avg_duration_today / 60)}m ${overview.avg_duration_today % 60}s` : '0s'}
+          subtitle="Vandaag"
+          icon={<Clock className="h-6 w-6" />}
+          status="neutral"
         />
         
         <MetricCard

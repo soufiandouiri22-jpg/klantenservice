@@ -58,9 +58,8 @@ class MetricsOverview(BaseModel):
     calls_today: int = 0
     calls_this_month: int = 0
     
-    # Pod status
-    pod_online: bool = False
-    pod_url: Optional[str] = None
+    # Average call duration (seconds) for today
+    avg_duration_today: int = 0
     
     # Errors
     errors_today: int = 0

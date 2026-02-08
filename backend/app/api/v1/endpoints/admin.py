@@ -421,28 +421,20 @@ async def get_metrics_overview(
     
     unknown_rate = (unknown_today / calls_today * 100) if calls_today > 0 else 0
     
-    # Check pod status
-    pod_online = False
-    pod_url = settings.PERSONAPLEX_POD_URL
-    if pod_url:
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    f"{pod_url}/health",
-                    timeout=aiohttp.ClientTimeout(total=5)
-                ) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        pod_online = data.get("model_loaded", False)
-        except Exception as e:
-            logger.warning(f"Pod health check failed: {e}")
+    # Average call duration today
+    avg_duration = db.query(func.avg(CallLog.duration_seconds)).filter(
+        and_(
+            CallLog.created_at >= today_start,
+            CallLog.duration_seconds.isnot(None),
+            CallLog.duration_seconds > 0,
+        )
+    ).scalar() or 0
     
     return MetricsOverview(
         active_calls=active_calls,
         calls_today=calls_today,
         calls_this_month=calls_this_month,
-        pod_online=pod_online,
-        pod_url=pod_url,
+        avg_duration_today=int(avg_duration),
         errors_today=errors_today,
         error_rate_today=round(error_rate, 2),
         unknown_questions_today=unknown_today,
