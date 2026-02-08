@@ -179,6 +179,21 @@ def tool_book_appointment(
     db.commit()
     db.refresh(appointment)
     
+    # Create notification for new appointment
+    try:
+        from app.services.notification_service import create_notification
+        from app.models.notification import NotificationType
+        create_notification(
+            db=db,
+            company_id=company_id,
+            type=NotificationType.APPOINTMENT_NEW,
+            title=f"Nieuwe afspraak: {customer_name}",
+            message=f"Afspraak ingepland op {starts_at.strftime('%d-%m-%Y')} om {starts_at.strftime('%H:%M')}.",
+            url="/dashboard/appointments",
+        )
+    except Exception:
+        pass  # Don't fail the appointment creation if notification fails
+    
     # Format datetime for speech
     day_names = ["maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag", "zondag"]
     day_name = day_names[starts_at.weekday()]

@@ -19,6 +19,8 @@ from app.api.v1.endpoints import (
     webhooks,
     admin,
     payments,
+    search,
+    notifications,
 )
 
 api_router = APIRouter()
@@ -126,4 +128,18 @@ api_router.include_router(
     payments.router,
     prefix="/payments",
     tags=["Betalingen"]
+)
+
+# Global Search
+api_router.include_router(
+    search.router,
+    prefix="/search",
+    tags=["Zoeken"]
+)
+
+# Notifications
+api_router.include_router(
+    notifications.router,
+    prefix="/notifications",
+    tags=["Notificaties"]
 )

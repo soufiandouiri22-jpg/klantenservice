@@ -572,6 +572,21 @@ class RealtimeCallHandler:
                             f"Detected {len(detected_questions)} unanswered questions "
                             f"in call {self.call_sid}"
                         )
+                        # Create notification for detected questions
+                        try:
+                            from app.services.notification_service import create_notification
+                            from app.models.notification import NotificationType
+                            count = len(detected_questions)
+                            create_notification(
+                                db=self.db,
+                                company_id=str(self.company.id),
+                                type=NotificationType.DETECTED_QUESTION,
+                                title=f"{count} nieuwe onbeantwoorde {'vraag' if count == 1 else 'vragen'} gedetecteerd",
+                                message=f"Tijdens een gesprek {'is' if count == 1 else 'zijn'} {count} {'vraag' if count == 1 else 'vragen'} gevonden die de AI niet kon beantwoorden.",
+                                url="/dashboard/training",
+                            )
+                        except Exception as ne:
+                            logger.error(f"Error creating notification for detected questions: {ne}")
                 except Exception as e:
                     logger.error(f"Error analyzing transcript for questions: {e}")
 

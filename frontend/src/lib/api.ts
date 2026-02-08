@@ -833,3 +833,29 @@ export const paymentsApi = {
     return response.data
   },
 }
+
+// Search API
+export const searchApi = {
+  search: async (q: string, limit: number = 10) => {
+    const response = await api.get('/search', { params: { q, limit } })
+    return response.data
+  },
+}
+
+// Notifications API
+export const notificationsApi = {
+  list: async (limit: number = 20) => {
+    const response = await api.get('/notifications', { params: { limit } })
+    return response.data
+  },
+
+  markRead: async (notificationId: string) => {
+    const response = await api.post(`/notifications/${notificationId}/read`)
+    return response.data
+  },
+
+  markAllRead: async () => {
+    const response = await api.post('/notifications/read-all')
+    return response.data
+  },
+}

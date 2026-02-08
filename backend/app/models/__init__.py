@@ -16,6 +16,7 @@ from app.models.global_config import GlobalConfig
 from app.models.usage_log import UsageLog
 from app.models.latency_log import LatencyLog
 from app.models.context_log import ContextLog
+from app.models.notification import Notification
 
 __all__ = [
     "Company",
@@ -37,4 +38,5 @@ __all__ = [
     "UsageLog",
     "LatencyLog",
     "ContextLog",
+    "Notification",
 ]

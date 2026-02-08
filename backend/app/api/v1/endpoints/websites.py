@@ -49,6 +49,8 @@ async def run_indexing(website_id: str, db_url: str):
     """Background task to run website indexing."""
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
+    from app.services.notification_service import create_notification
+    from app.models.notification import NotificationType
     
     engine = create_engine(db_url)
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -57,6 +59,28 @@ async def run_indexing(website_id: str, db_url: str):
     try:
         indexer = WebsiteIndexer(db)
         await indexer.index_website(website_id)
+        
+        # Create notification based on result
+        website = db.query(WebsiteKnowledge).filter(WebsiteKnowledge.id == website_id).first()
+        if website:
+            if website.status == IndexStatus.completed:
+                create_notification(
+                    db=db,
+                    company_id=str(website.company_id),
+                    type=NotificationType.WEBSITE_INDEXED,
+                    title=f"Website geïndexeerd: {website.base_url}",
+                    message=f"{website.total_pages or 0} pagina's succesvol geïndexeerd.",
+                    url="/dashboard/knowledge",
+                )
+            elif website.status == IndexStatus.failed:
+                create_notification(
+                    db=db,
+                    company_id=str(website.company_id),
+                    type=NotificationType.WEBSITE_FAILED,
+                    title=f"Indexering mislukt: {website.base_url}",
+                    message="De website kon niet worden geïndexeerd. Controleer de URL en probeer opnieuw.",
+                    url="/dashboard/knowledge",
+                )
     finally:
         db.close()
 
