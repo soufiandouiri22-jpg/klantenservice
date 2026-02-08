@@ -4,11 +4,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
-  MessageSquare, 
-  Shield, 
   Lock, 
-  Star, 
-  AlertTriangle, 
   FileText,
   Plus,
   Pencil,
@@ -19,7 +15,9 @@ import {
   ChevronDown,
   ChevronRight,
   Sparkles,
-  RefreshCw
+  RefreshCw,
+  Info,
+  Bot
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { Card, CardBody, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card'
@@ -52,27 +50,20 @@ interface Category {
 }
 
 const categoryIcons: Record<string, any> = {
-  communication: MessageSquare,
-  safety: Shield,
   privacy: Lock,
-  quality: Star,
-  edge_cases: AlertTriangle,
-  general: FileText,
+  compliance: FileText,
+  custom: FileText,
 }
 
 const categoryColors: Record<string, string> = {
-  communication: 'bg-blue-100 text-blue-700 border-blue-200',
-  safety: 'bg-red-100 text-red-700 border-red-200',
   privacy: 'bg-purple-100 text-purple-700 border-purple-200',
-  quality: 'bg-yellow-100 text-yellow-700 border-yellow-200',
-  edge_cases: 'bg-orange-100 text-orange-700 border-orange-200',
-  general: 'bg-gray-100 text-gray-700 border-gray-200',
+  compliance: 'bg-blue-100 text-blue-700 border-blue-200',
+  custom: 'bg-gray-100 text-gray-700 border-gray-200',
 }
 
 export function PoliciesTab() {
   const queryClient = useQueryClient()
   
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [editingPrompt, setEditingPrompt] = useState<SystemPrompt | null>(null)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false)
@@ -82,15 +73,15 @@ export function PoliciesTab() {
     key: '',
     name: '',
     description: '',
-    category: 'general',
+    category: 'custom',
     content: '',
     is_active: true,
     display_order: 0,
   })
 
   const { data: promptsData, isLoading: promptsLoading } = useQuery({
-    queryKey: ['admin-prompts', selectedCategory],
-    queryFn: () => adminApi.getPrompts(selectedCategory || undefined),
+    queryKey: ['admin-prompts'],
+    queryFn: () => adminApi.getPrompts(),
   })
 
   const { data: categories } = useQuery({
@@ -109,20 +100,20 @@ export function PoliciesTab() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-prompts'] })
       queryClient.invalidateQueries({ queryKey: ['admin-prompt-preview'] })
-      toast.success('Prompt aangemaakt')
+      toast.success('Beleidsregel aangemaakt')
       setIsCreateModalOpen(false)
       setNewPrompt({
         key: '',
         name: '',
         description: '',
-        category: 'general',
+        category: 'custom',
         content: '',
         is_active: true,
         display_order: 0,
       })
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Kon prompt niet aanmaken')
+      toast.error(error.response?.data?.detail || 'Kon beleidsregel niet aanmaken')
     },
   })
 
@@ -131,11 +122,11 @@ export function PoliciesTab() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-prompts'] })
       queryClient.invalidateQueries({ queryKey: ['admin-prompt-preview'] })
-      toast.success('Prompt bijgewerkt')
+      toast.success('Beleidsregel bijgewerkt')
       setEditingPrompt(null)
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Kon prompt niet bijwerken')
+      toast.error(error.response?.data?.detail || 'Kon beleidsregel niet bijwerken')
     },
   })
 
@@ -144,10 +135,10 @@ export function PoliciesTab() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-prompts'] })
       queryClient.invalidateQueries({ queryKey: ['admin-prompt-preview'] })
-      toast.success('Prompt verwijderd')
+      toast.success('Beleidsregel verwijderd')
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Kon prompt niet verwijderen')
+      toast.error(error.response?.data?.detail || 'Kon beleidsregel niet verwijderen')
     },
   })
 
@@ -157,13 +148,13 @@ export function PoliciesTab() {
       queryClient.invalidateQueries({ queryKey: ['admin-prompts'] })
       queryClient.invalidateQueries({ queryKey: ['admin-prompt-preview'] })
       if (data.total > 0) {
-        toast.success(`${data.total} standaard prompts aangemaakt`)
+        toast.success(`${data.total} standaard beleidsregels aangemaakt`)
       } else {
-        toast.success('Alle standaard prompts bestaan al')
+        toast.success('Alle standaard beleidsregels bestaan al')
       }
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Kon standaard prompts niet aanmaken')
+      toast.error(error.response?.data?.detail || 'Kon standaard beleidsregels niet aanmaken')
     },
   })
 
@@ -194,65 +185,56 @@ export function PoliciesTab() {
 
   const prompts: SystemPrompt[] = promptsData?.prompts || []
 
-  // Group prompts by category
-  const promptsByCategory = prompts.reduce((acc, prompt) => {
-    if (!acc[prompt.category]) {
-      acc[prompt.category] = []
-    }
-    acc[prompt.category].push(prompt)
-    return acc
-  }, {} as Record<string, SystemPrompt[]>)
-
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">Global Policies & System Prompts</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Aanvullend Bedrijfsbeleid</h2>
           <p className="text-sm text-gray-500">
-            Basisinstructies die voor alle AI-medewerkers gelden. Niet uitzetbaar door klanten.
+            Optionele beleidsregels die worden meegegeven aan alle AI-medewerkers.
           </p>
         </div>
       </div>
 
-      {/* Actions Bar */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <select
-            value={selectedCategory || ''}
-            onChange={(e) => setSelectedCategory(e.target.value || null)}
-            className="w-auto min-w-[180px] rounded-lg border border-gray-200 px-4 py-2 pr-8 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
-          >
-            <option value="">Alle categorieën</option>
-            {categories?.map((cat: Category) => (
-              <option key={cat.key} value={cat.key}>
-                {cat.icon} {cat.name}
-              </option>
-            ))}
-          </select>
-        </div>
+      {/* Info Card */}
+      <Card className="border-blue-200 bg-blue-50/50">
+        <CardBody className="p-4">
+          <div className="flex gap-3">
+            <Bot className="h-5 w-5 text-blue-600 mt-0.5 shrink-0" />
+            <div className="text-sm text-blue-800">
+              <p className="font-medium mb-1">AI-instructies zijn automatisch geconfigureerd</p>
+              <p className="text-blue-700">
+                Persoonlijkheid, toon, spreekstijl, gespreksverloop, veiligheid en taalregels worden 
+                automatisch ingesteld op basis van OpenAI's best practices. Hier kun je alleen 
+                aanvullend bedrijfsbeleid toevoegen, zoals privacy- of compliance-regels.
+              </p>
+            </div>
+          </div>
+        </CardBody>
+      </Card>
 
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            onClick={() => setIsPreviewModalOpen(true)}
-          >
-            <Eye className="h-4 w-4 mr-2" />
-            Preview
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => seedMutation.mutate()}
-            disabled={seedMutation.isPending}
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${seedMutation.isPending ? 'animate-spin' : ''}`} />
-            Standaard laden
-          </Button>
-          <Button onClick={() => setIsCreateModalOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Nieuwe prompt
-          </Button>
-        </div>
+      {/* Actions Bar */}
+      <div className="flex items-center justify-end gap-3">
+        <Button
+          variant="outline"
+          onClick={() => setIsPreviewModalOpen(true)}
+        >
+          <Eye className="h-4 w-4 mr-2" />
+          Preview
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => seedMutation.mutate()}
+          disabled={seedMutation.isPending}
+        >
+          <RefreshCw className={`h-4 w-4 mr-2 ${seedMutation.isPending ? 'animate-spin' : ''}`} />
+          Standaard laden
+        </Button>
+        <Button onClick={() => setIsCreateModalOpen(true)}>
+          <Plus className="h-4 w-4 mr-2" />
+          Nieuwe beleidsregel
+        </Button>
       </div>
 
       {/* Empty State */}
@@ -260,9 +242,9 @@ export function PoliciesTab() {
         <Card>
           <CardBody className="text-center py-12">
             <Sparkles className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Geen system prompts</h3>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Geen aanvullende beleidsregels</h3>
             <p className="text-gray-500 mb-6">
-              Voeg standaard prompts toe om je AI-medewerkers te verbeteren.
+              De AI werkt al met automatische instructies. Voeg hier optioneel extra beleidsregels toe.
             </p>
             <div className="flex justify-center gap-3">
               <Button
@@ -271,7 +253,7 @@ export function PoliciesTab() {
                 disabled={seedMutation.isPending}
               >
                 <RefreshCw className={`h-4 w-4 mr-2 ${seedMutation.isPending ? 'animate-spin' : ''}`} />
-                Standaard prompts laden
+                Standaard beleidsregels laden
               </Button>
             </div>
           </CardBody>
@@ -279,178 +261,165 @@ export function PoliciesTab() {
       )}
 
       {/* Prompts List */}
-      {Object.entries(promptsByCategory).map(([category, categoryPrompts]) => {
-        const CategoryIcon = categoryIcons[category] || FileText
-        const categoryInfo = categories?.find((c: Category) => c.key === category)
-        
-        return (
-          <div key={category} className="mb-8">
-            <div className="flex items-center gap-3 mb-4">
-              <div className={`p-2 rounded-lg ${categoryColors[category] || categoryColors.general}`}>
-                <CategoryIcon className="h-5 w-5" />
-              </div>
-              <h2 className="text-lg font-semibold text-gray-900">
-                {categoryInfo?.name || category}
-              </h2>
-              <Badge variant="gray">{categoryPrompts.length}</Badge>
-            </div>
-
-            <div className="space-y-3">
-              {categoryPrompts.map((prompt) => (
-                <motion.div
-                  key={prompt.id}
-                  layout
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                >
-                  <Card className={!prompt.is_active ? 'opacity-60' : ''}>
-                    <CardBody className="p-4">
-                      {editingPrompt?.id === prompt.id ? (
-                        // Edit Mode
-                        <div className="space-y-4">
-                          <div className="grid grid-cols-2 gap-4">
-                            <Input
-                              label="Key"
-                              value={editingPrompt.key}
-                              onChange={(e) => setEditingPrompt({ ...editingPrompt, key: e.target.value })}
-                            />
-                            <Input
-                              label="Naam"
-                              value={editingPrompt.name}
-                              onChange={(e) => setEditingPrompt({ ...editingPrompt, name: e.target.value })}
-                            />
+      <div className="space-y-3">
+        {prompts.map((prompt) => {
+          const CategoryIcon = categoryIcons[prompt.category] || FileText
+          
+          return (
+            <motion.div
+              key={prompt.id}
+              layout
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <Card className={!prompt.is_active ? 'opacity-60' : ''}>
+                <CardBody className="p-4">
+                  {editingPrompt?.id === prompt.id ? (
+                    // Edit Mode
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <Input
+                          label="Key"
+                          value={editingPrompt.key}
+                          onChange={(e) => setEditingPrompt({ ...editingPrompt, key: e.target.value })}
+                        />
+                        <Input
+                          label="Naam"
+                          value={editingPrompt.name}
+                          onChange={(e) => setEditingPrompt({ ...editingPrompt, name: e.target.value })}
+                        />
+                      </div>
+                      <Input
+                        label="Beschrijving"
+                        value={editingPrompt.description || ''}
+                        onChange={(e) => setEditingPrompt({ ...editingPrompt, description: e.target.value })}
+                      />
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Content
+                        </label>
+                        <textarea
+                          value={editingPrompt.content}
+                          onChange={(e) => setEditingPrompt({ ...editingPrompt, content: e.target.value })}
+                          rows={6}
+                          className="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm font-mono focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+                        />
+                      </div>
+                      <div className="flex justify-end gap-3">
+                        <Button variant="outline" onClick={() => setEditingPrompt(null)}>
+                          <X className="h-4 w-4 mr-2" />
+                          Annuleren
+                        </Button>
+                        <Button
+                          onClick={() => updateMutation.mutate({
+                            id: editingPrompt.id,
+                            data: {
+                              key: editingPrompt.key,
+                              name: editingPrompt.name,
+                              description: editingPrompt.description,
+                              content: editingPrompt.content,
+                            }
+                          })}
+                          disabled={updateMutation.isPending}
+                        >
+                          <Save className="h-4 w-4 mr-2" />
+                          Opslaan
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    // View Mode
+                    <div>
+                      <div className="flex items-start justify-between">
+                        <div 
+                          className="flex items-center gap-3 cursor-pointer flex-1"
+                          onClick={() => togglePromptExpand(prompt.id)}
+                        >
+                          {expandedPrompts.has(prompt.id) ? (
+                            <ChevronDown className="h-5 w-5 text-gray-400" />
+                          ) : (
+                            <ChevronRight className="h-5 w-5 text-gray-400" />
+                          )}
+                          <div className={`p-1.5 rounded ${categoryColors[prompt.category] || categoryColors.custom}`}>
+                            <CategoryIcon className="h-4 w-4" />
                           </div>
-                          <Input
-                            label="Beschrijving"
-                            value={editingPrompt.description || ''}
-                            onChange={(e) => setEditingPrompt({ ...editingPrompt, description: e.target.value })}
-                          />
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                              Content
-                            </label>
-                            <textarea
-                              value={editingPrompt.content}
-                              onChange={(e) => setEditingPrompt({ ...editingPrompt, content: e.target.value })}
-                              rows={8}
-                              className="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm font-mono focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
-                            />
-                          </div>
-                          <div className="flex justify-end gap-3">
-                            <Button variant="outline" onClick={() => setEditingPrompt(null)}>
-                              <X className="h-4 w-4 mr-2" />
-                              Annuleren
-                            </Button>
-                            <Button
-                              onClick={() => updateMutation.mutate({
-                                id: editingPrompt.id,
-                                data: {
-                                  key: editingPrompt.key,
-                                  name: editingPrompt.name,
-                                  description: editingPrompt.description,
-                                  content: editingPrompt.content,
-                                }
-                              })}
-                              disabled={updateMutation.isPending}
-                            >
-                              <Save className="h-4 w-4 mr-2" />
-                              Opslaan
-                            </Button>
-                          </div>
-                        </div>
-                      ) : (
-                        // View Mode
-                        <div>
-                          <div className="flex items-start justify-between">
-                            <div 
-                              className="flex items-center gap-3 cursor-pointer flex-1"
-                              onClick={() => togglePromptExpand(prompt.id)}
-                            >
-                              {expandedPrompts.has(prompt.id) ? (
-                                <ChevronDown className="h-5 w-5 text-gray-400" />
-                              ) : (
-                                <ChevronRight className="h-5 w-5 text-gray-400" />
-                              )}
-                              <div>
-                                <h3 className="font-medium text-gray-900">{prompt.name}</h3>
-                                <p className="text-sm text-gray-500">
-                                  <code className="bg-gray-100 px-1 rounded">{prompt.key}</code>
-                                  {prompt.description && ` · ${prompt.description}`}
-                                </p>
-                              </div>
-                            </div>
-                            
-                            <div className="flex items-center gap-3">
-                              <Toggle
-                                enabled={prompt.is_active}
-                                onChange={() => handleToggleActive(prompt)}
-                              />
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setEditingPrompt(prompt)}
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                onClick={() => {
-                                  if (confirm(`Weet je zeker dat je "${prompt.name}" wilt verwijderen?`)) {
-                                    deleteMutation.mutate(prompt.id)
-                                  }
-                                }}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </div>
-
-                          <AnimatePresence>
-                            {expandedPrompts.has(prompt.id) && (
-                              <motion.div
-                                initial={{ height: 0, opacity: 0 }}
-                                animate={{ height: 'auto', opacity: 1 }}
-                                exit={{ height: 0, opacity: 0 }}
-                                transition={{ duration: 0.2 }}
-                                className="overflow-hidden"
-                              >
-                                <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-                                  <pre className="text-sm text-gray-700 whitespace-pre-wrap font-mono">
-                                    {prompt.content}
-                                  </pre>
-                                </div>
-                                {prompt.updated_by_name && (
-                                  <p className="mt-3 text-xs text-gray-400">
-                                    Laatst bewerkt door {prompt.updated_by_name} op{' '}
-                                    {new Date(prompt.updated_at).toLocaleDateString('nl-NL', {
-                                      day: 'numeric',
-                                      month: 'long',
-                                      year: 'numeric',
-                                    })}
-                                  </p>
-                                )}
-                              </motion.div>
+                            <h3 className="font-medium text-gray-900">{prompt.name}</h3>
+                            {prompt.description && (
+                              <p className="text-sm text-gray-500">{prompt.description}</p>
                             )}
-                          </AnimatePresence>
+                          </div>
                         </div>
-                      )}
-                    </CardBody>
-                  </Card>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        )
-      })}
+                        
+                        <div className="flex items-center gap-3">
+                          <Toggle
+                            enabled={prompt.is_active}
+                            onChange={() => handleToggleActive(prompt)}
+                          />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setEditingPrompt(prompt)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            onClick={() => {
+                              if (confirm(`Weet je zeker dat je "${prompt.name}" wilt verwijderen?`)) {
+                                deleteMutation.mutate(prompt.id)
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+
+                      <AnimatePresence>
+                        {expandedPrompts.has(prompt.id) && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.2 }}
+                            className="overflow-hidden"
+                          >
+                            <div className="mt-4 ml-14 p-4 bg-gray-50 rounded-lg">
+                              <pre className="text-sm text-gray-700 whitespace-pre-wrap font-mono">
+                                {prompt.content}
+                              </pre>
+                            </div>
+                            {prompt.updated_by_name && (
+                              <p className="mt-3 ml-14 text-xs text-gray-400">
+                                Laatst bewerkt door {prompt.updated_by_name} op{' '}
+                                {new Date(prompt.updated_at).toLocaleDateString('nl-NL', {
+                                  day: 'numeric',
+                                  month: 'long',
+                                  year: 'numeric',
+                                })}
+                              </p>
+                            )}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  )}
+                </CardBody>
+              </Card>
+            </motion.div>
+          )
+        })}
+      </div>
 
       {/* Create Modal */}
       <Modal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
-        title="Nieuwe System Prompt"
-        description="Voeg een nieuwe basisinstructie toe."
+        title="Nieuwe beleidsregel"
+        description="Voeg een aanvullende beleidsregel toe voor alle AI-medewerkers."
       >
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
@@ -458,13 +427,13 @@ export function PoliciesTab() {
               label="Key"
               value={newPrompt.key}
               onChange={(e) => setNewPrompt({ ...newPrompt, key: e.target.value })}
-              placeholder="language_rules"
+              placeholder="custom_policy"
             />
             <Input
               label="Naam"
               value={newPrompt.name}
               onChange={(e) => setNewPrompt({ ...newPrompt, name: e.target.value })}
-              placeholder="Taal & Spraak"
+              placeholder="Bedrijfsbeleid"
             />
           </div>
           
@@ -495,7 +464,7 @@ export function PoliciesTab() {
             <textarea
               value={newPrompt.content}
               onChange={(e) => setNewPrompt({ ...newPrompt, content: e.target.value })}
-              rows={8}
+              rows={6}
               className="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm font-mono focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
               placeholder="- Regel 1&#10;- Regel 2"
             />
@@ -519,13 +488,22 @@ export function PoliciesTab() {
       <Modal
         isOpen={isPreviewModalOpen}
         onClose={() => setIsPreviewModalOpen(false)}
-        title="Preview System Prompt"
-        description={`${previewData?.active_prompts || 0} actieve prompts`}
+        title="Preview aanvullend bedrijfsbeleid"
+        description={`${previewData?.active_prompts || 0} actieve beleidsregels worden meegegeven aan de AI`}
       >
-        <div className="max-h-[60vh] overflow-y-auto">
-          <pre className="p-4 bg-gray-50 rounded-lg text-sm text-gray-700 whitespace-pre-wrap font-mono">
-            {previewData?.combined_prompt || 'Geen actieve prompts'}
-          </pre>
+        <div className="space-y-4">
+          <div className="flex gap-3 p-3 bg-blue-50 rounded-lg">
+            <Info className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+            <p className="text-xs text-blue-700">
+              Dit zijn alleen de aanvullende beleidsregels. De basispersoonlijkheid, toon, 
+              gespreksverloop en veiligheidsregels worden automatisch geconfigureerd.
+            </p>
+          </div>
+          <div className="max-h-[50vh] overflow-y-auto">
+            <pre className="p-4 bg-gray-50 rounded-lg text-sm text-gray-700 whitespace-pre-wrap font-mono">
+              {previewData?.combined_prompt || 'Geen actieve beleidsregels'}
+            </pre>
+          </div>
         </div>
         <div className="flex justify-end pt-4">
           <Button variant="outline" onClick={() => setIsPreviewModalOpen(false)}>

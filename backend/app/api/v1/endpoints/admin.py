@@ -365,12 +365,9 @@ async def get_prompt_categories(
     Get list of available prompt categories.
     """
     return [
-        {"key": "communication", "name": "Communicatie", "icon": "💬"},
-        {"key": "safety", "name": "Veiligheid", "icon": "🛡️"},
         {"key": "privacy", "name": "Privacy", "icon": "🔒"},
-        {"key": "quality", "name": "Kwaliteit", "icon": "⭐"},
-        {"key": "edge_cases", "name": "Bijzondere Situaties", "icon": "⚠️"},
-        {"key": "general", "name": "Algemeen", "icon": "📋"},
+        {"key": "compliance", "name": "Compliance", "icon": "📋"},
+        {"key": "custom", "name": "Overig", "icon": "📝"},
     ]
 
 
