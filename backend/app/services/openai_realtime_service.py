@@ -238,6 +238,15 @@ def build_system_instructions(
     if permissions:
         context_parts.append(f"## Bevoegdheden\n{chr(10).join(permissions)}")
 
+    # Instruct the AI to use search_knowledge for specific questions
+    context_parts.append(
+        "## Kennisbank Instructie\n"
+        "De bovenstaande bedrijfsinformatie is een SAMENVATTING. "
+        "Gebruik ALTIJD de search_knowledge tool om specifieke informatie op te zoeken "
+        "voordat je antwoord geeft op vragen over prijzen, diensten, openingstijden, "
+        "of andere bedrijfsdetails. Geef NOOIT een antwoord op basis van aannames."
+    )
+
     if context_parts:
         sections.append("# Context\n\n" + "\n\n".join(context_parts))
 

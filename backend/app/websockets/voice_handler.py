@@ -169,7 +169,13 @@ class RealtimeCallHandler:
         )
 
     async def _get_knowledge_context(self) -> Optional[str]:
-        """Get relevant knowledge context from the website linked to this AI worker."""
+        """
+        Get a SHORT summary of knowledge context for the system prompt.
+
+        Only loads the first 10 chunks (max 4000 chars) to avoid overflowing
+        the OpenAI Realtime API context window (~16k tokens). The AI should
+        use the search_knowledge tool for specific questions during the call.
+        """
         from app.models.website_knowledge import KnowledgeChunk
 
         # Only fetch website knowledge linked to this specific AI worker (strict 1:1)
@@ -184,16 +190,17 @@ class RealtimeCallHandler:
 
         context_parts = []
         for source in knowledge_sources:
+            # Only load first 10 chunks as a summary — NOT everything
             chunks = self.db.query(KnowledgeChunk).filter(
                 KnowledgeChunk.website_id == source.id
-            ).all()
+            ).limit(10).all()
 
             for chunk in chunks:
                 if chunk.content:
                     context_parts.append(chunk.content)
 
         if context_parts:
-            return "\n\n---\n\n".join(context_parts)[:60000]
+            return "\n\n---\n\n".join(context_parts)[:4000]
         return None
 
     def _get_training_rules(self) -> list:
