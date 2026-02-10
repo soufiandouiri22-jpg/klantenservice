@@ -8,7 +8,9 @@ import sys
 from fastapi import FastAPI, WebSocket, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
+from pathlib import Path
 import structlog
 
 from app.core.config import settings
@@ -133,6 +135,11 @@ async def readiness_check():
 
 # Include API router
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
+
+# Serve cached TTS audio files as static assets
+_tts_dir = Path("/tmp/tts_cache")
+_tts_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/static/tts", StaticFiles(directory=str(_tts_dir)), name="tts_static")
 
 
 # WebSocket endpoint for Twilio Media Streams

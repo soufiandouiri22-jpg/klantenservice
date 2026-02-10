@@ -14,6 +14,7 @@ import logging
 
 from app.core.database import get_db
 from app.core.config import settings
+from app.services.tts_service import generate_tts_audio, get_tts_url
 
 logger = logging.getLogger(__name__)
 from app.models.company import Company
@@ -28,6 +29,30 @@ def verify_twilio_signature(request: Request, signature: str) -> bool:
     """Verify Twilio webhook signature."""
     # In production, implement proper Twilio signature verification
     return True
+
+
+def _tts_twiml(text: str, voice: str = None, extra_twiml: str = "") -> str:
+    """
+    Build TwiML that plays a TTS-generated audio file.
+    Falls back to <Say> if TTS generation fails.
+    """
+    filename = generate_tts_audio(text, voice=voice)
+    if filename:
+        url = get_tts_url(filename)
+        return f"""<?xml version="1.0" encoding="UTF-8"?>
+        <Response>
+            <Play>{url}</Play>
+            {extra_twiml}
+            <Hangup/>
+        </Response>"""
+    else:
+        # Fallback: use Twilio's built-in TTS
+        return f"""<?xml version="1.0" encoding="UTF-8"?>
+        <Response>
+            <Say language="nl-NL">{text}</Say>
+            {extra_twiml}
+            <Hangup/>
+        </Response>"""
 
 
 @router.post("/twilio/voice")
@@ -58,11 +83,7 @@ async def twilio_voice_webhook(
     
     if not phone:
         # Return TwiML to reject the call
-        twiml = """<?xml version="1.0" encoding="UTF-8"?>
-        <Response>
-            <Say language="nl-NL">Dit nummer is niet in gebruik.</Say>
-            <Hangup/>
-        </Response>"""
+        twiml = _tts_twiml("Dit nummer is niet in gebruik.")
         return Response(content=twiml, media_type="text/xml")
     
     company = db.query(Company).filter(Company.id == phone.company_id).first()
@@ -70,11 +91,7 @@ async def twilio_voice_webhook(
     # Check kill switch - immediately reject calls for kill-switched companies
     if company and company.is_kill_switched:
         logger.warning(f"Call rejected: kill switch active for {company.name} (call_sid={call_sid})")
-        twiml = """<?xml version="1.0" encoding="UTF-8"?>
-        <Response>
-            <Say language="nl-NL">Dit nummer is momenteel niet bereikbaar. Probeert u het later nog eens.</Say>
-            <Hangup/>
-        </Response>"""
+        twiml = _tts_twiml("Dit nummer is momenteel niet bereikbaar. Probeert u het later nog eens.")
         return Response(content=twiml, media_type="text/xml")
     
     # Check subscription status - reject calls for inactive subscriptions
@@ -83,21 +100,19 @@ async def twilio_voice_webhook(
             f"Call rejected: inactive subscription ({company.subscription_status}) "
             f"for {company.name} (call_sid={call_sid})"
         )
-        twiml = """<?xml version="1.0" encoding="UTF-8"?>
-        <Response>
-            <Say language="nl-NL">Dit nummer is momenteel niet bereikbaar. Probeert u het later nog eens.</Say>
-            <Hangup/>
-        </Response>"""
+        twiml = _tts_twiml("Dit nummer is momenteel niet bereikbaar. Probeert u het later nog eens.")
         return Response(content=twiml, media_type="text/xml")
     
     # Check if within business hours
     if not phone.is_within_business_hours():
-        twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
-        <Response>
-            <Say language="nl-NL">{phone.after_hours_message}</Say>
-            {"<Record maxLength='120' transcribe='true'/>" if phone.after_hours_voicemail else ""}
-            <Hangup/>
-        </Response>"""
+        # Use the AI worker's voice for the after-hours message if available
+        worker_voice = None
+        if phone.ai_worker_id:
+            worker = db.query(AIWorker).filter(AIWorker.id == phone.ai_worker_id).first()
+            if worker:
+                worker_voice = worker.voice_id
+        record_tag = "<Record maxLength='120' transcribe='true'/>" if phone.after_hours_voicemail else ""
+        twiml = _tts_twiml(phone.after_hours_message, voice=worker_voice, extra_twiml=record_tag)
         return Response(content=twiml, media_type="text/xml")
     
     # First try the linked AI worker for this phone number
@@ -122,19 +137,23 @@ async def twilio_voice_webhook(
     
     if not available_worker:
         # All workers busy - queue or voicemail
+        # Try to use the linked worker's voice for consistency
+        busy_voice = None
+        if phone.ai_worker_id:
+            linked = db.query(AIWorker).filter(AIWorker.id == phone.ai_worker_id).first()
+            if linked:
+                busy_voice = linked.voice_id
         if phone.voicemail_enabled:
-            twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
-            <Response>
-                <Say language="nl-NL">Al onze medewerkers zijn momenteel in gesprek. U kunt een bericht achterlaten na de piep.</Say>
-                <Record maxLength="120" transcribe="true"/>
-                <Hangup/>
-            </Response>"""
+            twiml = _tts_twiml(
+                "Al onze medewerkers zijn momenteel in gesprek. U kunt een bericht achterlaten na de piep.",
+                voice=busy_voice,
+                extra_twiml='<Record maxLength="120" transcribe="true"/>',
+            )
         else:
-            twiml = """<?xml version="1.0" encoding="UTF-8"?>
-            <Response>
-                <Say language="nl-NL">Al onze medewerkers zijn momenteel in gesprek. Probeert u het later nog eens.</Say>
-                <Hangup/>
-            </Response>"""
+            twiml = _tts_twiml(
+                "Al onze medewerkers zijn momenteel in gesprek. Probeert u het later nog eens.",
+                voice=busy_voice,
+            )
         return Response(content=twiml, media_type="text/xml")
     
     # Create call log
