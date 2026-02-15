@@ -77,7 +77,7 @@ async def preview_customer_voice(
         raise HTTPException(status_code=500, detail="ELEVENLABS_API_KEY niet geconfigureerd")
 
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
                 f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
                 headers={
@@ -96,7 +96,10 @@ async def preview_customer_voice(
             resp.raise_for_status()
 
         audio_bytes = resp.content
-        _voice_preview_cache[voice_id] = audio_bytes  # Cache for next request
+        if len(audio_bytes) < 1000:
+            logger.warning(f"Voice preview suspiciously small ({len(audio_bytes)} bytes), not caching")
+            raise HTTPException(status_code=500, detail="Preview audio te kort — probeer opnieuw")
+        _voice_preview_cache[voice_id] = audio_bytes  # Cache only complete audio
         return Response(
             content=audio_bytes,
             media_type="audio/mpeg",

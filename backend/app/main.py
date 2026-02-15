@@ -49,9 +49,63 @@ structlog.configure(
 logger = structlog.get_logger()
 
 
+async def _prewarm_voice_previews():
+    """
+    Pre-generate voice previews for all ElevenLabs voices at startup.
+    Runs in the background so it doesn't block server startup.
+    """
+    import asyncio
+    import httpx
+    from app.core.voices import ELEVENLABS_VOICES, VOICE_SAMPLE_TEXT
+    from app.api.v1.endpoints.ai_workers import _voice_preview_cache
+
+    if not settings.ELEVENLABS_API_KEY:
+        logger.warning("ELEVENLABS_API_KEY not set — skipping voice preview pre-warm")
+        return
+
+    logger.info(f"Pre-warming {len(ELEVENLABS_VOICES)} voice previews...")
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        for voice in ELEVENLABS_VOICES:
+            voice_id = voice["id"]
+            if voice_id in _voice_preview_cache:
+                continue  # Already cached
+            try:
+                resp = await client.post(
+                    f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
+                    headers={
+                        "xi-api-key": settings.ELEVENLABS_API_KEY,
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "text": VOICE_SAMPLE_TEXT,
+                        "model_id": "eleven_v3",
+                        "voice_settings": {
+                            "stability": 0.5,
+                            "similarity_boost": 0.8,
+                        },
+                    },
+                )
+                resp.raise_for_status()
+                audio_bytes = resp.content
+                if len(audio_bytes) >= 1000:
+                    _voice_preview_cache[voice_id] = audio_bytes
+                    logger.info(f"Pre-warmed voice preview: {voice['name']} ({len(audio_bytes)} bytes)")
+                else:
+                    logger.warning(f"Pre-warm skipped {voice['name']}: audio too small ({len(audio_bytes)} bytes)")
+            except Exception as e:
+                logger.warning(f"Pre-warm failed for {voice['name']}: {e}")
+            # Small delay between requests to avoid rate limiting
+            await asyncio.sleep(1)
+
+    logger.info(f"Voice preview pre-warm complete ({len(_voice_preview_cache)} cached)")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan events."""
+    import asyncio
+
     # Startup
     effective_port = os.environ.get("PORT", "8000")
     logger.info(
@@ -71,11 +125,14 @@ async def lifespan(app: FastAPI):
         )
         logger.info("Sentry initialized")
     
-    # OpenAI Realtime API — no startup needed (sessions are created per call)
-    if settings.OPENAI_API_KEY:
-        logger.info("OpenAI Realtime API configured (sessions created on demand per call)")
+    # ElevenLabs Conversational AI — no startup needed (calls registered on demand)
+    if settings.ELEVENLABS_API_KEY:
+        logger.info("ElevenLabs Conversational AI configured")
     else:
-        logger.warning("OPENAI_API_KEY not set — voice calls will fail")
+        logger.warning("ELEVENLABS_API_KEY not set — voice calls will fail")
+    
+    # Pre-warm voice previews in the background (non-blocking)
+    asyncio.create_task(_prewarm_voice_previews())
     
     yield
     
