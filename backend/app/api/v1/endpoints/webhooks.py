@@ -16,12 +16,14 @@ import logging
 from app.core.database import get_db
 from app.core.config import settings
 from app.services.tts_service import generate_tts_audio, get_tts_url
+from app.services.openai_realtime_service import build_system_instructions
 
 logger = logging.getLogger(__name__)
 from app.models.company import Company
 from app.models.call_log import CallLog, CallStatus
 from app.models.ai_worker import AIWorker, AIWorkerStatus
-from app.models.website_knowledge import WebsiteKnowledge, IndexStatus
+from app.models.website_knowledge import WebsiteKnowledge, IndexStatus, KnowledgeChunk
+from app.models.training import TrainingRule, ExampleAnswer
 
 router = APIRouter()
 
@@ -178,11 +180,83 @@ async def twilio_voice_webhook(
     
     db.commit()
     
-    # ── Connect to ElevenLabs Conversational AI ──────────────────
-    # Use the AI worker's voice if set, otherwise default
+    # ── Build full system prompt from admin + customer settings ──
     voice_id = available_worker.voice_id or "eWptEH99Zco26MHjMz5g"
-    
-    # Build per-call overrides with dynamic variables for tool context
+
+    # Load knowledge context (summary only — AI uses search_knowledge for details)
+    knowledge_context = None
+    knowledge_sources = db.query(WebsiteKnowledge).filter(
+        WebsiteKnowledge.ai_worker_id == available_worker.id,
+        WebsiteKnowledge.is_active == True,
+        WebsiteKnowledge.status == "completed",
+    ).all()
+    if knowledge_sources:
+        context_parts = []
+        for source in knowledge_sources:
+            chunks = db.query(KnowledgeChunk).filter(
+                KnowledgeChunk.website_id == source.id
+            ).limit(10).all()
+            for chunk in chunks:
+                if chunk.content:
+                    context_parts.append(chunk.content)
+        if context_parts:
+            knowledge_context = "\n\n---\n\n".join(context_parts)[:4000]
+
+    # Load training rules
+    training_rules_db = db.query(TrainingRule).filter(
+        TrainingRule.company_id == company.id,
+        TrainingRule.is_enabled == True,
+    ).order_by(TrainingRule.display_order).all()
+    training_rules = [
+        {"key": r.rule_key, "name": r.rule_name, "description": r.rule_description}
+        for r in training_rules_db
+    ]
+
+    # Load example Q&A
+    examples_db = db.query(ExampleAnswer).filter(
+        ExampleAnswer.company_id == company.id,
+        ExampleAnswer.is_active == True,
+        ExampleAnswer.is_verified == True,
+    ).all()
+    example_answers = [
+        {"question": ex.question, "answer": ex.answer, "category": ex.category}
+        for ex in examples_db
+    ]
+
+    # Disclosure message
+    disclosure_message = company.disclosure_message if company.disclosure_message else None
+
+    # Build the full system prompt (personality, tone, rules, permissions, etc.)
+    full_instructions = build_system_instructions(
+        worker=available_worker,
+        company_name=company.name,
+        disclosure_message=disclosure_message,
+        knowledge_context=knowledge_context,
+        training_rules=training_rules,
+        example_answers=example_answers,
+        db=db,
+    )
+
+    logger.info(
+        f"Built full system prompt for {available_worker.name} "
+        f"({len(full_instructions)} chars, {len(training_rules)} rules, "
+        f"{len(example_answers)} examples)"
+    )
+
+    # Build first message — use disclosure if configured
+    if disclosure_message:
+        first_msg = disclosure_message.format(
+            company_name=company.name,
+            ai_worker_name=available_worker.name,
+        )
+        first_msg += " Waarmee kan ik u helpen?"
+    else:
+        first_msg = (
+            f"Goedemiddag, u spreekt met {available_worker.name} van {company.name}. "
+            "Waarmee kan ik u helpen?"
+        )
+
+    # ── Connect to ElevenLabs Conversational AI ──────────────────
     register_payload = {
         "agent_id": settings.ELEVENLABS_AGENT_ID,
         "from_number": from_number,
@@ -199,20 +273,9 @@ async def twilio_voice_webhook(
             "overrides": {
                 "agent": {
                     "prompt": {
-                        "prompt": (
-                            f"Je bent {available_worker.name}, een AI-klantenservicemedewerker van {company.name}. "
-                            f"Je rol is: {available_worker.role_title or 'Klantenservice medewerker'}. "
-                            "Je spreekt Nederlands. Je bent vriendelijk, behulpzaam en professioneel. "
-                            "Gebruik de beschikbare tools om vragen te beantwoorden over het bedrijf. "
-                            "Gebruik ALTIJD de search_knowledge tool om specifieke informatie op te zoeken "
-                            "voordat je antwoord geeft op vragen over prijzen, diensten, openingstijden, "
-                            "of andere bedrijfsdetails. Geef NOOIT een antwoord op basis van aannames."
-                        ),
+                        "prompt": full_instructions,
                     },
-                    "first_message": (
-                        f"Goedemiddag, u spreekt met {available_worker.name} van {company.name}. "
-                        "Waarmee kan ik u helpen?"
-                    ),
+                    "first_message": first_msg,
                 },
                 "tts": {
                     "voice_id": voice_id,
