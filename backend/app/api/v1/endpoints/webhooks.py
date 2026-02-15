@@ -270,7 +270,7 @@ async def twilio_voice_webhook(
                 "customer_phone": from_number,
                 "company_name": company.name or "",
             },
-            "overrides": {
+            "conversation_config_override": {
                 "agent": {
                     "prompt": {
                         "prompt": full_instructions,

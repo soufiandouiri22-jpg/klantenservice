@@ -247,6 +247,17 @@ def build_system_instructions(
         "of andere bedrijfsdetails. Geef NOOIT een antwoord op basis van aannames."
     )
 
+    # Instruct the AI to be concise — this is a phone conversation
+    context_parts.append(
+        "## Spreekstijl\n"
+        "Dit is een TELEFOONGESPREK. Houd je antwoorden kort en bondig:\n"
+        "- Maximaal 2-3 zinnen per beurt, tenzij de klant om meer detail vraagt.\n"
+        "- Geef niet alle informatie in één keer — wacht op een reactie.\n"
+        "- Gebruik korte, duidelijke zinnen. Geen lange opsommingen.\n"
+        "- Stel na je antwoord een korte vervolgvraag: 'Kan ik u nog ergens mee helpen?'\n"
+        "- Praat NIET door na je antwoord. Wacht tot de klant reageert."
+    )
+
     if context_parts:
         sections.append("# Context\n\n" + "\n\n".join(context_parts))
 
