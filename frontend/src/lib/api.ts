@@ -791,7 +791,7 @@ export const adminApi = {
     return response.data
   },
   
-  // Voices (OpenAI Realtime)
+  // Voices (ElevenLabs)
   getVoices: async () => {
     const response = await api.get('/admin/voices')
     return response.data

@@ -318,7 +318,7 @@ export function OverviewTab() {
                 <p className="text-xs text-gray-400">p95</p>
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-500">Pod (PersonaPlex)</p>
+                <p className="text-sm font-medium text-gray-500">ElevenLabs AI</p>
                 <p className="mt-1 text-2xl font-semibold text-gray-900">
                   {latency?.pod_p95 || 0}ms
                 </p>

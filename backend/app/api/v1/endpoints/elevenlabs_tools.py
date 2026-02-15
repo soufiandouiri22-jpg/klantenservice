@@ -5,6 +5,10 @@ Webhook endpoints called by ElevenLabs Conversational AI when the agent
 needs to execute a tool (search_knowledge, book_appointment, etc.).
 
 ElevenLabs sends POST requests with tool parameters in the JSON body.
+Dynamic variables (company_id, ai_worker_id, etc.) are injected as
+top-level fields in the body when configured with the `dynamic_variable`
+property in each tool's parameter schema on the ElevenLabs dashboard.
+
 We execute the tool using the existing _run_tool infrastructure and
 return the result as JSON.
 """
@@ -22,6 +26,16 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# Field names that are context (dynamic variables), not tool arguments
+CONTEXT_FIELDS = {
+    "company_id",
+    "ai_worker_id",
+    "call_log_id",
+    "customer_phone",
+    "company_name",
+    "calendar_id",
+}
+
 
 def _get_db() -> Session:
     """Create a database session for tool execution."""
@@ -30,27 +44,43 @@ def _get_db() -> Session:
 
 def _extract_company_context(data: dict) -> Dict[str, Any]:
     """
-    Extract company context from ElevenLabs dynamic variables.
-    
-    ElevenLabs passes dynamic_variables set during register_call.
-    We use these to identify the company and AI worker for tool execution.
+    Extract company context from ElevenLabs tool request body.
+
+    ElevenLabs injects dynamic variables as top-level fields in the
+    request body when each tool parameter has `dynamic_variable` set
+    in its JSON schema.  We also check the legacy `dynamic_variables`
+    nested object as a fallback.
     """
-    # Dynamic variables are passed in the request body
-    dynamic_vars = data.get("dynamic_variables", {})
-    
+    # Primary: top-level fields (set via dynamic_variable parameter property)
+    company_id = data.get("company_id", "")
+    ai_worker_id = data.get("ai_worker_id")
+    call_log_id = data.get("call_log_id")
+    customer_phone = data.get("customer_phone")
+    calendar_id = data.get("calendar_id")
+
+    # Fallback: legacy nested dynamic_variables object
+    if not company_id:
+        dv = data.get("dynamic_variables", {})
+        if isinstance(dv, dict):
+            company_id = dv.get("company_id", company_id)
+            ai_worker_id = ai_worker_id or dv.get("ai_worker_id")
+            call_log_id = call_log_id or dv.get("call_log_id")
+            customer_phone = customer_phone or dv.get("customer_phone")
+            calendar_id = calendar_id or dv.get("calendar_id")
+
     return {
-        "company_id": dynamic_vars.get("company_id", ""),
-        "ai_worker_id": dynamic_vars.get("ai_worker_id"),
-        "call_log_id": dynamic_vars.get("call_log_id"),
-        "customer_phone": dynamic_vars.get("customer_phone"),
-        "calendar_id": dynamic_vars.get("calendar_id"),
+        "company_id": company_id,
+        "ai_worker_id": ai_worker_id,
+        "call_log_id": call_log_id,
+        "customer_phone": customer_phone,
+        "calendar_id": calendar_id,
     }
 
 
 async def _handle_tool(request: Request, tool_name: str) -> JSONResponse:
     """
     Generic handler for all ElevenLabs server tool calls.
-    
+
     Extracts parameters from the request, builds context,
     executes the tool, and returns the result.
     """
@@ -61,7 +91,14 @@ async def _handle_tool(request: Request, tool_name: str) -> JSONResponse:
 
         # Extract context from dynamic variables
         ctx = _extract_company_context(data)
-        
+
+        logger.info(
+            f"[ElevenLabs Tool] {tool_name} context: "
+            f"company_id={ctx['company_id']}, "
+            f"ai_worker_id={ctx.get('ai_worker_id')}, "
+            f"call_log_id={ctx.get('call_log_id')}"
+        )
+
         # Build the tool context dict expected by _run_tool
         context = {
             "db": db,
@@ -72,15 +109,21 @@ async def _handle_tool(request: Request, tool_name: str) -> JSONResponse:
             "calendar_id": ctx.get("calendar_id"),
         }
 
-        # Extract tool-specific arguments (everything except dynamic_variables)
-        arguments = {k: v for k, v in data.items() if k != "dynamic_variables"}
+        # Extract tool-specific arguments (exclude context fields and legacy key)
+        arguments = {
+            k: v
+            for k, v in data.items()
+            if k not in CONTEXT_FIELDS and k != "dynamic_variables"
+        }
+
+        logger.info(f"[ElevenLabs Tool] {tool_name} arguments: {arguments}")
 
         # Execute the tool
         result = _run_tool(tool_name, arguments, context)
-        
+
         logger.info(f"[ElevenLabs Tool] {tool_name} result: {str(result)[:200]}")
         return JSONResponse(content=result)
-        
+
     except Exception as e:
         logger.error(f"[ElevenLabs Tool] {tool_name} error: {e}", exc_info=True)
         return JSONResponse(

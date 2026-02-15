@@ -204,6 +204,11 @@ export default function AVGPage() {
                     <td className="py-3 px-4">EU Data Processing Agreement</td>
                   </tr>
                   <tr className="border-b border-gray-100">
+                    <td className="py-3 px-4">ElevenLabs</td>
+                    <td className="py-3 px-4">Spraak-AI en tekst-naar-spraak</td>
+                    <td className="py-3 px-4">EU Data Processing Agreement</td>
+                  </tr>
+                  <tr className="border-b border-gray-100">
                     <td className="py-3 px-4">Stripe</td>
                     <td className="py-3 px-4">Betalingsverwerking</td>
                     <td className="py-3 px-4">Ierland (EU)</td>

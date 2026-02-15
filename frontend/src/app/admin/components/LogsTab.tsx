@@ -342,7 +342,7 @@ export function LogsTab() {
                                 {(log.facts || log.instructions) && (
                                   <div className="bg-primary-50 rounded p-3">
                                     <p className="text-xs font-medium text-primary-700 mb-2">
-                                      Context Injection → PersonaPlex
+                                      Context Injection → ElevenLabs AI
                                     </p>
                                     {log.facts && (
                                       <div className="mb-2">
