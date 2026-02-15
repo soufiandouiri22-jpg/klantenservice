@@ -66,7 +66,7 @@ def generate_tts_audio(text: str, voice: Optional[str] = None) -> Optional[str]:
                 },
                 json={
                     "text": text,
-                    "model_id": "eleven_turbo_v2_5",
+                    "model_id": "eleven_v3",
                     "voice_settings": {
                         "stability": 0.5,
                         "similarity_boost": 0.8,
