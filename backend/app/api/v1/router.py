@@ -22,6 +22,7 @@ from app.api.v1.endpoints import (
     search,
     notifications,
     kvk,
+    elevenlabs_tools,
 )
 
 api_router = APIRouter()
@@ -150,4 +151,11 @@ api_router.include_router(
     kvk.router,
     prefix="/kvk",
     tags=["KVK"]
+)
+
+# ElevenLabs Server Tools (webhook endpoints for Conversational AI)
+api_router.include_router(
+    elevenlabs_tools.router,
+    prefix="/elevenlabs/tools",
+    tags=["ElevenLabs Tools"]
 )

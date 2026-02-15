@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from uuid import UUID, uuid4
 import hmac
 import hashlib
+import httpx
 
 import logging
 
@@ -177,22 +178,82 @@ async def twilio_voice_webhook(
     
     db.commit()
     
-    # Return TwiML to connect to the AI via OpenAI Realtime API
-    # No "Een moment geduld" needed — AI responds instantly
+    # ── Connect to ElevenLabs Conversational AI ──────────────────
+    # Use the AI worker's voice if set, otherwise default
+    voice_id = available_worker.voice_id or "eWptEH99Zco26MHjMz5g"
     
-    # Get the WebSocket URL from settings or use default
-    ws_url = settings.WEBSOCKET_URL or "wss://api.klantenservice.ai/ws/voice"
+    # Build per-call overrides with dynamic variables for tool context
+    register_payload = {
+        "agent_id": settings.ELEVENLABS_AGENT_ID,
+        "from_number": from_number,
+        "to_number": to_number,
+        "direction": "inbound",
+        "conversation_initiation_client_data": {
+            "dynamic_variables": {
+                "company_id": str(company.id),
+                "ai_worker_id": str(available_worker.id),
+                "call_log_id": str(call_log.id),
+                "customer_phone": from_number,
+                "company_name": company.name or "",
+            },
+            "overrides": {
+                "agent": {
+                    "prompt": {
+                        "prompt": (
+                            f"Je bent {available_worker.name}, een AI-klantenservicemedewerker van {company.name}. "
+                            f"Je rol is: {available_worker.role_title or 'Klantenservice medewerker'}. "
+                            "Je spreekt Nederlands. Je bent vriendelijk, behulpzaam en professioneel. "
+                            "Gebruik de beschikbare tools om vragen te beantwoorden over het bedrijf. "
+                            "Gebruik ALTIJD de search_knowledge tool om specifieke informatie op te zoeken "
+                            "voordat je antwoord geeft op vragen over prijzen, diensten, openingstijden, "
+                            "of andere bedrijfsdetails. Geef NOOIT een antwoord op basis van aannames."
+                        ),
+                    },
+                    "first_message": (
+                        f"Goedemiddag, u spreekt met {available_worker.name} van {company.name}. "
+                        "Waarmee kan ik u helpen?"
+                    ),
+                },
+                "tts": {
+                    "voice_id": voice_id,
+                },
+            },
+        },
+    }
     
-    twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
-    <Response>
-        <Connect>
-            <Stream url="{ws_url}">
-                <Parameter name="to" value="{to_number}"/>
-                <Parameter name="from" value="{from_number}"/>
-            </Stream>
-        </Connect>
-    </Response>"""
-    return Response(content=twiml, media_type="text/xml")
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                "https://api.elevenlabs.io/v1/convai/twilio/register-call",
+                headers={
+                    "xi-api-key": settings.ELEVENLABS_API_KEY,
+                    "Content-Type": "application/json",
+                },
+                json=register_payload,
+            )
+            resp.raise_for_status()
+            
+            # ElevenLabs returns TwiML directly
+            twiml = resp.text
+            logger.info(
+                f"ElevenLabs register_call success for {call_sid} "
+                f"(worker={available_worker.name}, voice={voice_id})"
+            )
+            return Response(content=twiml, media_type="text/xml")
+            
+    except Exception as e:
+        logger.error(f"ElevenLabs register_call failed for {call_sid}: {e}", exc_info=True)
+        # Fallback: play a professional TTS message instead of crashing
+        twiml = _tts_twiml(
+            "Er is een technisch probleem opgetreden. Probeert u het later nog eens.",
+            voice=voice_id,
+        )
+        # Free the worker since the call won't connect
+        available_worker.status = AIWorkerStatus.AVAILABLE
+        available_worker.current_call_id = None
+        call_log.status = CallStatus.FAILED
+        db.commit()
+        return Response(content=twiml, media_type="text/xml")
 
 
 @router.post("/twilio/status")

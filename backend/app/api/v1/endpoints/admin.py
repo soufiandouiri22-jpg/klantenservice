@@ -1099,7 +1099,7 @@ async def list_voices(
     current_user: User = Depends(require_superadmin),
 ):
     """
-    List available OpenAI Realtime voices with metadata.
+    List available ElevenLabs voices with metadata.
     """
     return {"voices": OPENAI_VOICES}
 
@@ -1110,24 +1110,17 @@ async def preview_voice(
     current_user: User = Depends(require_superadmin),
 ):
     """
-    Generate a voice preview using OpenAI TTS API.
+    Generate a voice preview using ElevenLabs TTS API.
     Returns MP3 audio for browser playback.
-    Some voices (ballad, verse, cedar, marin) are Realtime-only and don't support TTS preview.
     """
     from fastapi.responses import Response
-    import openai
+    import httpx
 
     valid_ids = [v["id"] for v in OPENAI_VOICES]
     if voice_id not in valid_ids:
         raise HTTPException(
             status_code=400,
             detail=f"Ongeldige stem: {voice_id}. Kies uit: {', '.join(valid_ids)}",
-        )
-
-    if voice_id not in TTS_SUPPORTED_VOICES:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Preview niet beschikbaar voor '{voice_id}'. Deze stem werkt wel tijdens gesprekken, maar ondersteunt geen TTS preview.",
         )
 
     # Use shared voice preview cache
@@ -1144,19 +1137,29 @@ async def preview_voice(
         )
 
     settings = get_settings()
-    if not settings.OPENAI_API_KEY:
-        raise HTTPException(status_code=500, detail="OPENAI_API_KEY niet geconfigureerd")
+    if not settings.ELEVENLABS_API_KEY:
+        raise HTTPException(status_code=500, detail="ELEVENLABS_API_KEY niet geconfigureerd")
 
     try:
-        client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
-        response = client.audio.speech.create(
-            model="tts-1",
-            voice=voice_id,
-            input=VOICE_SAMPLE_TEXT,
-            response_format="mp3",
-        )
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(
+                f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
+                headers={
+                    "xi-api-key": settings.ELEVENLABS_API_KEY,
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "text": VOICE_SAMPLE_TEXT,
+                    "model_id": "eleven_turbo_v2_5",
+                    "voice_settings": {
+                        "stability": 0.5,
+                        "similarity_boost": 0.8,
+                    },
+                },
+            )
+            resp.raise_for_status()
 
-        audio_bytes = response.content
+        audio_bytes = resp.content
         _voice_preview_cache[voice_id] = audio_bytes  # Cache for next request
         return Response(
             content=audio_bytes,

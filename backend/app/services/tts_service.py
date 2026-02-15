@@ -1,20 +1,19 @@
 """
 klantenservice.ai - TTS Service
 
-Generates professional-sounding audio from text using OpenAI TTS API.
+Generates professional-sounding audio from text using ElevenLabs TTS API.
 Caches generated audio files on disk to avoid repeated API calls for
 identical messages.
 """
 import hashlib
 import logging
-import os
 from pathlib import Path
 from typing import Optional
 
-import openai
+import httpx
 
 from app.core.config import settings
-from app.core.voices import TTS_SUPPORTED_VOICES
+from app.core.voices import DEFAULT_VOICE_ID
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +21,8 @@ logger = logging.getLogger(__name__)
 TTS_CACHE_DIR = Path("/tmp/tts_cache")
 TTS_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-# Default voice for system messages
-DEFAULT_TTS_VOICE = "alloy"
+# ElevenLabs TTS API endpoint
+ELEVENLABS_TTS_URL = "https://api.elevenlabs.io/v1/text-to-speech"
 
 
 def _cache_key(text: str, voice: str) -> str:
@@ -32,19 +31,9 @@ def _cache_key(text: str, voice: str) -> str:
     return hashlib.sha256(content.encode()).hexdigest()[:16]
 
 
-def _get_tts_voice(ai_worker_voice: Optional[str] = None) -> str:
-    """
-    Pick the best TTS voice. Uses the AI worker's voice if it supports TTS,
-    otherwise falls back to the default.
-    """
-    if ai_worker_voice and ai_worker_voice in TTS_SUPPORTED_VOICES:
-        return ai_worker_voice
-    return DEFAULT_TTS_VOICE
-
-
 def generate_tts_audio(text: str, voice: Optional[str] = None) -> Optional[str]:
     """
-    Generate an MP3 audio file from text using OpenAI TTS.
+    Generate an MP3 audio file from text using ElevenLabs TTS.
 
     Returns the filename (relative to the cache dir) on success,
     or None if generation fails.
@@ -52,7 +41,7 @@ def generate_tts_audio(text: str, voice: Optional[str] = None) -> Optional[str]:
     Results are cached on disk — identical text+voice combinations
     are only generated once.
     """
-    tts_voice = _get_tts_voice(voice)
+    tts_voice = voice or DEFAULT_VOICE_ID
     key = _cache_key(text, tts_voice)
     filename = f"{key}.mp3"
     filepath = TTS_CACHE_DIR / filename
@@ -62,27 +51,37 @@ def generate_tts_audio(text: str, voice: Optional[str] = None) -> Optional[str]:
         logger.debug(f"TTS cache hit: {filename}")
         return filename
 
-    # Generate via OpenAI TTS API
-    if not settings.OPENAI_API_KEY:
-        logger.error("OPENAI_API_KEY not configured — cannot generate TTS audio")
+    # Generate via ElevenLabs TTS API
+    if not settings.ELEVENLABS_API_KEY:
+        logger.error("ELEVENLABS_API_KEY not configured — cannot generate TTS audio")
         return None
 
     try:
-        client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
-        response = client.audio.speech.create(
-            model="tts-1",
-            voice=tts_voice,
-            input=text,
-            response_format="mp3",
-        )
+        with httpx.Client(timeout=15.0) as client:
+            response = client.post(
+                f"{ELEVENLABS_TTS_URL}/{tts_voice}",
+                headers={
+                    "xi-api-key": settings.ELEVENLABS_API_KEY,
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "text": text,
+                    "model_id": "eleven_turbo_v2_5",
+                    "voice_settings": {
+                        "stability": 0.5,
+                        "similarity_boost": 0.8,
+                    },
+                },
+            )
+            response.raise_for_status()
 
-        # Write to disk
-        filepath.write_bytes(response.content)
-        logger.info(f"TTS generated: {filename} ({len(response.content)} bytes, voice={tts_voice})")
-        return filename
+            # Write to disk
+            filepath.write_bytes(response.content)
+            logger.info(f"TTS generated: {filename} ({len(response.content)} bytes, voice={tts_voice})")
+            return filename
 
     except Exception as e:
-        logger.error(f"TTS generation failed: {e}")
+        logger.error(f"ElevenLabs TTS generation failed: {e}")
         return None
 
 
@@ -96,7 +95,6 @@ def get_tts_url(filename: str) -> str:
     elif base.startswith("ws://"):
         base = "http://" + base.split("//", 1)[1].split("/")[0]
     else:
-        # Fallback: use FRONTEND_URL's domain or localhost
         base = ""
 
     return f"{base}/static/tts/{filename}"

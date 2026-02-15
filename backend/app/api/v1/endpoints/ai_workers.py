@@ -49,11 +49,10 @@ async def preview_customer_voice(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Generate a voice preview using OpenAI TTS API.
-    Only available for TTS-supported voices.
+    Generate a voice preview using ElevenLabs TTS API.
     """
     from fastapi.responses import Response
-    import openai
+    import httpx
 
     if voice_id not in TTS_SUPPORTED_VOICES:
         valid_ids = [v["id"] for v in CUSTOMER_VOICES]
@@ -64,8 +63,7 @@ async def preview_customer_voice(
 
     # Return cached audio if available
     if voice_id in _voice_preview_cache:
-        from fastapi.responses import Response as Resp
-        return Resp(
+        return Response(
             content=_voice_preview_cache[voice_id],
             media_type="audio/mpeg",
             headers={
@@ -75,19 +73,29 @@ async def preview_customer_voice(
         )
 
     settings = get_settings()
-    if not settings.OPENAI_API_KEY:
-        raise HTTPException(status_code=500, detail="OPENAI_API_KEY niet geconfigureerd")
+    if not settings.ELEVENLABS_API_KEY:
+        raise HTTPException(status_code=500, detail="ELEVENLABS_API_KEY niet geconfigureerd")
 
     try:
-        client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
-        response = client.audio.speech.create(
-            model="tts-1",
-            voice=voice_id,
-            input=VOICE_SAMPLE_TEXT,
-            response_format="mp3",
-        )
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(
+                f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
+                headers={
+                    "xi-api-key": settings.ELEVENLABS_API_KEY,
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "text": VOICE_SAMPLE_TEXT,
+                    "model_id": "eleven_turbo_v2_5",
+                    "voice_settings": {
+                        "stability": 0.5,
+                        "similarity_boost": 0.8,
+                    },
+                },
+            )
+            resp.raise_for_status()
 
-        audio_bytes = response.content
+        audio_bytes = resp.content
         _voice_preview_cache[voice_id] = audio_bytes  # Cache for next request
         return Response(
             content=audio_bytes,

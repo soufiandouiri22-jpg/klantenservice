@@ -113,11 +113,11 @@ export function VoiceTab() {
           <div className="flex gap-3">
             <Sparkles className="h-5 w-5 text-blue-600 mt-0.5 shrink-0" />
             <div className="text-sm text-blue-800">
-              <p className="font-medium mb-1">OpenAI gpt-realtime</p>
+              <p className="font-medium mb-1">ElevenLabs Conversational AI</p>
               <p className="text-blue-700">
                 Alle stemmen ondersteunen Nederlands en zijn full-duplex:
                 de AI kan luisteren terwijl het spreekt en stopt automatisch als de beller
-                iets zegt (barge-in). Sommige stemmen hebben geen preview maar werken wel tijdens gesprekken.
+                iets zegt (barge-in). Expressieve stemmen met natuurlijke emoties en intonatie.
               </p>
             </div>
           </div>
@@ -132,7 +132,7 @@ export function VoiceTab() {
             Beschikbare Stemmen
           </CardTitle>
           <CardDescription>
-            Alle OpenAI Realtime stemmen. Sommige stemmen hebben geen preview maar werken wel tijdens gesprekken.
+            Alle ElevenLabs stemmen. Klik op &quot;Beluister&quot; om een preview te horen.
           </CardDescription>
         </CardHeader>
         <CardBody>

@@ -100,6 +100,10 @@ class Settings(BaseSettings):
     STRIPE_PRICE_ENTERPRISE_MONTHLY: str = ""
     STRIPE_PRICE_ENTERPRISE_YEARLY: str = ""
     
+    # ElevenLabs (Conversational AI + TTS)
+    ELEVENLABS_API_KEY: str = ""
+    ELEVENLABS_AGENT_ID: str = ""  # Created via API; used for register_call
+    
     # KVK (Kamer van Koophandel)
     KVK_API_KEY: str = "l7xx1f2691f2520d487b902f4e0b57a0b197"  # Test key; replace with production key
     KVK_API_URL: str = "https://api.kvk.nl/test/api/v2"  # Use https://api.kvk.nl/api/v2 for production

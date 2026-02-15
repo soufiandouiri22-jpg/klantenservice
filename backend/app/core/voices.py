@@ -1,31 +1,36 @@
 """
 klantenservice.ai - Voice Constants
 
-Shared voice metadata and TTS support info used by both admin and customer endpoints.
+ElevenLabs voice metadata for both admin and customer endpoints.
+All voices support TTS previews and Conversational AI.
 """
 
-# All OpenAI Realtime voices with metadata
-OPENAI_VOICES = [
-    {"id": "alloy", "name": "Alloy", "description": "Neutraal en veelzijdig", "gender": "neutral"},
-    {"id": "ash", "name": "Ash", "description": "Warm en kalm", "gender": "male"},
-    {"id": "ballad", "name": "Ballad", "description": "Zacht en expressief", "gender": "male"},
-    {"id": "coral", "name": "Coral", "description": "Helder en vriendelijk", "gender": "female"},
-    {"id": "echo", "name": "Echo", "description": "Diep en professioneel", "gender": "male"},
-    {"id": "sage", "name": "Sage", "description": "Warm en autoritair", "gender": "female"},
-    {"id": "shimmer", "name": "Shimmer", "description": "Licht en energiek", "gender": "female"},
-    {"id": "verse", "name": "Verse", "description": "Dynamisch en levendig", "gender": "male"},
-    {"id": "cedar", "name": "Cedar", "description": "Rustig en betrouwbaar", "gender": "male"},
-    {"id": "marin", "name": "Marin", "description": "Helder en professioneel", "gender": "female"},
+# ElevenLabs voices available for customers
+# IDs marked as "PLACEHOLDER" need to be replaced with real ElevenLabs voice IDs
+ELEVENLABS_VOICES = [
+    {"id": "eWptEH99Zco26MHjMz5g", "name": "Bella", "description": "Vriendelijk en professioneel", "gender": "female"},
+    {"id": "PLACEHOLDER_ARJEN", "name": "Arjen", "description": "Kalm en betrouwbaar", "gender": "male"},
+    {"id": "PLACEHOLDER_THOMAS", "name": "Thomas", "description": "Natuurlijk en professioneel", "gender": "male"},
+    {"id": "PLACEHOLDER_ERIC", "name": "Eric", "description": "Natuurlijk en authentiek", "gender": "male"},
+    {"id": "PLACEHOLDER_MARLIES", "name": "Marlies", "description": "Vriendelijk en warm", "gender": "female"},
+    {"id": "PLACEHOLDER_NOA", "name": "Noa", "description": "Jong en modern", "gender": "female"},
 ]
 
-# Voices that support the TTS API for previews (others are Realtime-only)
-TTS_SUPPORTED_VOICES = {"alloy", "ash", "coral", "echo", "fable", "nova", "onyx", "sage", "shimmer"}
+# All ElevenLabs voices support TTS — no filtering needed
+TTS_SUPPORTED_VOICES = {v["id"] for v in ELEVENLABS_VOICES}
 
-# Only voices customers can see and select (must be previewable)
-CUSTOMER_VOICES = [v for v in OPENAI_VOICES if v["id"] in TTS_SUPPORTED_VOICES]
+# Customer-visible voices (all of them — all support TTS previews)
+CUSTOMER_VOICES = ELEVENLABS_VOICES
+
+# Default voice ID (Bella)
+DEFAULT_VOICE_ID = "eWptEH99Zco26MHjMz5g"
 
 # Sample text for voice previews
 VOICE_SAMPLE_TEXT = (
     "Goedemiddag, u spreekt met de klantenservice. "
     "Waarmee kan ik u vandaag helpen?"
 )
+
+# ── Legacy aliases for backward compatibility ──
+# Some code may still reference OPENAI_VOICES
+OPENAI_VOICES = ELEVENLABS_VOICES
