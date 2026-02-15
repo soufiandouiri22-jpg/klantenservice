@@ -117,12 +117,10 @@ def build_system_instructions(
         permissions.append("- Je mag GEEN prijsinformatie geven — verwijs door")
 
     # ── Example Q&A ───────────────────────────────────────────
+    # NOTE: Example answers are NOT included in the system prompt to keep it
+    # short and reduce latency.  The AI retrieves them via the search_knowledge
+    # tool at runtime when a relevant question is asked.
     example_section = ""
-    if example_answers and len(example_answers) > 0:
-        qa_items = []
-        for ex in example_answers[:15]:
-            qa_items.append(f"- Vraag: \"{ex['question']}\" → Antwoord: \"{ex['answer']}\"")
-        example_section = "\n".join(qa_items)
 
     # ── Disclosure ────────────────────────────────────────────
     formatted_disclosure = ""
@@ -229,33 +227,36 @@ def build_system_instructions(
     # ── Dynamic Context (not from system prompts) ─────────────
     context_parts = []
 
-    if knowledge_context:
-        context_parts.append(f"## Bedrijfsinformatie {company_name}\n{knowledge_context}")
-    if example_section:
-        context_parts.append(f"## Voorbeeldantwoorden\n{example_section}")
+    # NOTE: knowledge_context is intentionally NOT included in the system
+    # prompt.  Including thousands of chars slows down every LLM turn.
+    # The AI retrieves specific information on-demand via the
+    # search_knowledge and get_prices tools instead.
+
     if behavior_rules:
         context_parts.append(f"## Bedrijfsregels\n{chr(10).join(behavior_rules)}")
     if permissions:
         context_parts.append(f"## Bevoegdheden\n{chr(10).join(permissions)}")
 
-    # Instruct the AI to use search_knowledge for specific questions
+    # Instruct the AI to use search_knowledge for ALL content questions
     context_parts.append(
         "## Kennisbank Instructie\n"
-        "De bovenstaande bedrijfsinformatie is een SAMENVATTING. "
-        "Gebruik ALTIJD de search_knowledge tool om specifieke informatie op te zoeken "
+        "Je hebt GEEN bedrijfsinformatie in je geheugen. "
+        "Gebruik ALTIJD de search_knowledge tool om informatie op te zoeken "
         "voordat je antwoord geeft op vragen over prijzen, diensten, openingstijden, "
-        "of andere bedrijfsdetails. Geef NOOIT een antwoord op basis van aannames."
+        "locatie, of andere bedrijfsdetails. Gebruik get_prices voor prijsvragen. "
+        "Geef NOOIT een antwoord op basis van aannames — zoek het ALTIJD op."
     )
 
     # Instruct the AI to be concise — this is a phone conversation
     context_parts.append(
         "## Spreekstijl\n"
-        "Dit is een TELEFOONGESPREK. Houd je antwoorden kort en bondig:\n"
-        "- Maximaal 2-3 zinnen per beurt, tenzij de klant om meer detail vraagt.\n"
-        "- Geef niet alle informatie in één keer — wacht op een reactie.\n"
-        "- Gebruik korte, duidelijke zinnen. Geen lange opsommingen.\n"
-        "- Stel na je antwoord een korte vervolgvraag: 'Kan ik u nog ergens mee helpen?'\n"
-        "- Praat NIET door na je antwoord. Wacht tot de klant reageert."
+        "Dit is een TELEFOONGESPREK. Praat zoals een echte medewerker:\n"
+        "- Maximaal 1-2 zinnen per beurt. Kort en bondig.\n"
+        "- NOOIT opsommingen of lijstjes — vertel het in woorden.\n"
+        "- NOOIT alles in één keer vertellen. Geef één antwoord, wacht op reactie.\n"
+        "- Geen 'ten eerste, ten tweede'. Gewoon praten.\n"
+        "- Na je antwoord: stop. Wacht tot de klant reageert.\n"
+        "- Alleen als de klant vraagt om meer detail, geef je meer."
     )
 
     if context_parts:

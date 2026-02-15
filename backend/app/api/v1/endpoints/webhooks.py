@@ -22,8 +22,8 @@ logger = logging.getLogger(__name__)
 from app.models.company import Company
 from app.models.call_log import CallLog, CallStatus
 from app.models.ai_worker import AIWorker, AIWorkerStatus
-from app.models.website_knowledge import WebsiteKnowledge, IndexStatus, KnowledgeChunk
-from app.models.training import TrainingRule, ExampleAnswer
+from app.models.website_knowledge import WebsiteKnowledge, IndexStatus
+from app.models.training import TrainingRule
 
 router = APIRouter()
 
@@ -183,26 +183,11 @@ async def twilio_voice_webhook(
     # ── Build full system prompt from admin + customer settings ──
     voice_id = available_worker.voice_id or "eWptEH99Zco26MHjMz5g"
 
-    # Load knowledge context (summary only — AI uses search_knowledge for details)
-    knowledge_context = None
-    knowledge_sources = db.query(WebsiteKnowledge).filter(
-        WebsiteKnowledge.ai_worker_id == available_worker.id,
-        WebsiteKnowledge.is_active == True,
-        WebsiteKnowledge.status == "completed",
-    ).all()
-    if knowledge_sources:
-        context_parts = []
-        for source in knowledge_sources:
-            chunks = db.query(KnowledgeChunk).filter(
-                KnowledgeChunk.website_id == source.id
-            ).limit(10).all()
-            for chunk in chunks:
-                if chunk.content:
-                    context_parts.append(chunk.content)
-        if context_parts:
-            knowledge_context = "\n\n---\n\n".join(context_parts)[:4000]
+    # Knowledge context is NOT loaded into the system prompt to keep it
+    # short and reduce latency.  The AI retrieves information on-demand
+    # via the search_knowledge and get_prices tools.
 
-    # Load training rules
+    # Load training rules (these are short and stay in the prompt)
     training_rules_db = db.query(TrainingRule).filter(
         TrainingRule.company_id == company.id,
         TrainingRule.is_enabled == True,
@@ -212,16 +197,8 @@ async def twilio_voice_webhook(
         for r in training_rules_db
     ]
 
-    # Load example Q&A
-    examples_db = db.query(ExampleAnswer).filter(
-        ExampleAnswer.company_id == company.id,
-        ExampleAnswer.is_active == True,
-        ExampleAnswer.is_verified == True,
-    ).all()
-    example_answers = [
-        {"question": ex.question, "answer": ex.answer, "category": ex.category}
-        for ex in examples_db
-    ]
+    # Example answers are NOT loaded into the system prompt — the AI
+    # retrieves them via search_knowledge when a relevant question is asked.
 
     # Disclosure message
     disclosure_message = company.disclosure_message if company.disclosure_message else None
@@ -231,16 +208,15 @@ async def twilio_voice_webhook(
         worker=available_worker,
         company_name=company.name,
         disclosure_message=disclosure_message,
-        knowledge_context=knowledge_context,
+        knowledge_context=None,
         training_rules=training_rules,
-        example_answers=example_answers,
+        example_answers=None,
         db=db,
     )
 
     logger.info(
         f"Built full system prompt for {available_worker.name} "
-        f"({len(full_instructions)} chars, {len(training_rules)} rules, "
-        f"{len(example_answers)} examples)"
+        f"({len(full_instructions)} chars, {len(training_rules)} rules)"
     )
 
     # Build first message — use disclosure if configured
