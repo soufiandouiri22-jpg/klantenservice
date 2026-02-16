@@ -23,13 +23,12 @@ from app.models.website_knowledge import WebsiteKnowledge, KnowledgeChunk, Index
 
 logger = logging.getLogger(__name__)
 
-# Try to import sentence-transformers for embeddings
-try:
-    from sentence_transformers import SentenceTransformer
-    EMBEDDINGS_AVAILABLE = True
-except ImportError:
-    EMBEDDINGS_AVAILABLE = False
-    logger.warning("Sentence-transformers not available - embeddings disabled")
+# OpenAI Embeddings API is used for generating embeddings (no local model needed)
+import openai
+
+EMBEDDINGS_AVAILABLE = bool(settings.OPENAI_API_KEY)
+if not EMBEDDINGS_AVAILABLE:
+    logger.warning("OPENAI_API_KEY not set - embeddings disabled")
 
 
 class WebsiteCrawler:
@@ -240,45 +239,50 @@ class TextChunker:
 
 class VectorStore:
     """Manages embeddings in PostgreSQL using pgvector."""
-    
-    # Class-level embedding model (loaded once, shared across instances)
-    _embedding_model = None
-    _model_loaded = False
-    
+
+    EMBEDDING_MODEL = "text-embedding-3-small"
+    EMBEDDING_DIMENSIONS = 384
+
     def __init__(self, company_id: str, db: Session = None):
         self.company_id = str(company_id)
         self.db = db
-        
-        # Load embedding model if not already loaded
-        if not VectorStore._model_loaded and EMBEDDINGS_AVAILABLE:
-            try:
-                VectorStore._embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
-                VectorStore._model_loaded = True
-                logger.info("Loaded embedding model: all-MiniLM-L6-v2")
-            except Exception as e:
-                logger.error(f"Failed to load embedding model: {e}")
-                VectorStore._model_loaded = True  # Don't retry
-    
+        self._client = None
+
     @property
-    def embedding_model(self):
-        return VectorStore._embedding_model
-    
+    def _openai_client(self):
+        if self._client is None and EMBEDDINGS_AVAILABLE:
+            self._client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
+        return self._client
+
     def generate_embedding(self, text: str) -> Optional[List[float]]:
-        """Generate embedding for a single text."""
-        if not self.embedding_model:
+        """Generate embedding for a single text via OpenAI API."""
+        if not self._openai_client:
             return None
         try:
-            return self.embedding_model.encode(text).tolist()
+            resp = self._openai_client.embeddings.create(
+                model=self.EMBEDDING_MODEL,
+                input=text,
+                dimensions=self.EMBEDDING_DIMENSIONS,
+            )
+            return resp.data[0].embedding
         except Exception as e:
             logger.error(f"Error generating embedding: {e}")
             return None
-    
+
     def generate_embeddings(self, texts: List[str]) -> List[List[float]]:
-        """Generate embeddings for multiple texts."""
-        if not self.embedding_model:
+        """Generate embeddings for multiple texts via OpenAI API."""
+        if not self._openai_client or not texts:
             return [[] for _ in texts]
         try:
-            return self.embedding_model.encode(texts).tolist()
+            resp = self._openai_client.embeddings.create(
+                model=self.EMBEDDING_MODEL,
+                input=texts,
+                dimensions=self.EMBEDDING_DIMENSIONS,
+            )
+            result = [[] for _ in texts]
+            for item in resp.data:
+                result[item.index] = item.embedding
+            return result
         except Exception as e:
             logger.error(f"Error generating embeddings: {e}")
             return [[] for _ in texts]
