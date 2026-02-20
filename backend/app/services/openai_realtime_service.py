@@ -237,26 +237,10 @@ def build_system_instructions(
     if permissions:
         context_parts.append(f"## Bevoegdheden\n{chr(10).join(permissions)}")
 
-    # Instruct the AI to use search_knowledge for ALL content questions
     context_parts.append(
-        "## Kennisbank Instructie\n"
-        "Je hebt GEEN bedrijfsinformatie in je geheugen. "
-        "Gebruik ALTIJD de search_knowledge tool om informatie op te zoeken "
-        "voordat je antwoord geeft op vragen over prijzen, diensten, openingstijden, "
-        "locatie, of andere bedrijfsdetails. Gebruik get_prices voor prijsvragen. "
-        "Geef NOOIT een antwoord op basis van aannames — zoek het ALTIJD op."
-    )
-
-    # Instruct the AI to be concise — this is a phone conversation
-    context_parts.append(
-        "## Spreekstijl\n"
-        "Dit is een TELEFOONGESPREK. Praat zoals een echte medewerker:\n"
-        "- Maximaal 1-2 zinnen per beurt. Kort en bondig.\n"
-        "- NOOIT opsommingen of lijstjes — vertel het in woorden.\n"
-        "- NOOIT alles in één keer vertellen. Geef één antwoord, wacht op reactie.\n"
-        "- Geen 'ten eerste, ten tweede'. Gewoon praten.\n"
-        "- Na je antwoord: stop. Wacht tot de klant reageert.\n"
-        "- Alleen als de klant vraagt om meer detail, geef je meer."
+        "## Tools\n"
+        "Je weet niets over het bedrijf. Gebruik search_knowledge of get_prices "
+        "voor elke inhoudelijke vraag. Nooit gokken."
     )
 
     if context_parts:
