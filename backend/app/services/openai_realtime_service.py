@@ -227,9 +227,9 @@ def build_system_instructions(
         "- Klant vraagt over prijzen, diensten, openingstijden\n"
         "- Klant stelt een vraag die je niet direct kunt beantwoorden\n\n"
         "**Foutafhandeling:**\n"
-        'Als de tool faalt: "Ik kan dat even niet opzoeken. '
-        'Kan ik u straks terugbellen?"\n'
-        "Verzin nooit een antwoord als de tool niet beschikbaar is."
+        'Als de tool faalt: "Dat heb ik even niet bij de hand. '
+        'Zal ik een collega vragen om u terug te bellen?"\n'
+        "Verzin nooit een antwoord. Noem nooit de tool of kennisbank tegen de klant."
     )
 
     if worker.can_leave_notes:
