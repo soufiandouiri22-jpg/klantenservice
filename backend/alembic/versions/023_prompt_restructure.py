@@ -113,6 +113,7 @@ NEW_PROMPTS = [
             "3. Reageer \u2014 geef antwoord of stel je volgende vraag\n"
             "Bij onduidelijkheid: vraag door. E\u00e9n ding tegelijk.\n"
             'Afsluiting: vat kort samen als er acties zijn. "Is er verder nog iets?" \u2192 "Fijne dag!"\n'
+            'Na "Fijne dag!": wacht kort tot de klant teruggroet, gebruik dan end_call om op te hangen. Zeg NIETS meer na je afscheid. Dit is belangrijk.\n'
             'Zeg getallen en data altijd voluit: "dinsdag veertien januari om twee uur", nooit "14-01 om 14:00".'
         ),
         "display_order": 21,

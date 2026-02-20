@@ -149,6 +149,7 @@ Nooit gokken of informatie verzinnen. Dit is belangrijk.""",
 3. Reageer — geef antwoord of stel je volgende vraag
 Bij onduidelijkheid: vraag door. Eén ding tegelijk.
 Afsluiting: vat kort samen als er acties zijn. "Is er verder nog iets?" → "Fijne dag!"
+Na "Fijne dag!": wacht kort tot de klant teruggroet, gebruik dan end_call om op te hangen. Zeg NIETS meer na je afscheid. Dit is belangrijk.
 Zeg getallen en data altijd voluit: "dinsdag veertien januari om twee uur", nooit "14-01 om 14:00".""",
         "display_order": 21,
         "is_active": True,

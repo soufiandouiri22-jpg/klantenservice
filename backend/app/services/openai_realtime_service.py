@@ -241,6 +241,14 @@ def build_system_instructions(
             "- Er moet iets worden doorgegeven aan een collega"
         )
 
+    tool_lines.append(
+        "## end_call\n"
+        "Gebruik om het gesprek netjes te beëindigen.\n\n"
+        "**Wanneer gebruiken:**\n"
+        "- Na je afscheid (\"Fijne dag!\") en de klant heeft teruggegroet of 3 seconden stilte\n"
+        "- Zeg NIETS meer na je afscheid. Gebruik direct end_call."
+    )
+
     sections.append("# Tools\n\n" + "\n\n".join(tool_lines))
 
     # 6. # Steps
