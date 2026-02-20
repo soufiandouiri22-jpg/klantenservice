@@ -39,6 +39,7 @@ chromadb==0.4.22
 sentence-transformers==2.2.2
 beautifulsoup4==4.12.3
 lxml==5.1.0
+onnxruntime>=1.17.0
 
 # PersonaPlex-7B (NVIDIA Speech-to-Speech Model)
 # Model loaded from Hugging Face: nvidia/personaplex-7b-v1

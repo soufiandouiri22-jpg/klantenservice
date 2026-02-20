@@ -87,19 +87,10 @@ async def _handle_tool(request: Request, tool_name: str) -> JSONResponse:
     db = _get_db()
     try:
         data = await request.json()
-        logger.info(f"[ElevenLabs Tool] {tool_name} called with: {data}")
 
-        # Extract context from dynamic variables
         ctx = _extract_company_context(data)
+        logger.debug(f"[ElevenLabs Tool] {tool_name} company={ctx['company_id']}")
 
-        logger.info(
-            f"[ElevenLabs Tool] {tool_name} context: "
-            f"company_id={ctx['company_id']}, "
-            f"ai_worker_id={ctx.get('ai_worker_id')}, "
-            f"call_log_id={ctx.get('call_log_id')}"
-        )
-
-        # Build the tool context dict expected by _run_tool
         context = {
             "db": db,
             "company_id": ctx["company_id"],
@@ -109,19 +100,15 @@ async def _handle_tool(request: Request, tool_name: str) -> JSONResponse:
             "calendar_id": ctx.get("calendar_id"),
         }
 
-        # Extract tool-specific arguments (exclude context fields and legacy key)
         arguments = {
             k: v
             for k, v in data.items()
             if k not in CONTEXT_FIELDS and k != "dynamic_variables"
         }
 
-        logger.info(f"[ElevenLabs Tool] {tool_name} arguments: {arguments}")
-
-        # Execute the tool
         result = _run_tool(tool_name, arguments, context)
 
-        logger.info(f"[ElevenLabs Tool] {tool_name} result: {str(result)[:200]}")
+        logger.info(f"[ElevenLabs Tool] {tool_name} ok={result.get('ok')}")
         return JSONResponse(content=result)
 
     except Exception as e:

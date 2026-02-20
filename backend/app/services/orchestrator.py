@@ -232,7 +232,7 @@ def _run_tool(
             return tool_search_knowledge(
                 db, company_id,
                 query=arguments.get("query", ""),
-                limit=arguments.get("limit", 5)
+                limit=arguments.get("limit", 3)
             )
         
         if name == "create_note":

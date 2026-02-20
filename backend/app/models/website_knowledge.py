@@ -87,6 +87,7 @@ class KnowledgeChunk(Base):
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     website_id = Column(UUID(as_uuid=True), ForeignKey("website_knowledge.id"), nullable=False)
+    company_id = Column(UUID(as_uuid=True), ForeignKey("companies.id"), nullable=True)
     
     # Source page
     source_url = Column(String(500), nullable=False)

@@ -212,17 +212,11 @@ def tool_search_knowledge(
     db: Session,
     company_id: str,
     query: str,
-    limit: int = 5,
+    limit: int = 3,
 ) -> Dict[str, Any]:
     """
     Search company knowledge base using RAG (vector similarity).
-    
-    Args:
-        db: Database session
-        company_id: Company UUID
-        query: Search query
-        limit: Max number of results
-        
+
     Returns:
         Dict with ok, results (list of content+url), message
     """
@@ -232,38 +226,39 @@ def tool_search_knowledge(
             "results": [],
             "message": "Geen zoekopdracht opgegeven."
         }
-    
+
     try:
         store = VectorStore(company_id, db)
         chunks = store.search(query, website_id=None, limit=limit, db=db)
-        
+
         if not chunks:
             return {
                 "ok": True,
                 "results": [],
                 "message": "Geen relevante informatie gevonden in de kennisbank."
             }
-        
-        results = []
-        for c in chunks:
-            results.append({
-                "content": c.get("content", "")[:500],  # Limit content length
+
+        results = [
+            {
+                "content": c.get("content", "")[:500],
                 "url": c.get("metadata", {}).get("url", ""),
-                "title": c.get("metadata", {}).get("title", "")
-            })
-        
+                "title": c.get("metadata", {}).get("title", ""),
+            }
+            for c in chunks
+        ]
+
         return {
             "ok": True,
             "results": results,
             "message": f"{len(results)} relevante resultaten gevonden."
         }
-        
+
     except Exception as e:
         logger.error(f"Error searching knowledge: {e}")
         return {
             "ok": False,
             "results": [],
-            "message": "Er ging iets mis bij het zoeken in de kennisbank."
+            "message": "Er is een technisch probleem met de kennisbank. Probeer het later opnieuw."
         }
 
 
@@ -290,7 +285,7 @@ def tool_get_prices(
     
     try:
         store = VectorStore(company_id, db)
-        chunks = store.search(query, website_id=None, limit=5, db=db)
+        chunks = store.search(query, website_id=None, limit=3, db=db)
         
         if not chunks:
             return {

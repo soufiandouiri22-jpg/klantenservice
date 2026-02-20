@@ -6,6 +6,7 @@ and stores embeddings in PostgreSQL using pgvector for RAG.
 """
 import asyncio
 import hashlib
+import os
 import re
 from datetime import datetime
 from typing import List, Dict, Optional, Set
@@ -14,21 +15,95 @@ from uuid import uuid4
 import logging
 
 import httpx
+import numpy as np
 from bs4 import BeautifulSoup
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
-from app.core.config import settings
 from app.models.website_knowledge import WebsiteKnowledge, KnowledgeChunk, IndexStatus
 
 logger = logging.getLogger(__name__)
 
-# OpenAI Embeddings API is used for generating embeddings (no local model needed)
-import openai
 
-EMBEDDINGS_AVAILABLE = bool(settings.OPENAI_API_KEY)
-if not EMBEDDINGS_AVAILABLE:
-    logger.warning("OPENAI_API_KEY not set - embeddings disabled")
+class LocalEmbedder:
+    """
+    Local ONNX-based embedding model for fast inference (~10-20ms) without
+    external API calls. Uses paraphrase-multilingual-MiniLM-L12-v2 which
+    supports Dutch and outputs 384-dimensional vectors.
+    """
+
+    MODEL_REPO = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+    DIMENSIONS = 384
+    _instance: Optional["LocalEmbedder"] = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._ready = False
+        return cls._instance
+
+    def _ensure_loaded(self):
+        if self._ready:
+            return
+
+        from transformers import AutoTokenizer
+        from huggingface_hub import hf_hub_download
+        import onnxruntime as ort
+
+        cache_dir = os.environ.get("HF_HOME", "/tmp/hf_models")
+
+        onnx_path = hf_hub_download(
+            self.MODEL_REPO,
+            filename="onnx/model.onnx",
+            cache_dir=cache_dir,
+        )
+
+        self._tokenizer = AutoTokenizer.from_pretrained(
+            self.MODEL_REPO, cache_dir=cache_dir
+        )
+
+        sess_opts = ort.SessionOptions()
+        sess_opts.inter_op_num_threads = 1
+        sess_opts.intra_op_num_threads = 4
+        sess_opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+
+        self._session = ort.InferenceSession(
+            onnx_path,
+            sess_options=sess_opts,
+            providers=["CPUExecutionProvider"],
+        )
+        self._input_names = {inp.name for inp in self._session.get_inputs()}
+        self._ready = True
+        logger.info("LocalEmbedder loaded (%s, %d dims)", self.MODEL_REPO, self.DIMENSIONS)
+
+    @staticmethod
+    def _mean_pool(token_embeddings: np.ndarray, attention_mask: np.ndarray) -> np.ndarray:
+        mask = np.expand_dims(attention_mask, -1).astype(token_embeddings.dtype)
+        summed = np.sum(token_embeddings * mask, axis=1)
+        counts = np.clip(np.sum(mask, axis=1), a_min=1e-9, a_max=None)
+        pooled = summed / counts
+        norms = np.linalg.norm(pooled, axis=1, keepdims=True)
+        return pooled / np.clip(norms, a_min=1e-9, a_max=None)
+
+    def _run(self, texts: List[str]) -> np.ndarray:
+        self._ensure_loaded()
+        encoded = self._tokenizer(
+            texts, padding=True, truncation=True, max_length=512, return_tensors="np"
+        )
+        feeds = {k: v for k, v in encoded.items() if k in self._input_names}
+        outputs = self._session.run(None, feeds)
+        return self._mean_pool(outputs[0], encoded["attention_mask"])
+
+    def embed(self, text: str) -> List[float]:
+        return self._run([text])[0].tolist()
+
+    def embed_batch(self, texts: List[str]) -> List[List[float]]:
+        if not texts:
+            return []
+        return self._run(texts).tolist()
+
+
+_embedder = LocalEmbedder()
 
 
 class WebsiteCrawler:
@@ -240,82 +315,55 @@ class TextChunker:
 class VectorStore:
     """Manages embeddings in PostgreSQL using pgvector."""
 
-    EMBEDDING_MODEL = "text-embedding-3-small"
     EMBEDDING_DIMENSIONS = 384
 
     def __init__(self, company_id: str, db: Session = None):
         self.company_id = str(company_id)
         self.db = db
-        self._client = None
-
-    @property
-    def _openai_client(self):
-        if self._client is None and EMBEDDINGS_AVAILABLE:
-            self._client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
-        return self._client
 
     def generate_embedding(self, text: str) -> Optional[List[float]]:
-        """Generate embedding for a single text via OpenAI API."""
-        if not self._openai_client:
-            return None
+        """Generate embedding using local ONNX model."""
         try:
-            resp = self._openai_client.embeddings.create(
-                model=self.EMBEDDING_MODEL,
-                input=text,
-                dimensions=self.EMBEDDING_DIMENSIONS,
-            )
-            return resp.data[0].embedding
+            return _embedder.embed(text)
         except Exception as e:
             logger.error(f"Error generating embedding: {e}")
             return None
 
     def generate_embeddings(self, texts: List[str]) -> List[List[float]]:
-        """Generate embeddings for multiple texts via OpenAI API."""
-        if not self._openai_client or not texts:
-            return [[] for _ in texts]
+        """Generate embeddings for multiple texts using local ONNX model."""
+        if not texts:
+            return []
         try:
-            resp = self._openai_client.embeddings.create(
-                model=self.EMBEDDING_MODEL,
-                input=texts,
-                dimensions=self.EMBEDDING_DIMENSIONS,
-            )
-            result = [[] for _ in texts]
-            for item in resp.data:
-                result[item.index] = item.embedding
-            return result
+            return _embedder.embed_batch(texts)
         except Exception as e:
             logger.error(f"Error generating embeddings: {e}")
             return [[] for _ in texts]
-    
+
     def add_chunks(self, chunks: List[Dict], website_id: str, db: Session = None) -> List[str]:
         """Add chunks to the database with embeddings."""
         db = db or self.db
         if not db:
             logger.error("No database session available")
             return [f"error_{i}" for i in range(len(chunks))]
-        
+
         ids = []
         documents = [chunk['content'] for chunk in chunks]
-        
-        # Generate all embeddings at once (more efficient)
         embeddings = self.generate_embeddings(documents)
-        
+
         for i, chunk in enumerate(chunks):
             chunk_id = f"{website_id}_{chunk['hash']}_{i}"
             ids.append(chunk_id)
-            
-            # Update existing chunk or the chunk object with embedding
-            chunk['embedding'] = embeddings[i] if embeddings[i] else None
-        
+            chunk['embedding'] = embeddings[i] if i < len(embeddings) and embeddings[i] else None
+
         return ids
-    
+
     def delete_website_chunks(self, website_id: str, db: Session = None):
         """Delete all chunks for a website."""
         db = db or self.db
         if not db:
             logger.warning("No database session - skipping delete")
             return
-        
+
         try:
             db.query(KnowledgeChunk).filter(
                 KnowledgeChunk.website_id == website_id
@@ -325,89 +373,70 @@ class VectorStore:
         except Exception as e:
             logger.error(f"Error deleting chunks: {e}")
             db.rollback()
-    
-    def search(self, query: str, website_id: str = None, limit: int = 5, db: Session = None) -> List[Dict]:
-        """Search for relevant chunks using cosine similarity."""
+
+    def search(self, query: str, website_id: str = None, limit: int = 3, db: Session = None) -> List[Dict]:
+        """Search for relevant chunks using cosine similarity.
+
+        Raises on infrastructure errors so callers can distinguish
+        'no results' from 'search broken'.
+        """
         db = db or self.db
         if not db:
-            logger.error("No database session available for search")
-            return []
-        
-        # Generate query embedding
+            raise RuntimeError("No database session available for search")
+
         query_embedding = self.generate_embedding(query)
         if not query_embedding:
-            logger.warning("Could not generate query embedding")
-            return []
-        
-        try:
-            # Build the query using pgvector's cosine distance operator
-            # Lower distance = more similar
-            embedding_str = f"[{','.join(map(str, query_embedding))}]"
-            
-            if website_id:
-                # Search within specific website
-                sql = text("""
-                    SELECT 
-                        kc.id,
-                        kc.content,
-                        kc.source_url,
-                        kc.page_title,
-                        kc.chunk_metadata,
-                        kc.embedding <=> :embedding::vector AS distance
-                    FROM knowledge_chunks kc
-                    JOIN website_knowledge wk ON kc.website_id = wk.id
-                    WHERE wk.company_id = :company_id
-                    AND kc.website_id = :website_id
-                    AND kc.embedding IS NOT NULL
-                    ORDER BY distance ASC
-                    LIMIT :limit
-                """)
-                results = db.execute(sql, {
-                    'embedding': embedding_str,
-                    'company_id': self.company_id,
-                    'website_id': website_id,
-                    'limit': limit
-                }).fetchall()
-            else:
-                # Search across all company websites
-                sql = text("""
-                    SELECT 
-                        kc.id,
-                        kc.content,
-                        kc.source_url,
-                        kc.page_title,
-                        kc.chunk_metadata,
-                        kc.embedding <=> :embedding::vector AS distance
-                    FROM knowledge_chunks kc
-                    JOIN website_knowledge wk ON kc.website_id = wk.id
-                    WHERE wk.company_id = :company_id
-                    AND kc.embedding IS NOT NULL
-                    ORDER BY distance ASC
-                    LIMIT :limit
-                """)
-                results = db.execute(sql, {
-                    'embedding': embedding_str,
-                    'company_id': self.company_id,
-                    'limit': limit
-                }).fetchall()
-            
-            chunks = []
-            for row in results:
-                chunks.append({
-                    'content': row.content,
-                    'metadata': {
-                        'url': row.source_url,
-                        'title': row.page_title,
-                        **(row.chunk_metadata or {})
-                    },
-                    'distance': float(row.distance),
-                })
-            
-            return chunks
-            
-        except Exception as e:
-            logger.error(f"Error searching chunks: {e}")
-            return []
+            raise RuntimeError("Could not generate query embedding")
+
+        embedding_str = f"[{','.join(map(str, query_embedding))}]"
+
+        if website_id:
+            sql = text("""
+                SELECT kc.id, kc.content, kc.source_url, kc.page_title,
+                       kc.chunk_metadata,
+                       kc.embedding <=> CAST(:embedding AS vector) AS distance
+                FROM knowledge_chunks kc
+                WHERE kc.company_id = :company_id
+                  AND kc.website_id = :website_id
+                  AND kc.embedding IS NOT NULL
+                ORDER BY distance ASC
+                LIMIT :limit
+            """)
+            results = db.execute(sql, {
+                'embedding': embedding_str,
+                'company_id': self.company_id,
+                'website_id': website_id,
+                'limit': limit,
+            }).fetchall()
+        else:
+            sql = text("""
+                SELECT kc.id, kc.content, kc.source_url, kc.page_title,
+                       kc.chunk_metadata,
+                       kc.embedding <=> CAST(:embedding AS vector) AS distance
+                FROM knowledge_chunks kc
+                WHERE kc.company_id = :company_id
+                  AND kc.embedding IS NOT NULL
+                ORDER BY distance ASC
+                LIMIT :limit
+            """)
+            results = db.execute(sql, {
+                'embedding': embedding_str,
+                'company_id': self.company_id,
+                'limit': limit,
+            }).fetchall()
+
+        return [
+            {
+                'content': row.content,
+                'metadata': {
+                    'url': row.source_url,
+                    'title': row.page_title,
+                    **(row.chunk_metadata or {}),
+                },
+                'distance': float(row.distance),
+            }
+            for row in results
+        ]
 
 
 class WebsiteIndexer:
@@ -474,16 +503,16 @@ class WebsiteIndexer:
                     # Generate embeddings for chunks
                     vector_store.add_chunks(chunks, str(website.id), self.db)
                     
-                    # Store in PostgreSQL with embeddings
                     for i, chunk in enumerate(chunks):
                         db_chunk = KnowledgeChunk(
                             id=uuid4(),
                             website_id=website.id,
+                            company_id=website.company_id,
                             source_url=page['url'],
                             page_title=page['title'],
                             content=chunk['content'],
                             content_hash=chunk['hash'],
-                            embedding=chunk.get('embedding'),  # Now stored directly in PostgreSQL
+                            embedding=chunk.get('embedding'),
                             chunk_metadata=chunk.get('metadata', {}),
                         )
                         self.db.add(db_chunk)
