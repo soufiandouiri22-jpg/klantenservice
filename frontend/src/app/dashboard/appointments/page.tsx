@@ -9,6 +9,7 @@ import FullCalendar from '@fullcalendar/react'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
+import listPlugin from '@fullcalendar/list'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { Header } from '@/components/layout/Header'
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card'
@@ -210,14 +211,14 @@ export default function AppointmentsPage() {
           <Card>
             <CardBody>
               <FullCalendar
-                plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-                initialView={isMobile ? 'timeGridDay' : 'timeGridWeek'}
+                plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
+                initialView={isMobile ? 'listWeek' : 'timeGridWeek'}
                 headerToolbar={isMobile
                   ? { left: 'prev,next', center: 'title', right: 'today' }
                   : { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,timeGridDay' }
                 }
                 footerToolbar={isMobile
-                  ? { center: 'timeGridDay,timeGridWeek,dayGridMonth' }
+                  ? { center: 'listDay,listWeek,listMonth' }
                   : false
                 }
                 locale="nl"
@@ -226,7 +227,11 @@ export default function AppointmentsPage() {
                   month: 'Maand',
                   week: 'Week',
                   day: 'Dag',
+                  listDay: 'Dag',
+                  listWeek: 'Week',
+                  listMonth: 'Maand',
                 }}
+                noEventsContent="Geen afspraken in deze periode"
                 events={calendarEvents}
                 eventClick={handleEventClick}
                 slotMinTime="07:00:00"
@@ -246,14 +251,21 @@ export default function AppointmentsPage() {
                   minute: '2-digit',
                   hour12: false,
                 }}
-                dayHeaderFormat={isMobile
-                  ? { weekday: 'long', day: 'numeric', month: 'long' }
-                  : { weekday: 'short', day: 'numeric', month: 'short' }
-                }
+                dayHeaderFormat={{ weekday: 'short', day: 'numeric', month: 'short' }}
                 titleFormat={isMobile
-                  ? { day: 'numeric', month: 'short', year: 'numeric' }
+                  ? { day: 'numeric', month: 'long', year: 'numeric' }
                   : { year: 'numeric', month: 'short', day: 'numeric' }
                 }
+                windowResize={(arg) => {
+                  const api = arg.view.calendar
+                  const mobile = window.innerWidth < 768
+                  const current = arg.view.type
+                  if (mobile && !current.startsWith('list')) {
+                    api.changeView('listWeek')
+                  } else if (!mobile && current.startsWith('list')) {
+                    api.changeView('timeGridWeek')
+                  }
+                }}
               />
             </CardBody>
           </Card>

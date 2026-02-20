@@ -238,6 +238,44 @@
   @apply ml-2;
 }
 
+/* FullCalendar List View Styling */
+.fc .fc-list {
+  @apply border-0;
+}
+
+.fc .fc-list-day-cushion {
+  @apply bg-gray-50 px-4 py-2.5;
+}
+
+.fc .fc-list-day-text,
+.fc .fc-list-day-side-text {
+  @apply text-sm font-semibold text-gray-900;
+}
+
+.fc .fc-list-event {
+  @apply cursor-pointer;
+}
+
+.fc .fc-list-event:hover td {
+  @apply bg-primary-50;
+}
+
+.fc .fc-list-event-time {
+  @apply text-sm text-gray-600 font-medium;
+}
+
+.fc .fc-list-event-title {
+  @apply text-sm font-medium text-gray-900;
+}
+
+.fc .fc-list-event-dot {
+  border-color: #2563eb;
+}
+
+.fc .fc-list-empty-cushion {
+  @apply text-sm text-gray-500 py-12;
+}
+
 /* FullCalendar Mobile Overrides */
 @media (max-width: 767px) {
   .fc .fc-toolbar {
@@ -245,7 +283,7 @@
   }
 
   .fc .fc-toolbar-title {
-    @apply text-base;
+    @apply text-base font-semibold;
   }
 
   .fc .fc-button {
@@ -254,5 +292,17 @@
 
   .fc .fc-col-header-cell-cushion {
     @apply text-xs;
+  }
+
+  .fc .fc-list-day-cushion {
+    @apply px-3 py-2;
+  }
+
+  .fc .fc-list-event-time {
+    @apply text-xs px-3;
+  }
+
+  .fc .fc-list-event-title {
+    @apply text-sm px-3;
   }
 }

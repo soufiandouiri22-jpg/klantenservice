@@ -296,7 +296,7 @@ export function Header({ title, description, actions, showActionsOnMobile = fals
               </button>
 
               {isNotifOpen && (
-                <div className="absolute top-full right-0 mt-1 w-[calc(100vw-2rem)] sm:w-96 max-w-sm bg-white rounded-lg border border-gray-200 shadow-lg overflow-hidden z-50 -right-2 sm:right-0">
+                <div className="fixed left-4 right-4 top-[4.25rem] sm:absolute sm:left-auto sm:top-full sm:right-0 sm:mt-1 sm:w-96 bg-white rounded-lg border border-gray-200 shadow-lg overflow-hidden z-50">
                   <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                     <h3 className="text-sm font-semibold text-gray-900">Notificaties</h3>
                     {unreadCount > 0 && (
