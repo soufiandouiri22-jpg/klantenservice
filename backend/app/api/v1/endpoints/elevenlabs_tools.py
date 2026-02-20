@@ -87,9 +87,10 @@ async def _handle_tool(request: Request, tool_name: str) -> JSONResponse:
     db = _get_db()
     try:
         data = await request.json()
+        logger.info(f"[ElevenLabs Tool] {tool_name} incoming keys={list(data.keys())}")
 
         ctx = _extract_company_context(data)
-        logger.debug(f"[ElevenLabs Tool] {tool_name} company={ctx['company_id']}")
+        logger.info(f"[ElevenLabs Tool] {tool_name} company={ctx['company_id']}")
 
         context = {
             "db": db,

@@ -123,18 +123,36 @@ def build_system_instructions(
     example_section = ""
 
     # ── Disclosure ────────────────────────────────────────────
+    from zoneinfo import ZoneInfo
+    from datetime import datetime as _dt
+
+    ams_hour = _dt.now(ZoneInfo("Europe/Amsterdam")).hour
+    if ams_hour < 12:
+        time_greeting = "Goedemorgen"
+    elif ams_hour < 18:
+        time_greeting = "Goedemiddag"
+    else:
+        time_greeting = "Goedenavond"
+
     formatted_disclosure = ""
     if disclosure_message:
-        formatted_disclosure = disclosure_message.format(
-            company_name=company_name,
-            ai_worker_name=worker.name,
-        )
+        try:
+            formatted_disclosure = disclosure_message.format(
+                greeting=time_greeting,
+                company_name=company_name,
+                ai_worker_name=worker.name,
+            )
+        except KeyError:
+            formatted_disclosure = disclosure_message.format(
+                company_name=company_name,
+                ai_worker_name=worker.name,
+            )
 
     # ── Opening ───────────────────────────────────────────────
     if formatted_disclosure:
-        greeting = f'Begin ALTIJD met: "{formatted_disclosure}" en vraag hoe je kunt helpen.'
+        greeting = f'Begin ALTIJD met: "{formatted_disclosure}"'
     else:
-        greeting = f'Bijvoorbeeld: "Hoi, je spreekt met {worker.name} van {company_name}. Waarmee kan ik je helpen?"'
+        greeting = f'Begin ALTIJD met: "{time_greeting}, met {worker.name} van {company_name}, waarmee kan ik u helpen?"'
 
     # ── Tone extra ────────────────────────────────────────────
     tone_extra = f"\n- {worker.tone_of_voice}" if worker.tone_of_voice else ""
@@ -234,8 +252,10 @@ def build_system_instructions(
 
     context_parts.append(
         "## Tools\n"
-        "Je weet niets over het bedrijf. Gebruik search_knowledge "
-        "voor elke inhoudelijke vraag (ook prijzen). Nooit gokken."
+        "Gebruik search_knowledge voor inhoudelijke vragen over het bedrijf "
+        "(prijzen, diensten, openingstijden, locatie, etc.). "
+        "Als de tool niet beschikbaar is, zeg dat je het even niet kunt "
+        "opzoeken en vraag of de beller later kan terugbellen. Nooit gokken."
     )
 
     if context_parts:
