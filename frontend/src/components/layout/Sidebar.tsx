@@ -187,7 +187,7 @@ export function Sidebar() {
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="fixed left-0 top-0 z-50 flex h-screen w-72 flex-col bg-white shadow-xl md:hidden"
+              className="fixed left-0 top-0 z-50 flex h-screen w-72 flex-col bg-white shadow-xl md:hidden pb-[max(1.5rem,env(safe-area-inset-bottom))]"
             >
               <SidebarContent onNavigate={() => setMobileOpen(false)} />
             </motion.aside>
