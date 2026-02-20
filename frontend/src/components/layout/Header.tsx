@@ -351,7 +351,7 @@ export function Header({ title, description, actions }: HeaderProps) {
               )}
             </div>
 
-            {actions}
+            {actions && <div className="hidden md:block">{actions}</div>}
 
             {/* User menu */}
             <div className="flex items-center gap-3 border-l border-gray-200 pl-3 sm:pl-4">
