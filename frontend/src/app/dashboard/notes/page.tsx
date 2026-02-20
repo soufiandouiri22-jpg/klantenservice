@@ -359,9 +359,9 @@ export default function NotesPage() {
                   }
                 }}
               >
-                Verwijderen
+                <span className="hidden sm:inline">Verwijderen</span>
               </Button>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 sm:gap-3">
                 <Button variant="outline" onClick={() => setSelectedNote(null)}>
                   Sluiten
                 </Button>

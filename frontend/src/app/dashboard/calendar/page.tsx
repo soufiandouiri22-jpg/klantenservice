@@ -165,6 +165,7 @@ export default function CalendarPage() {
       <Header
         title="Agenda"
         description="Beheer uw agenda-integraties voor het inplannen van afspraken."
+        hideSearch
         actions={
           <Button
             leftIcon={<Plus className="h-4 w-4" />}

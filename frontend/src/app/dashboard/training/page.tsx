@@ -139,6 +139,7 @@ export default function TrainingPage() {
       <Header
         title="Training"
         description="Configureer het gedrag en de kennis van uw AI-medewerkers."
+        hideSearch
         actions={
           <Button
             leftIcon={<Plus className="h-4 w-4" />}

@@ -30,6 +30,7 @@ interface HeaderProps {
   description?: string
   actions?: React.ReactNode
   showActionsOnMobile?: boolean
+  hideSearch?: boolean
 }
 
 const typeIcons: Record<string, React.ElementType> = {
@@ -60,7 +61,7 @@ const notifIcons: Record<string, React.ElementType> = {
   appointment_cancelled: XCircle,
 }
 
-export function Header({ title, description, actions, showActionsOnMobile = false }: HeaderProps) {
+export function Header({ title, description, actions, showActionsOnMobile = false, hideSearch = false }: HeaderProps) {
   const router = useRouter()
   const queryClient = useQueryClient()
   const { user } = useAuthStore()
@@ -255,31 +256,33 @@ export function Header({ title, description, actions, showActionsOnMobile = fals
             </button>
 
             {/* Desktop search */}
-            <div className="hidden md:block relative" ref={searchRef}>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                <input
-                  ref={searchInputRef}
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onFocus={() => setIsSearchFocused(true)}
-                  placeholder="Zoeken... (⌘K)"
-                  className="h-9 w-64 rounded-lg border border-gray-200 bg-gray-50 pl-10 pr-8 text-sm placeholder:text-gray-400 focus:border-primary-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:w-80 transition-all"
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => { setSearchQuery(''); searchInputRef.current?.focus() }}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
+            {!hideSearch && (
+              <div className="hidden md:block relative" ref={searchRef}>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  <input
+                    ref={searchInputRef}
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onFocus={() => setIsSearchFocused(true)}
+                    placeholder="Zoeken... (⌘K)"
+                    className="h-9 w-64 rounded-lg border border-gray-200 bg-gray-50 pl-10 pr-8 text-sm placeholder:text-gray-400 focus:border-primary-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:w-80 transition-all"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => { setSearchQuery(''); searchInputRef.current?.focus() }}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+                {showSearchResults && !isMobileSearchOpen && (
+                  <SearchResultsDropdown className="absolute top-full right-0 mt-1 w-96" />
                 )}
               </div>
-              {showSearchResults && !isMobileSearchOpen && (
-                <SearchResultsDropdown className="absolute top-full right-0 mt-1 w-96" />
-              )}
-            </div>
+            )}
 
             {/* Notifications */}
             <div className="relative" ref={notifRef}>
