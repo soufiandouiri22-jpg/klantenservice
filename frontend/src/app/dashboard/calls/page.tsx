@@ -76,7 +76,7 @@ export default function CallsPage() {
         description="Bekijk en analyseer alle telefoongesprekken."
       />
 
-      <div className="p-6 space-y-6">
+      <div className="p-4 sm:p-6 space-y-6">
         {/* Stats */}
         {stats && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -110,7 +110,7 @@ export default function CallsPage() {
         {/* Search & Filter */}
         <Card>
           <CardBody className="space-y-4">
-            <div className="flex items-center gap-4">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
               <div className="flex-1 relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <input
@@ -125,13 +125,14 @@ export default function CallsPage() {
                 variant={activeFilterCount > 0 ? 'primary' : 'outline'}
                 leftIcon={<Filter className="h-4 w-4" />}
                 onClick={() => setShowFilters(!showFilters)}
+                className="w-full sm:w-auto"
               >
                 Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
               </Button>
             </div>
 
             {showFilters && (
-              <div className="flex items-center gap-4 pt-2 border-t border-gray-100">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 pt-2 border-t border-gray-100">
                 <div className="flex-1">
                   <Select
                     label="Status"
@@ -202,7 +203,7 @@ export default function CallsPage() {
                     key={call.id}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="flex items-center justify-between p-4 hover:bg-gray-50 cursor-pointer transition-colors"
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 hover:bg-gray-50 cursor-pointer transition-colors"
                     onClick={() => setSelectedCall(call)}
                   >
                     <div className="flex items-center gap-4">
@@ -221,7 +222,7 @@ export default function CallsPage() {
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 sm:gap-4">
                       {call.outcome && (
                         <Badge variant="gray">{call.outcome.replace('_', ' ')}</Badge>
                       )}
@@ -282,7 +283,7 @@ export default function CallsPage() {
         ) : callDetail ? (
           <div className="space-y-6">
             {/* Call Info */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <p className="text-sm text-gray-500">Beller</p>
                 <p className="font-medium text-gray-900">

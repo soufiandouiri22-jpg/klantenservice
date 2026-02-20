@@ -43,7 +43,7 @@ export default function AVGPage() {
     <div className="min-h-screen bg-white">
       <PublicHeader />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-12">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 sm:pt-24 md:pt-28 pb-12">
         {/* Back link */}
         <Link
           href="/"
@@ -82,7 +82,7 @@ export default function AVGPage() {
         </div>
 
         {/* Detailed content */}
-        <div className="bg-white rounded-2xl shadow-soft border border-gray-200 p-8 md:p-12">
+        <div className="bg-white rounded-2xl shadow-soft border border-gray-200 p-4 sm:p-6 md:p-8 lg:p-12">
           <div className="prose prose-gray max-w-none">
             <h2 className="text-2xl font-semibold text-gray-900 mt-0 mb-6">Onze AVG-maatregelen in detail</h2>
             
@@ -142,7 +142,7 @@ export default function AVGPage() {
             <p className="text-gray-600 mb-4">
               Wij ondersteunen u volledig bij het uitoefenen van de rechten van betrokkenen:
             </p>
-            <div className="grid md:grid-cols-2 gap-4 mb-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
               <div className="bg-gray-50 rounded-xl p-4">
                 <h4 className="font-medium text-gray-900 mb-2">Recht op inzage</h4>
                 <p className="text-sm text-gray-600">Export alle gegevens van een specifieke beller via het dashboard</p>
@@ -243,7 +243,7 @@ export default function AVGPage() {
         </div>
 
         {/* CTA */}
-        <div className="mt-12 bg-primary-600 rounded-2xl p-8 md:p-12 text-center">
+        <div className="mt-12 bg-primary-600 rounded-2xl p-4 sm:p-6 md:p-8 lg:p-12 text-center">
           <h2 className="text-2xl font-display font-bold text-white mb-4">
             Verwerkersovereenkomst nodig?
           </h2>

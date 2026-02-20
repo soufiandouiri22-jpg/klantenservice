@@ -43,7 +43,7 @@ export default function ContactPage() {
     <div className="min-h-screen bg-white">
       <PublicHeader />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-12">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 sm:pt-24 md:pt-28 pb-12">
         {/* Back link */}
         <Link
           href="/"
@@ -117,7 +117,7 @@ export default function ContactPage() {
 
           {/* Right side - Form */}
           <div>
-            <div className="bg-white rounded-2xl shadow-soft border border-gray-200 p-8">
+            <div className="bg-white rounded-2xl shadow-soft border border-gray-200 p-4 sm:p-6 md:p-8">
               {isSubmitted ? (
                 <div className="text-center py-12">
                   <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-100 mx-auto">
@@ -152,7 +152,7 @@ export default function ContactPage() {
                     Stuur ons een bericht
                   </h2>
                   <form onSubmit={handleSubmit} className="space-y-5">
-                    <div className="grid sm:grid-cols-2 gap-5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                       <div>
                         <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
                           Naam *
@@ -185,7 +185,7 @@ export default function ContactPage() {
                       </div>
                     </div>
 
-                    <div className="grid sm:grid-cols-2 gap-5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                       <div>
                         <label htmlFor="company" className="block text-sm font-medium text-gray-700 mb-1">
                           Bedrijfsnaam

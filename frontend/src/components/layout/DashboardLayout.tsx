@@ -63,7 +63,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       <main
         className={cn(
           'min-h-screen transition-all duration-300',
-          isCollapsed ? 'ml-20' : 'ml-64'
+          isCollapsed ? 'md:ml-20' : 'md:ml-64'
         )}
       >
         {children}

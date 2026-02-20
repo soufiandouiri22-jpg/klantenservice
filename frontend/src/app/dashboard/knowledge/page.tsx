@@ -147,7 +147,7 @@ export default function KnowledgePage() {
         }
       />
 
-      <div className="p-6 space-y-6">
+      <div className="p-4 sm:p-6 space-y-6">
         {/* Info Card */}
         <Card>
           <CardBody>
@@ -237,7 +237,7 @@ export default function KnowledgePage() {
                       </div>
                     )}
 
-                    <div className="mt-4 flex items-center gap-3 pt-4 border-t border-gray-100">
+                    <div className="mt-4 flex flex-wrap items-center gap-3 pt-4 border-t border-gray-100">
                       <Button
                         variant="outline"
                         size="sm"

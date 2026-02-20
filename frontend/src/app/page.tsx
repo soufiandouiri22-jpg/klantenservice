@@ -212,7 +212,7 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
     <div className="border border-gray-200 rounded-xl overflow-hidden">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between p-6 text-left hover:bg-gray-50 transition-colors"
+        className="w-full flex items-center justify-between p-4 sm:p-6 text-left hover:bg-gray-50 transition-colors"
       >
         <span className="font-medium text-gray-900">{question}</span>
         {isOpen ? (
@@ -222,7 +222,7 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
         )}
       </button>
       {isOpen && (
-        <div className="px-6 pb-6">
+        <div className="px-4 sm:px-6 pb-4 sm:pb-6">
           <p className="text-gray-600">{answer}</p>
         </div>
       )}
@@ -357,7 +357,7 @@ export default function HomePage() {
       />
 
       {/* Hero */}
-      <section className="min-h-screen pt-24 flex items-center justify-center px-4 relative overflow-hidden z-10">
+      <section className="min-h-screen pt-20 sm:pt-24 md:pt-28 flex items-center justify-center px-4 sm:px-6 relative overflow-hidden z-10">
         {/* Fade to white at bottom of hero */}
         <div 
           className="absolute bottom-0 left-0 right-0 h-32 pointer-events-none"
@@ -397,7 +397,7 @@ export default function HomePage() {
       </section>
 
       {/* Demo Video Section */}
-      <section className="py-20 md:py-32 px-4 relative bg-white z-10">
+      <section className="py-20 md:py-32 px-4 sm:px-6 relative bg-white z-10">
         <div className="max-w-5xl mx-auto w-full">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl lg:text-5xl font-display font-bold text-gray-900">
@@ -477,7 +477,7 @@ export default function HomePage() {
 
       {/* How It Works */}
       <section className="py-20 md:py-32 bg-white relative z-10">
-        <div className="max-w-6xl mx-auto px-4">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="text-center mb-16">
             <span className="inline-flex items-center gap-2 bg-primary-100 text-primary-700 px-4 py-2 rounded-full text-sm font-medium mb-4">
               <Zap className="h-4 w-4" />
@@ -540,7 +540,7 @@ export default function HomePage() {
 
       {/* Testimonials / Case Studies - Full Width Scrolling */}
       <section className="py-20 md:py-32 bg-white overflow-hidden relative z-10">
-        <div className="text-center mb-16 px-4">
+        <div className="text-center mb-16 px-4 sm:px-6">
           <h2 className="text-3xl md:text-4xl lg:text-5xl font-display font-bold text-gray-900">
             Wat onze klanten bereiken
           </h2>
@@ -553,7 +553,7 @@ export default function HomePage() {
         <TestimonialSlider />
 
         {/* Stats */}
-        <div className="mt-12 md:mt-20 max-w-5xl mx-auto px-4 grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8">
+        <div className="mt-12 md:mt-20 max-w-5xl mx-auto px-4 sm:px-6 grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 md:gap-8">
           <div className="text-center">
             <p className="text-3xl md:text-4xl font-bold text-primary-600">500+</p>
             <p className="text-sm md:text-base text-gray-600 mt-1">Tevreden bedrijven</p>
@@ -602,7 +602,7 @@ export default function HomePage() {
 
       {/* Integrations */}
       <section className="py-20 md:py-32 bg-white relative z-10">
-        <div className="max-w-6xl mx-auto px-4">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="text-center mb-16">
             <span className="inline-flex items-center gap-2 bg-primary-100 text-primary-700 px-4 py-2 rounded-full text-sm font-medium mb-4">
               <Link2 className="h-4 w-4" />
@@ -787,9 +787,9 @@ export default function HomePage() {
       </section>
 
       {/* CTA Card */}
-      <section className="py-20 md:py-32 px-4 bg-white relative z-10">
+      <section className="py-20 md:py-32 px-4 sm:px-6 bg-white relative z-10">
         <div className="max-w-4xl mx-auto">
-          <div className="bg-white rounded-2xl border border-gray-200 p-8 md:p-12 lg:p-16 text-center">
+          <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-6 md:p-8 lg:p-12 xl:p-16 text-center">
             <h2 className="text-2xl md:text-3xl lg:text-4xl font-display font-bold text-gray-900">
               Klaar om te starten?
             </h2>

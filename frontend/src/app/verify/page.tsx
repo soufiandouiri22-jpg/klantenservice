@@ -178,7 +178,7 @@ function VerifyContent() {
           </div>
 
           {/* Card */}
-          <div className="bg-white rounded-xl shadow-soft border border-gray-200 p-8">
+          <div className="bg-white rounded-xl shadow-soft border border-gray-200 p-6 sm:p-8">
             <div className="text-center mb-8">
               <div className="mx-auto w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center mb-4">
                 <Mail className="h-8 w-8 text-primary-600" />
@@ -194,7 +194,7 @@ function VerifyContent() {
             </div>
 
             {/* Code Input */}
-            <div className="flex justify-center gap-2 mb-6">
+            <div className="flex justify-center gap-1.5 sm:gap-2 mb-6">
               {code.map((digit, index) => (
                 <input
                   key={index}
@@ -206,7 +206,7 @@ function VerifyContent() {
                   onChange={(e) => handleChange(index, e.target.value)}
                   onKeyDown={(e) => handleKeyDown(index, e)}
                   onPaste={index === 0 ? handlePaste : undefined}
-                  className="w-12 h-14 text-center text-2xl font-bold border-2 border-gray-300 rounded-lg focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none transition-all"
+                  className="w-10 h-12 sm:w-12 sm:h-14 text-center text-xl sm:text-2xl font-bold border-2 border-gray-300 rounded-lg focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none transition-all"
                   disabled={isVerifying}
                 />
               ))}

@@ -135,7 +135,7 @@ function LoginContent() {
           </div>
 
           {/* Form */}
-          <div className="bg-white rounded-xl shadow-soft border border-gray-200 p-8">
+          <div className="bg-white rounded-xl shadow-soft border border-gray-200 p-6 sm:p-8">
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
               <Input
                 label="E-mailadres"

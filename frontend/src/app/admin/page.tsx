@@ -83,10 +83,10 @@ export default function AdminPage() {
         description="Beheer platform-brede instellingen en monitor alle klanten."
       />
 
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         {/* Tab Navigation */}
-        <div className="border-b border-gray-200 mb-6">
-          <nav className="-mb-px flex space-x-8 overflow-x-auto">
+        <div className="border-b border-gray-200 mb-6 -mx-4 px-4 sm:mx-0 sm:px-0">
+          <nav className="-mb-px flex space-x-4 sm:space-x-8 overflow-x-auto scrollbar-hide">
             {tabs.map((tab) => {
               const Icon = tab.icon
               const isActive = activeTab === tab.id

@@ -411,10 +411,30 @@ function SettingsContent() {
     <DashboardLayout>
       <Header title="Instellingen" description="Beheer uw account en bedrijfsinstellingen." />
 
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
+        {/* Mobile: horizontal scrollable tabs */}
+        <div className="md:hidden mb-6 -mx-4 px-4 overflow-x-auto">
+          <div className="flex gap-2 min-w-max pb-2">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+                  activeTab === tab.id
+                    ? 'bg-primary-50 text-primary-700'
+                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                }`}
+              >
+                <tab.icon className={`h-4 w-4 ${activeTab === tab.id ? 'text-primary-600' : 'text-gray-400'}`} />
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="flex gap-6">
-          {/* Tabs */}
-          <div className="w-64 flex-shrink-0">
+          {/* Desktop: vertical tabs */}
+          <div className="hidden md:block w-64 flex-shrink-0">
             <nav className="space-y-1">
               {tabs.map((tab) => (
                 <button
@@ -434,7 +454,7 @@ function SettingsContent() {
           </div>
 
           {/* Content */}
-          <div className="flex-1 space-y-6">
+          <div className="flex-1 min-w-0 space-y-6">
             {activeTab === 'profile' && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
                 <Card>
@@ -445,7 +465,7 @@ function SettingsContent() {
                     </CardDescription>
                   </CardHeader>
                   <CardBody className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <Input
                         label="Voornaam"
                         defaultValue={currentUser?.first_name}
@@ -576,7 +596,7 @@ function SettingsContent() {
                         }
                       }}
                     />
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <Input
                         label="KvK-nummer"
                         defaultValue={companyData?.kvk_number}
@@ -634,7 +654,7 @@ function SettingsContent() {
                         }
                       }}
                     />
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <Input
                         label="Postcode"
                         defaultValue={companyData?.postal_code}
@@ -707,7 +727,7 @@ function SettingsContent() {
                     <textarea
                       className="input min-h-[100px] resize-none"
                       defaultValue={privacySettings?.disclosure_message}
-                      placeholder="U spreekt met {ai_worker_name}, de digitale assistent van {company_name}"
+                      placeholder="{greeting}, met {ai_worker_name} van {company_name}, waarmee kan ik u helpen?"
                       onBlur={(e) => {
                         const v = e.target.value.trim()
                         if (v !== privacySettings?.disclosure_message) {
@@ -716,7 +736,7 @@ function SettingsContent() {
                       }}
                     />
                     <p className="mt-2 text-sm text-gray-500">
-                      Gebruik <code className="px-1 py-0.5 bg-gray-100 rounded">{'{ai_worker_name}'}</code> voor de naam van de AI-medewerker en <code className="px-1 py-0.5 bg-gray-100 rounded">{'{company_name}'}</code> voor de bedrijfsnaam.
+                      Gebruik <code className="px-1 py-0.5 bg-gray-100 rounded">{'{greeting}'}</code> voor de tijdsgroet (Goedemorgen/Goedemiddag/Goedenavond), <code className="px-1 py-0.5 bg-gray-100 rounded">{'{ai_worker_name}'}</code> voor de naam van de AI-medewerker en <code className="px-1 py-0.5 bg-gray-100 rounded">{'{company_name}'}</code> voor de bedrijfsnaam.
                     </p>
                   </CardBody>
                 </Card>
@@ -732,7 +752,7 @@ function SettingsContent() {
                   </CardHeader>
                   <CardBody>
                     {subscription?.status === 'active' || subscription?.status === 'trialing' ? (
-                      <div className="flex items-center justify-between p-4 rounded-lg bg-primary-50 border border-primary-100">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-lg bg-primary-50 border border-primary-100">
                         <div>
                           <h3 className="text-lg font-semibold text-primary-900 capitalize">
                             {subscription?.plan} Plan
@@ -746,7 +766,7 @@ function SettingsContent() {
                         </Badge>
                       </div>
                     ) : (
-                      <div className="flex items-center justify-between p-4 rounded-lg bg-amber-50 border border-amber-200">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-lg bg-amber-50 border border-amber-200">
                         <div>
                           <h3 className="text-lg font-semibold text-amber-900">
                             Geen actief abonnement
@@ -957,7 +977,7 @@ function SettingsContent() {
                   <CardBody className="p-0">
                     <div className="divide-y divide-gray-100">
                       {users?.map((u: any) => (
-                        <div key={u.id} className="flex items-center justify-between p-4">
+                        <div key={u.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
                           <div className="flex items-center gap-4">
                             <div className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-medium ${
                               u.is_active 
@@ -1034,7 +1054,7 @@ function SettingsContent() {
                   description="De gebruiker ontvangt een e-mail om zelf een wachtwoord in te stellen."
                 >
                   <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <Input
                         label="Voornaam"
                         value={newUserData.first_name}

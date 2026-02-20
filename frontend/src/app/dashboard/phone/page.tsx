@@ -288,7 +288,7 @@ export default function PhonePage() {
         }
       />
 
-      <div className={phoneNumbers?.length === 0 ? "flex items-center justify-center min-h-[calc(100vh-4rem)] pb-24" : "p-6 space-y-6"}>
+      <div className={phoneNumbers?.length === 0 ? "flex items-center justify-center min-h-[calc(100vh-4rem)] pb-24 px-4" : "p-4 sm:p-6 space-y-6"}>
         {phoneNumbers?.length === 0 ? (
           <EmptyState
             icon={Phone}
@@ -583,7 +583,7 @@ export default function PhonePage() {
                 </div>
 
                 {/* Provider selection */}
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {providers.map((provider) => (
                     <button
                       key={provider.id}

@@ -260,7 +260,7 @@ function RegisterContent() {
             </div>
 
             {/* Form */}
-            <div className="bg-white rounded-xl shadow-soft border border-gray-200 p-8">
+            <div className="bg-white rounded-xl shadow-soft border border-gray-200 p-6 sm:p-8">
               {step === 1 && (
                 <>
                   {/* Google Register Button */}
@@ -357,7 +357,7 @@ function RegisterContent() {
                   </>
                 ) : (
                   <>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <Input
                         label="Voornaam"
                         placeholder="Jan"

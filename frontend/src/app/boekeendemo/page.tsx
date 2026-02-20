@@ -40,7 +40,7 @@ export default function BookDemoPage() {
     <div className="min-h-screen bg-white">
       <PublicHeader />
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-12">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 sm:pt-24 md:pt-28 pb-12">
         {/* Back link */}
         <Link
           href="/"
@@ -120,7 +120,7 @@ export default function BookDemoPage() {
           <div>
             <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
               {/* Calendar Header */}
-              <div className="bg-primary-600 text-white p-6">
+              <div className="bg-primary-600 text-white p-4 sm:p-6">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/20">
                     <Headphones className="h-5 w-5 text-white" />
@@ -143,11 +143,11 @@ export default function BookDemoPage() {
               </div>
 
               {/* Calendar Body */}
-              <div className="p-6">
+              <div className="p-4 sm:p-6">
                 <h3 className="font-semibold text-gray-900 mb-4">Selecteer een datum</h3>
                 
                 {/* Date selector */}
-                <div className="grid grid-cols-4 sm:grid-cols-7 gap-2 mb-6">
+                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2 mb-6">
                   {dates.map((date) => {
                     const dateKey = formatDateKey(date)
                     const isSelected = selectedDate === dateKey
@@ -177,7 +177,7 @@ export default function BookDemoPage() {
                 {selectedDate && (
                   <div className="animate-fadeIn">
                     <h3 className="font-semibold text-gray-900 mb-4">Selecteer een tijd</h3>
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                       {times.map((time) => {
                         const isSelected = selectedTime === time
                         return (

@@ -175,7 +175,7 @@ export default function CalendarPage() {
         }
       />
 
-      <div className="p-6 space-y-6">
+      <div className="p-4 sm:p-6 space-y-6">
         {/* Info */}
         <Card>
           <CardBody>
@@ -263,7 +263,7 @@ export default function CalendarPage() {
                         </div>
                       )}
 
-                      <div className="mt-4 grid grid-cols-3 gap-4 text-sm">
+                      <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
                         <div>
                           <p className="text-gray-500">Standaard duur</p>
                           <p className="font-medium text-gray-900">
@@ -284,7 +284,7 @@ export default function CalendarPage() {
                         </div>
                       </div>
 
-                      <div className="mt-4 flex items-center gap-3 pt-4 border-t border-gray-100">
+                      <div className="mt-4 flex flex-wrap items-center gap-3 pt-4 border-t border-gray-100">
                         <Button
                           variant="outline"
                           size="sm"
@@ -454,7 +454,7 @@ export default function CalendarPage() {
       >
         {selectedCalendar && (
           <div className="space-y-6">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Input
                 label="Standaard afspraakduur (minuten)"
                 type="number"

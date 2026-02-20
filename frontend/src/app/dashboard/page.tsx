@@ -157,16 +157,16 @@ export default function DashboardPage() {
         variants={container}
         initial="hidden"
         animate="show"
-        className="p-6 space-y-6"
+        className="p-4 sm:p-6 space-y-6"
       >
         {/* Subscription Activation Banner */}
         {needsSubscription && (
           <motion.div variants={item}>
             <Card className={`border-${subscription?.status === 'canceled' || subscription?.status === 'past_due' ? 'red-300 bg-gradient-to-r from-red-50 to-orange-50' : 'amber-300 bg-gradient-to-r from-amber-50 to-orange-50'}`}>
               <CardBody className="p-6">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                   <div className="flex items-center gap-4">
-                    <div className={`flex h-12 w-12 items-center justify-center rounded-full ${subscription?.status === 'canceled' || subscription?.status === 'past_due' ? 'bg-red-100' : 'bg-amber-100'}`}>
+                    <div className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full ${subscription?.status === 'canceled' || subscription?.status === 'past_due' ? 'bg-red-100' : 'bg-amber-100'}`}>
                       <CreditCard className={`h-6 w-6 ${subscription?.status === 'canceled' || subscription?.status === 'past_due' ? 'text-red-600' : 'text-amber-600'}`} />
                     </div>
                     <div>
@@ -186,8 +186,8 @@ export default function DashboardPage() {
                       </p>
                     </div>
                   </div>
-                  <Link href="/dashboard/settings?tab=subscription">
-                    <Button size="lg" className="whitespace-nowrap">
+                  <Link href="/dashboard/settings?tab=subscription" className="w-full sm:w-auto">
+                    <Button size="lg" className="whitespace-nowrap w-full sm:w-auto">
                       {subscription?.status === 'canceled' ? 'Opnieuw abonneren' : subscription?.status === 'past_due' ? 'Betaling bijwerken' : 'Abonnement kiezen'}
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Button>

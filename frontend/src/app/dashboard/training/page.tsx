@@ -149,7 +149,7 @@ export default function TrainingPage() {
         }
       />
 
-      <div className="p-6 space-y-6">
+      <div className="p-4 sm:p-6 space-y-6">
         {/* Behavior Rules */}
         <Card>
           <CardHeader>
@@ -197,12 +197,12 @@ export default function TrainingPage() {
                 </p>
                 <div className="space-y-3">
                   {detectedQuestions.map((q: any) => (
-                    <div key={q.id} className="flex items-center justify-between p-4 rounded-lg bg-amber-50 border border-amber-100">
+                    <div key={q.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-lg bg-amber-50 border border-amber-100">
                       <div>
                         <p className="font-medium text-gray-900">{q.question}</p>
                         <p className="text-sm text-gray-500">{q.occurrences}x gevraagd</p>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-shrink-0">
                         <Button
                           variant="ghost"
                           size="sm"

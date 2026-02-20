@@ -195,7 +195,7 @@ export default function AppointmentsPage() {
         }
       />
 
-      <div className="p-6 space-y-6">
+      <div className="p-4 sm:p-6 space-y-6">
         {/* Calendar View */}
         {viewMode === 'calendar' && (
           <Card>
@@ -261,11 +261,11 @@ export default function AppointmentsPage() {
                 {todayAppointments.map((apt: any) => (
                   <div
                     key={apt.id}
-                    className="flex items-center justify-between p-4 hover:bg-gray-50 cursor-pointer"
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 hover:bg-gray-50 cursor-pointer"
                     onClick={() => setSelectedAppointment(apt)}
                   >
                     <div className="flex items-center gap-4">
-                      <div className="flex flex-col items-center justify-center w-16 h-16 rounded-lg bg-primary-50">
+                      <div className="flex flex-col items-center justify-center w-16 h-16 flex-shrink-0 rounded-lg bg-primary-50">
                         <span className="text-2xl font-bold text-primary-600">
                           {new Date(apt.starts_at).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}
                         </span>
@@ -294,7 +294,7 @@ export default function AppointmentsPage() {
         {/* Search & Filter */}
         <Card>
           <CardBody>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
               <div className="flex-1 relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <input
@@ -306,7 +306,7 @@ export default function AppointmentsPage() {
                 />
               </div>
               <Select
-                className="w-48"
+                className="w-full sm:w-48"
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
               >
@@ -407,7 +407,7 @@ export default function AppointmentsPage() {
       >
         {selectedAppointment && (
           <div className="space-y-6">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <p className="text-sm text-gray-500">Titel</p>
                 <p className="font-medium text-gray-900">{selectedAppointment.title}</p>

@@ -10,7 +10,7 @@ export default function PrivacyPage() {
     <div className="min-h-screen bg-white">
       <PublicHeader />
 
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-12">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 sm:pt-24 md:pt-28 pb-12">
         {/* Back link */}
         <Link
           href="/"
@@ -20,7 +20,7 @@ export default function PrivacyPage() {
           Terug naar home
         </Link>
 
-        <div className="bg-white rounded-2xl shadow-soft border border-gray-200 p-8 md:p-12">
+        <div className="bg-white rounded-2xl shadow-soft border border-gray-200 p-4 sm:p-6 md:p-8 lg:p-12">
           <h1 className="text-3xl font-display font-bold text-gray-900 mb-2">
             Privacyverklaring
           </h1>

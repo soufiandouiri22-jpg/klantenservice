@@ -88,7 +88,7 @@ export default function NotesPage() {
         description="Interne notities achtergelaten door de AI-medewerkers."
       />
 
-      <div className="p-6 space-y-6">
+      <div className="p-4 sm:p-6 space-y-6">
         {/* Action Required Alert */}
         {actionRequired && actionRequired.length > 0 && !actionRequiredOnly && (
           <Card className="border-amber-200 bg-amber-50">
@@ -120,7 +120,7 @@ export default function NotesPage() {
         {/* Filters */}
         <Card>
           <CardBody>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
               <div className="flex-1 relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <input
@@ -131,24 +131,26 @@ export default function NotesPage() {
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={actionRequiredOnly}
-                  onChange={(e) => setActionRequiredOnly(e.target.checked)}
-                  className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                />
-                <span className="text-sm text-gray-600">Alleen actie vereist</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={showResolved}
-                  onChange={(e) => setShowResolved(e.target.checked)}
-                  className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                />
-                <span className="text-sm text-gray-600">Toon opgeloste</span>
-              </label>
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2 cursor-pointer whitespace-nowrap">
+                  <input
+                    type="checkbox"
+                    checked={actionRequiredOnly}
+                    onChange={(e) => setActionRequiredOnly(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  <span className="text-sm text-gray-600">Alleen actie vereist</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer whitespace-nowrap">
+                  <input
+                    type="checkbox"
+                    checked={showResolved}
+                    onChange={(e) => setShowResolved(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  <span className="text-sm text-gray-600">Toon opgeloste</span>
+                </label>
+              </div>
             </div>
           </CardBody>
         </Card>
