@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import { Calendar, Clock, User, X, Search, Filter, List, CalendarDays } from 'lucide-react'
@@ -68,6 +68,14 @@ export default function AppointmentsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list')
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
 
   const { data: appointmentsData, isLoading } = useQuery({
     queryKey: ['appointments', page, searchQuery, statusFilter],
@@ -203,12 +211,15 @@ export default function AppointmentsPage() {
             <CardBody>
               <FullCalendar
                 plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-                initialView="timeGridWeek"
-                headerToolbar={{
-                  left: 'prev,next today',
-                  center: 'title',
-                  right: 'dayGridMonth,timeGridWeek,timeGridDay',
-                }}
+                initialView={isMobile ? 'timeGridDay' : 'timeGridWeek'}
+                headerToolbar={isMobile
+                  ? { left: 'prev,next', center: 'title', right: 'today' }
+                  : { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,timeGridDay' }
+                }
+                footerToolbar={isMobile
+                  ? { center: 'timeGridDay,timeGridWeek,dayGridMonth' }
+                  : false
+                }
                 locale="nl"
                 buttonText={{
                   today: 'Vandaag',
@@ -235,11 +246,14 @@ export default function AppointmentsPage() {
                   minute: '2-digit',
                   hour12: false,
                 }}
-                dayHeaderFormat={{
-                  weekday: 'short',
-                  day: 'numeric',
-                  month: 'short',
-                }}
+                dayHeaderFormat={isMobile
+                  ? { weekday: 'long', day: 'numeric', month: 'long' }
+                  : { weekday: 'short', day: 'numeric', month: 'short' }
+                }
+                titleFormat={isMobile
+                  ? { day: 'numeric', month: 'short', year: 'numeric' }
+                  : { year: 'numeric', month: 'short', day: 'numeric' }
+                }
               />
             </CardBody>
           </Card>
