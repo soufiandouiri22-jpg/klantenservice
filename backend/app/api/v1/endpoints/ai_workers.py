@@ -86,10 +86,10 @@ async def preview_customer_voice(
                 },
                 json={
                     "text": VOICE_SAMPLE_TEXT,
-                    "model_id": "eleven_v3",
+                    "model_id": "eleven_flash_v2_5",
                     "voice_settings": {
                         "stability": 0.5,
-                        "similarity_boost": 0.8,
+                        "similarity_boost": 0.75,
                     },
                 },
             )

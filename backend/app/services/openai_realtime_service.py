@@ -4,12 +4,15 @@ klantenservice.ai - System Prompt Builder
 Builds the system instructions for AI voice agents. Used by the ElevenLabs
 Conversational AI integration (via register-call overrides).
 
+Prompt structure follows the ElevenLabs recommended format:
+  # Personality  ->  # Goal  ->  # Tone  ->  # Guardrails  ->  # Tools  ->  # Steps
+
 All prompt sections are loaded from the database (SystemPrompt model) and
 interpolated with runtime variables. Admins can edit every part of the AI's
 personality, tone, and behavior via the admin panel.
 """
 import logging
-from typing import List, Optional
+from typing import Optional
 
 from app.core.config import get_settings
 from app.models.ai_worker import AIWorker, AddressForm
@@ -17,6 +20,16 @@ from app.models.system_prompt import SystemPrompt
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
+
+# ElevenLabs recommended section order; models pay extra attention to # Guardrails
+_SECTION_ORDER = [
+    ("personality", "# Personality"),
+    ("goal", "# Goal"),
+    ("tone", "# Tone"),
+    ("guardrails", "# Guardrails"),
+    ("tools", None),  # built dynamically
+    ("steps", "# Steps"),
+]
 
 
 def build_system_instructions(
@@ -30,7 +43,7 @@ def build_system_instructions(
     db=None,
 ) -> str:
     """
-    Build system instructions for the OpenAI Realtime session.
+    Build system instructions for the ElevenLabs Conversational AI agent.
 
     All prompt sections are loaded from the database (SystemPrompt model)
     and interpolated with runtime variables. This allows admins to edit
@@ -82,12 +95,6 @@ def build_system_instructions(
     else:
         permissions.append("- Je mag GEEN prijsinformatie geven — verwijs door")
 
-    # ── Example Q&A ───────────────────────────────────────────
-    # NOTE: Example answers are NOT included in the system prompt to keep it
-    # short and reduce latency.  The AI retrieves them via the search_knowledge
-    # tool at runtime when a relevant question is asked.
-    example_section = ""
-
     # ── Disclosure ────────────────────────────────────────────
     from zoneinfo import ZoneInfo
     from datetime import datetime as _dt
@@ -114,11 +121,13 @@ def build_system_instructions(
                 ai_worker_name=worker.name,
             )
 
-    # ── Opening ───────────────────────────────────────────────
     if formatted_disclosure:
         greeting = f'Begin ALTIJD met: "{formatted_disclosure}"'
     else:
-        greeting = f'Begin ALTIJD met: "{time_greeting}, met {worker.name} van {company_name}, waarmee kan ik u helpen?"'
+        greeting = (
+            f'Begin ALTIJD met: "{time_greeting}, met {worker.name} van '
+            f'{company_name}, waarmee kan ik u helpen?"'
+        )
 
     # ── Tone extra ────────────────────────────────────────────
     tone_extra = f"\n- {worker.tone_of_voice}" if worker.tone_of_voice else ""
@@ -146,7 +155,6 @@ def build_system_instructions(
         except Exception as e:
             logger.warning(f"Failed to load system prompts from DB: {e}")
 
-    # Fallback to defaults if DB is empty or unavailable
     if not prompt_records:
         logger.info("Using DEFAULT_SYSTEM_PROMPTS (no DB prompts found)")
         prompt_contents = []
@@ -164,68 +172,81 @@ def build_system_instructions(
         ]
 
     # ═══════════════════════════════════════════════════════════
-    # BUILD PROMPT — group by category
+    # BUILD PROMPT — ElevenLabs recommended section order:
+    # Personality → Goal → Tone → Guardrails → Tools → Steps
     # ═══════════════════════════════════════════════════════════
+
+    def _render(category: str) -> list[str]:
+        parts = []
+        for p in prompt_contents:
+            if p["category"] == category:
+                try:
+                    content = p["content"].format(**template_vars)
+                except KeyError:
+                    content = p["content"]
+                parts.append(f"## {p['name']}\n{content}")
+        return parts
 
     sections = []
 
-    # Group: Personality (personality category)
-    personality_parts = []
-    for p in prompt_contents:
-        if p["category"] == "personality":
-            try:
-                content = p["content"].format(**template_vars)
-            except KeyError:
-                content = p["content"]
-            personality_parts.append(f"## {p['name']}\n{content}")
-
+    # 1. # Personality
+    personality_parts = _render("personality")
     if personality_parts:
-        sections.append("# Personality and Tone\n\n" + "\n\n".join(personality_parts))
+        sections.append("# Personality\n\n" + "\n\n".join(personality_parts))
 
-    # Group: Steps (steps category)
-    steps_parts = []
-    for p in prompt_contents:
-        if p["category"] == "steps":
-            try:
-                content = p["content"].format(**template_vars)
-            except KeyError:
-                content = p["content"]
-            steps_parts.append(f"## {p['name']}\n{content}")
+    # 2. # Goal
+    goal_parts = _render("goal")
+    if goal_parts:
+        sections.append("# Goal\n\n" + "\n\n".join(goal_parts))
 
-    if steps_parts:
-        sections.append("# Steps\n\n" + "\n\n".join(steps_parts))
+    # 3. # Tone
+    tone_parts = _render("tone")
+    if tone_parts:
+        sections.append("# Tone\n\n" + "\n\n".join(tone_parts))
 
-    # Group: Safety & Compliance (safety, privacy, compliance categories)
-    safety_parts = []
-    for p in prompt_contents:
-        if p["category"] in ("safety", "privacy", "compliance"):
-            try:
-                content = p["content"].format(**template_vars)
-            except KeyError:
-                content = p["content"]
-            safety_parts.append(f"## {p['name']}\n{content}")
+    # 4. # Guardrails  (models pay extra attention to this heading)
+    guardrails_parts = _render("guardrails")
+    # Legacy: also pick up old "safety" / "privacy" / "compliance" categories
+    for cat in ("safety", "privacy", "compliance"):
+        guardrails_parts.extend(_render(cat))
+    if guardrails_parts:
+        sections.append("# Guardrails\n\n" + "\n\n".join(guardrails_parts))
 
-    if safety_parts:
-        sections.append("# Safety & Compliance\n\n" + "\n\n".join(safety_parts))
-
-    # ── Dynamic Context (not from system prompts) ─────────────
-    context_parts = []
-
+    # 5. # Tools  (built dynamically from permissions + tool descriptions)
+    tool_lines = []
     if behavior_rules:
-        context_parts.append(f"## Bedrijfsregels\n{chr(10).join(behavior_rules)}")
+        tool_lines.append(f"## Bedrijfsregels\n{chr(10).join(behavior_rules)}")
     if permissions:
-        context_parts.append(f"## Bevoegdheden\n{chr(10).join(permissions)}")
+        tool_lines.append(f"## Bevoegdheden\n{chr(10).join(permissions)}")
 
-    context_parts.append(
-        "## Tools\n"
-        "Gebruik search_knowledge voor inhoudelijke vragen over het bedrijf "
-        "(prijzen, diensten, openingstijden, locatie, etc.). "
-        "Als de tool niet beschikbaar is, zeg dat je het even niet kunt "
-        "opzoeken en vraag of de beller later kan terugbellen. Nooit gokken."
+    tool_lines.append(
+        "## search_knowledge\n"
+        "Gebruik voor inhoudelijke vragen over het bedrijf "
+        "(prijzen, diensten, openingstijden, locatie, etc.).\n\n"
+        "**Wanneer gebruiken:**\n"
+        "- Klant vraagt over prijzen, diensten, openingstijden\n"
+        "- Klant stelt een vraag die je niet direct kunt beantwoorden\n\n"
+        "**Foutafhandeling:**\n"
+        'Als de tool faalt: "Ik kan dat even niet opzoeken. '
+        'Kan ik u straks terugbellen?"\n'
+        "Verzin nooit een antwoord als de tool niet beschikbaar is."
     )
 
-    if context_parts:
-        sections.append("# Context\n\n" + "\n\n".join(context_parts))
+    if worker.can_leave_notes:
+        tool_lines.append(
+            "## create_note\n"
+            "Gebruik om notities achter te laten voor collega's.\n\n"
+            "**Wanneer gebruiken:**\n"
+            "- Klant heeft een verzoek buiten jouw bevoegdheden\n"
+            "- Er moet iets worden doorgegeven aan een collega"
+        )
+
+    sections.append("# Tools\n\n" + "\n\n".join(tool_lines))
+
+    # 6. # Steps
+    steps_parts = _render("steps")
+    if steps_parts:
+        sections.append("# Steps\n\n" + "\n\n".join(steps_parts))
 
     return "\n\n".join(sections)
 
