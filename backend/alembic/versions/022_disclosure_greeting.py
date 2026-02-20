@@ -1,12 +1,12 @@
 """Update disclosure_message default to time-aware greeting
 
-Revision ID: 022_update_disclosure_message_default
+Revision ID: 022_disclosure_greeting
 Revises: 021_optimize_vector_search
 Create Date: 2026-02-20
 """
 from alembic import op
 
-revision = "022_update_disclosure_message_default"
+revision = "022_disclosure_greeting"
 down_revision = "021_optimize_vector_search"
 branch_labels = None
 depends_on = None
