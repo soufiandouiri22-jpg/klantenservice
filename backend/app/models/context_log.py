@@ -40,7 +40,7 @@ class ContextLog(Base):
     # Tool calls made
     tool_calls = Column(JSON, default=list)  # [{name, arguments, result, latency_ms}]
     
-    # Context injection sent to PersonaPlex
+    # Context injection sent to the voice agent
     facts = Column(Text, nullable=True)
     instructions = Column(Text, nullable=True)
     

@@ -20,9 +20,7 @@ email-validator==2.1.0
 # Async & Background Tasks
 celery>=5.3.0
 redis>=5.0.0
-aiohttp==3.9.1
 httpx>=0.26.0
-websockets>=12.0
 
 # Calendar Integrations
 google-api-python-client==2.114.0

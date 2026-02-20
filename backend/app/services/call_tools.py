@@ -3,7 +3,7 @@ klantenservice.ai - Call Tools for Orchestrator
 
 Tool functions that the orchestrator calls during voice calls.
 All "truth" (prices, availability, business info) comes from these tools.
-PersonaPlex only speaks what the backend provides via these tool results.
+The AI only speaks what the backend provides via these tool results.
 
 Tools:
 - check_availability: Get available calendar slots

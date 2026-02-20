@@ -5,7 +5,7 @@ import logging
 import os
 import sys
 
-from fastapi import FastAPI, WebSocket, Depends
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -14,9 +14,7 @@ from pathlib import Path
 import structlog
 
 from app.core.config import settings
-from app.core.database import get_db
 from app.api.v1.router import api_router
-from app.websockets.voice_handler import voice_websocket_handler
 
 # ── Logging ──────────────────────────────────────────────────────────
 # Ensure the root logger has a StreamHandler to stdout so that ALL
@@ -182,14 +180,14 @@ async def health_check():
 async def readiness_check():
     """
     Readiness check — returns 200 when the service is ready to handle calls.
-    With OpenAI Realtime API, we're always ready if the API key is configured.
+    With ElevenLabs Conversational AI, we're ready if the API key + agent ID are set.
     """
     try:
-        if settings.OPENAI_API_KEY:
-            return {"status": "ready", "engine": "openai_realtime"}
+        if settings.ELEVENLABS_API_KEY and settings.ELEVENLABS_AGENT_ID:
+            return {"status": "ready", "engine": "elevenlabs_convai"}
         return JSONResponse(
             status_code=503,
-            content={"status": "not_ready", "reason": "OPENAI_API_KEY not configured"},
+            content={"status": "not_ready", "reason": "ELEVENLABS keys not configured"},
         )
     except Exception:
         return JSONResponse(
@@ -205,32 +203,6 @@ app.include_router(api_router, prefix=settings.API_V1_PREFIX)
 _tts_dir = Path("/tmp/tts_cache")
 _tts_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/static/tts", StaticFiles(directory=str(_tts_dir)), name="tts_static")
-
-
-# WebSocket endpoint for Twilio Media Streams
-@app.websocket("/ws/voice")
-async def websocket_voice_endpoint(websocket: WebSocket):
-    """
-    WebSocket endpoint for Twilio Media Streams.
-    
-    Twilio connects here when a call is answered and streams audio
-    bidirectionally through OpenAI Realtime API for AI conversation.
-    
-    TwiML should include:
-    <Stream url="wss://your-domain.com/ws/voice">
-        <Parameter name="to" value="{{To}}" />
-        <Parameter name="from" value="{{From}}" />
-    </Stream>
-    """
-    # Get database session
-    from sqlalchemy.orm import Session
-    from app.core.database import SessionLocal
-    
-    db = SessionLocal()
-    try:
-        await voice_websocket_handler(websocket, db)
-    finally:
-        db.close()
 
 
 if __name__ == "__main__":

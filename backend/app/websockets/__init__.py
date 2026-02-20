@@ -1,6 +1,3 @@
 """
-klantenservice.ai - WebSocket Handlers
+klantenservice.ai - WebSocket Handlers (legacy — unused with ElevenLabs)
 """
-from app.websockets.voice_handler import voice_websocket_handler
-
-__all__ = ["voice_websocket_handler"]

@@ -2,9 +2,9 @@
 klantenservice.ai - Voice Call Orchestrator
 
 Receives live transcript (user + assistant), detects intent, calls tools,
-and builds context injection payload for PersonaPlex.
+and builds context injection payload for the voice agent.
 
-Goal: PersonaPlex NEVER hallucinates. Prices, availability, and policies
+Goal: The AI NEVER hallucinates. Prices, availability, and policies
 come ONLY from tool results injected via update_context.
 
 Flow:
@@ -285,7 +285,7 @@ def build_context_payload(
         turn_id: Current turn ID
         
     Returns:
-        Tuple of (facts, instructions) to inject into PersonaPlex
+        Tuple of (facts, instructions) to inject into the voice agent
     """
     import time
     from uuid import UUID

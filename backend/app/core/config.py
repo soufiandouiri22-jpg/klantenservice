@@ -28,29 +28,9 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
-    # AI / LLM
-    LLM_API_URL: str = "http://localhost:8080/v1"
-    LLM_MODEL_NAME: str = "personaplex-7b"
-    LLM_MAX_TOKENS: int = 2048
-    LLM_TEMPERATURE: float = 0.7
-    
-    # OpenAI (for Orchestrator + STT + Realtime Voice)
+    # OpenAI (for Orchestrator function calling)
     OPENAI_API_KEY: str = ""
-    ORCHESTRATOR_MODEL: str = "gpt-4o-mini"  # Model for intent detection + function calling
-    OPENAI_REALTIME_MODEL: str = "gpt-realtime"  # Latest production speech-to-speech model (Aug 2025)
-    OPENAI_REALTIME_VOICE: str = "ash"  # alloy, ash, ballad, coral, echo, sage, shimmer, verse, cedar, marin
-    
-    # Hugging Face (for PersonaPlex model)
-    HUGGINGFACE_TOKEN: str = ""
-    
-    # PersonaPlex Dedicated Pod
-    PERSONAPLEX_POD_URL: str = ""  # URL of the dedicated GPU pod (e.g., https://pod-id.runpod.net)
-    PERSONAPLEX_POD_TOKEN: str = ""  # Authentication token for the pod
-    WARM_POOL_SIZE: int = 1  # Max workers to keep pre-warmed (1 per pod; increase when adding pods)
-    
-    # RunPod (legacy - for serverless fallback)
-    RUNPOD_API_KEY: str = ""
-    RUNPOD_ENDPOINT_ID: str = ""  # Deprecated: use PERSONAPLEX_POD_URL instead
+    ORCHESTRATOR_MODEL: str = "gpt-4o-mini"
     
     # Twilio
     TWILIO_ACCOUNT_SID: str = ""
@@ -71,9 +51,6 @@ class Settings(BaseSettings):
     MICROSOFT_CLIENT_ID: str = ""
     MICROSOFT_CLIENT_SECRET: str = ""
     MICROSOFT_REDIRECT_URI: str = ""
-    
-    # ChromaDB
-    CHROMA_PERSIST_DIRECTORY: str = "/data/chroma"
     
     # Sentry
     SENTRY_DSN: str = ""

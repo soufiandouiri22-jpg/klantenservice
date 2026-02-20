@@ -32,7 +32,7 @@ class LatencyLog(Base):
     # Latencies in milliseconds
     stt_latency_ms = Column(Integer, nullable=True)  # Speech-to-text (Whisper)
     orchestrator_latency_ms = Column(Integer, nullable=True)  # LLM + tool calls
-    pod_latency_ms = Column(Integer, nullable=True)  # PersonaPlex processing
+    pod_latency_ms = Column(Integer, nullable=True)  # AI processing
     tts_latency_ms = Column(Integer, nullable=True)  # Text-to-speech (if separate)
     
     # Total end-to-end latency

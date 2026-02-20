@@ -8,7 +8,6 @@ from datetime import datetime, timedelta
 from typing import List, Optional, Any
 from uuid import UUID
 import logging
-import aiohttp
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -930,8 +929,8 @@ async def toggle_kill_switch(
     
     db.commit()
     
-    # With OpenAI Realtime API, no warm sessions to tear down.
-    # Active calls will be rejected on the next check in voice_handler.
+    # With ElevenLabs Conversational AI, no warm sessions to tear down.
+    # Active calls will be rejected on the next inbound check.
     
     action = "ingeschakeld" if data.enabled else "uitgeschakeld"
     logger.warning(
