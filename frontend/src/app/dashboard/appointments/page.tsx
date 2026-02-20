@@ -180,25 +180,25 @@ export default function AppointmentsPage() {
           <div className="flex items-center gap-2 bg-gray-100 p-1 rounded-lg">
             <button
               onClick={() => setViewMode('list')}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              className={`flex items-center gap-2 px-2 md:px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                 viewMode === 'list'
                   ? 'bg-white text-gray-900 shadow-sm'
                   : 'text-gray-600 hover:text-gray-900'
               }`}
             >
               <List className="h-4 w-4" />
-              Lijst
+              <span className="hidden md:inline">Lijst</span>
             </button>
             <button
               onClick={() => setViewMode('calendar')}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              className={`flex items-center gap-2 px-2 md:px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                 viewMode === 'calendar'
                   ? 'bg-white text-gray-900 shadow-sm'
                   : 'text-gray-600 hover:text-gray-900'
               }`}
             >
               <CalendarDays className="h-4 w-4" />
-              Kalender
+              <span className="hidden md:inline">Kalender</span>
             </button>
           </div>
         }
