@@ -412,24 +412,27 @@ function SettingsContent() {
       <Header title="Instellingen" description="Beheer uw account en bedrijfsinstellingen." />
 
       <div className="p-4 sm:p-6">
-        {/* Mobile: horizontal scrollable tabs */}
-        <div className="md:hidden mb-6 -mx-4 px-4 overflow-x-auto">
-          <div className="flex gap-2 min-w-max pb-2">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
-                  activeTab === tab.id
-                    ? 'bg-primary-50 text-primary-700'
-                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                }`}
-              >
-                <tab.icon className={`h-4 w-4 ${activeTab === tab.id ? 'text-primary-600' : 'text-gray-400'}`} />
-                {tab.label}
-              </button>
-            ))}
+        {/* Mobile: horizontal scrollable tabs with fade hint */}
+        <div className="md:hidden mb-6 -mx-4 relative">
+          <div className="px-4 overflow-x-auto scrollbar-hide">
+            <div className="flex gap-2 min-w-max pb-2">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+                    activeTab === tab.id
+                      ? 'bg-primary-50 text-primary-700'
+                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                  }`}
+                >
+                  <tab.icon className={`h-4 w-4 ${activeTab === tab.id ? 'text-primary-600' : 'text-gray-400'}`} />
+                  {tab.label}
+                </button>
+              ))}
+            </div>
           </div>
+          <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-gray-50 to-transparent" />
         </div>
 
         <div className="flex gap-6">
@@ -489,15 +492,15 @@ function SettingsContent() {
                     </div>
                     <div>
                       <label className="label">E-mailadres</label>
-                      <div className="flex gap-3 items-center">
-                        <div className="flex-1 input bg-gray-50 text-gray-700 cursor-not-allowed">
+                      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 sm:items-center">
+                        <div className="flex-1 input bg-gray-50 text-gray-700 cursor-not-allowed truncate">
                           {currentUser?.email}
                         </div>
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => setIsEmailModalOpen(true)}
-                          className="flex-shrink-0"
+                          className="flex-shrink-0 w-full sm:w-auto"
                         >
                           <Pencil className="h-4 w-4 mr-1.5" />
                           Wijzigen
