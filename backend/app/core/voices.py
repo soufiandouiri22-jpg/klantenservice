@@ -8,7 +8,7 @@ All voices support TTS previews and Conversational AI.
 # ElevenLabs voices available for customers
 # IDs marked as "PLACEHOLDER" need to be replaced with real ElevenLabs voice IDs
 ELEVENLABS_VOICES = [
-    {"id": "eWptEH99Zco26MHjMz5g", "name": "Bella", "description": "Vriendelijk en professioneel", "gender": "female"},
+    {"id": "OlBRrVAItyi00MuGMbna", "name": "Emma", "description": "Vriendelijk en professioneel", "gender": "female"},
     {"id": "XWw6BayktH5jsnELw9Bc", "name": "Arjen", "description": "Kalm en betrouwbaar", "gender": "male"},
     {"id": "tvFp0BgJPrEXGoDhDIA4", "name": "Thomas", "description": "Natuurlijk en professioneel", "gender": "male"},
     {"id": "AVIlLDn2TVmdaDycgbo3", "name": "Eric", "description": "Natuurlijk en authentiek", "gender": "male"},
@@ -22,8 +22,8 @@ TTS_SUPPORTED_VOICES = {v["id"] for v in ELEVENLABS_VOICES}
 # Customer-visible voices (all of them — all support TTS previews)
 CUSTOMER_VOICES = ELEVENLABS_VOICES
 
-# Default voice ID (Bella)
-DEFAULT_VOICE_ID = "eWptEH99Zco26MHjMz5g"
+# Default voice ID (Emma)
+DEFAULT_VOICE_ID = "OlBRrVAItyi00MuGMbna"
 
 # Sample text for voice previews
 VOICE_SAMPLE_TEXT = (

@@ -3,6 +3,7 @@ klantenservice.ai - Webhook Endpoints
 For receiving callbacks from external services (Twilio, calendar providers, etc.)
 """
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Header
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
@@ -17,6 +18,7 @@ from app.core.database import get_db
 from app.core.config import settings
 from app.services.tts_service import generate_tts_audio, get_tts_url
 from app.services.openai_realtime_service import build_system_instructions
+from app.core.voices import DEFAULT_VOICE_ID
 
 logger = logging.getLogger(__name__)
 from app.models.company import Company
@@ -181,7 +183,7 @@ async def twilio_voice_webhook(
     db.commit()
     
     # ── Build full system prompt from admin + customer settings ──
-    voice_id = available_worker.voice_id or "eWptEH99Zco26MHjMz5g"
+    voice_id = available_worker.voice_id or DEFAULT_VOICE_ID
 
     # Knowledge context is NOT loaded into the system prompt to keep it
     # short and reduce latency.  The AI uses search_knowledge on-demand.
@@ -218,17 +220,26 @@ async def twilio_voice_webhook(
         f"({len(full_instructions)} chars, {len(training_rules)} rules)"
     )
 
+    # Time-aware greeting based on Amsterdam timezone
+    ams_hour = datetime.now(ZoneInfo("Europe/Amsterdam")).hour
+    if ams_hour < 12:
+        greeting = "Goedemorgen"
+    elif ams_hour < 18:
+        greeting = "Goedemiddag"
+    else:
+        greeting = "Goedenavond"
+
     # Build first message — use disclosure if configured
     if disclosure_message:
         first_msg = disclosure_message.format(
+            greeting=greeting,
             company_name=company.name,
             ai_worker_name=available_worker.name,
         )
-        first_msg += " Waarmee kan ik u helpen?"
     else:
         first_msg = (
-            f"Goedemiddag, u spreekt met {available_worker.name} van {company.name}. "
-            "Waarmee kan ik u helpen?"
+            f"{greeting}, met {available_worker.name} van {company.name}, "
+            "waarmee kan ik u helpen?"
         )
 
     # ── Connect to ElevenLabs Conversational AI ──────────────────
