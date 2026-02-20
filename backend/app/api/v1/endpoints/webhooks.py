@@ -184,8 +184,7 @@ async def twilio_voice_webhook(
     voice_id = available_worker.voice_id or "eWptEH99Zco26MHjMz5g"
 
     # Knowledge context is NOT loaded into the system prompt to keep it
-    # short and reduce latency.  The AI retrieves information on-demand
-    # via the search_knowledge and get_prices tools.
+    # short and reduce latency.  The AI uses search_knowledge on-demand.
 
     # Load training rules (these are short and stay in the prompt)
     training_rules_db = db.query(TrainingRule).filter(

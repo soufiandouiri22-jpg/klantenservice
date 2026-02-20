@@ -25,7 +25,6 @@ from app.services.call_tools import (
     tool_check_availability,
     tool_book_appointment,
     tool_search_knowledge,
-    tool_get_prices,
     tool_create_note,
     tool_flag_unknown,
 )
@@ -65,8 +64,7 @@ Jij bepaalt de waarheid; de spraakassistent spreekt alleen jouw feiten uit.
 BELANGRIJKE REGELS:
 - Bij prijzen, openingstijden, beleid: gebruik ALLEEN de resultaten van de tools. NOOIT iets verzinnen.
 - Bij afspraakvragen: gebruik check_availability en book_appointment tools.
-- Bij vragen over het bedrijf: gebruik search_knowledge tool.
-- Bij prijsvragen: gebruik get_prices tool.
+- Bij vragen over het bedrijf of prijzen: gebruik search_knowledge tool.
 - Als je een vraag NIET kunt beantwoorden: gebruik flag_unknown tool EN maak een notitie.
 - Voor terugbelverzoeken of notities: gebruik create_note tool.
 
@@ -126,7 +124,7 @@ TOOLS_OPENAI = [
         "type": "function",
         "function": {
             "name": "search_knowledge",
-            "description": "Zoek in de bedrijfsinformatie/kennisbank. Gebruik dit voor vragen over openingstijden, locatie, diensten, etc.",
+            "description": "Zoek in de bedrijfsinformatie/kennisbank. Gebruik dit voor ALLE vragen over het bedrijf: prijzen, diensten, openingstijden, locatie, etc.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -134,19 +132,6 @@ TOOLS_OPENAI = [
                     "limit": {"type": "integer", "description": "Max aantal resultaten", "default": 5},
                 },
                 "required": ["query"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_prices",
-            "description": "Haal prijsinformatie op. Gebruik dit bij prijsvragen. Geef ALLEEN prijzen door die hier terugkomen.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "topic": {"type": "string", "description": "Onderwerp/dienst waarvoor prijzen gevraagd worden"},
-                },
             },
         },
     },
@@ -248,12 +233,6 @@ def _run_tool(
                 db, company_id,
                 query=arguments.get("query", ""),
                 limit=arguments.get("limit", 5)
-            )
-        
-        if name == "get_prices":
-            return tool_get_prices(
-                db, company_id,
-                topic=arguments.get("topic")
             )
         
         if name == "create_note":

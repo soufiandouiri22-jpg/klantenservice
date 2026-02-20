@@ -154,8 +154,8 @@ async def tool_book_appointment(request: Request):
 
 @router.post("/get_prices")
 async def tool_get_prices(request: Request):
-    """ElevenLabs server tool: Get price information."""
-    return await _handle_tool(request, "get_prices")
+    """Legacy endpoint — redirects to search_knowledge."""
+    return await _handle_tool(request, "search_knowledge")
 
 
 @router.post("/create_note")

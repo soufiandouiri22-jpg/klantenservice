@@ -227,11 +227,6 @@ def build_system_instructions(
     # ── Dynamic Context (not from system prompts) ─────────────
     context_parts = []
 
-    # NOTE: knowledge_context is intentionally NOT included in the system
-    # prompt.  Including thousands of chars slows down every LLM turn.
-    # The AI retrieves specific information on-demand via the
-    # search_knowledge and get_prices tools instead.
-
     if behavior_rules:
         context_parts.append(f"## Bedrijfsregels\n{chr(10).join(behavior_rules)}")
     if permissions:
@@ -239,8 +234,8 @@ def build_system_instructions(
 
     context_parts.append(
         "## Tools\n"
-        "Je weet niets over het bedrijf. Gebruik search_knowledge of get_prices "
-        "voor elke inhoudelijke vraag. Nooit gokken."
+        "Je weet niets over het bedrijf. Gebruik search_knowledge "
+        "voor elke inhoudelijke vraag (ook prijzen). Nooit gokken."
     )
 
     if context_parts:
