@@ -29,6 +29,7 @@ interface HeaderProps {
   title?: string
   description?: string
   actions?: React.ReactNode
+  showActionsOnMobile?: boolean
 }
 
 const typeIcons: Record<string, React.ElementType> = {
@@ -59,7 +60,7 @@ const notifIcons: Record<string, React.ElementType> = {
   appointment_cancelled: XCircle,
 }
 
-export function Header({ title, description, actions }: HeaderProps) {
+export function Header({ title, description, actions, showActionsOnMobile = false }: HeaderProps) {
   const router = useRouter()
   const queryClient = useQueryClient()
   const { user } = useAuthStore()
@@ -351,7 +352,7 @@ export function Header({ title, description, actions }: HeaderProps) {
               )}
             </div>
 
-            {actions && <div className="hidden md:block">{actions}</div>}
+            {actions && <div className={showActionsOnMobile ? '' : 'hidden md:block'}>{actions}</div>}
 
             {/* User menu */}
             <div className="flex items-center gap-3 border-l border-gray-200 pl-3 sm:pl-4">
