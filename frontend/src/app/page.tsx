@@ -358,14 +358,14 @@ function VideoSection() {
             </div>
 
             <div className="relative aspect-video">
-              <iframe
-                src="https://www.youtube-nocookie.com/embed/x0K4LZKzW1g?autoplay=1&mute=1&loop=1&playlist=x0K4LZKzW1g&rel=0&modestbranding=1&showinfo=0&controls=0&iv_load_policy=3&disablekb=1"
-                title="Klantenservice.ai - Bekijk hoe het werkt"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-                className="absolute inset-0 w-full h-full pointer-events-none"
+              <video
+                src="/demo-video.mp4"
+                autoPlay
+                muted
+                loop
+                playsInline
+                className="absolute inset-0 w-full h-full object-cover"
               />
-              <div className="absolute inset-0 z-10" />
             </div>
           </div>
         </motion.div>
