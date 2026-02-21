@@ -125,8 +125,8 @@ def build_system_instructions(
         greeting = f'Begin ALTIJD met: "{formatted_disclosure}"'
     else:
         greeting = (
-            f'Begin ALTIJD met: "{time_greeting}, met {worker.name} van '
-            f'{company_name}, waarmee kan ik u helpen?"'
+            f'Begin ALTIJD met: "{time_greeting}! U spreekt met {worker.name} van '
+            f'{company_name}, wat leuk dat u belt! Waarmee kan ik u helpen?"'
         )
 
     # ── Tone extra ────────────────────────────────────────────
