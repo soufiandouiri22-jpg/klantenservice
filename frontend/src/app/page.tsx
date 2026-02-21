@@ -329,13 +329,13 @@ function VideoSection() {
         <div className="text-center mb-12">
           <span className="inline-flex items-center gap-2 bg-primary-100 text-primary-700 px-4 py-2 rounded-full text-sm font-medium mb-4">
             <Play className="h-4 w-4" />
-            Tutorial
+            Bekijk de demo
           </span>
           <h2 className="text-3xl md:text-4xl lg:text-5xl font-display font-bold text-gray-900">
-            Zo werkt het platform
+            Waarom klantenservice.ai?
           </h2>
           <p className="mt-4 text-lg text-gray-600 max-w-2xl mx-auto">
-            In minder dan een minuut ziet u hoe u uw AI-telefonist configureert en live zet.
+            Ontdek hoe bedrijven hun klantenservice automatiseren met een AI-telefonist.
           </p>
         </div>
 
