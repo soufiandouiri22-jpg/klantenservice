@@ -252,8 +252,10 @@ export const calendarsApi = {
     return response.data
   },
   
-  getOAuthUrl: async (provider: string) => {
-    const response = await api.get(`/calendars/oauth/${provider}/url`)
+  getOAuthUrl: async (provider: string, calendarId: string) => {
+    const response = await api.get(`/calendars/oauth/${provider}/url`, {
+      params: { calendar_id: calendarId },
+    })
     return response.data
   },
   

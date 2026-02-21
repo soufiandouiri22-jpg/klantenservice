@@ -282,12 +282,22 @@ async def twilio_voice_webhook(
             )
             resp.raise_for_status()
             
-            # ElevenLabs returns TwiML directly
             twiml = resp.text
             logger.info(
                 f"ElevenLabs register_call success for {call_sid} "
                 f"(worker={available_worker.name}, voice={voice_id})"
             )
+            logger.info(f"ElevenLabs TwiML for {call_sid}: {twiml[:500]}")
+
+            # Inject a brief pause before <Connect> to give ElevenLabs'
+            # WebSocket time to initialise — prevents silent-call issue
+            # when calls come in quick succession.
+            if "<Connect>" in twiml:
+                twiml = twiml.replace(
+                    "<Connect>",
+                    "<Pause length=\"1\"/><Connect>",
+                )
+
             return Response(content=twiml, media_type="text/xml")
             
     except Exception as e:
@@ -319,12 +329,17 @@ async def twilio_status_webhook(
     call_status = form_data.get("CallStatus")
     call_duration = form_data.get("CallDuration", 0)
     
+    logger.info(
+        f"Twilio status callback: call_sid={call_sid} "
+        f"status={call_status} duration={call_duration}s"
+    )
+    
     call_log = db.query(CallLog).filter(CallLog.twilio_call_sid == call_sid).first()
     
     if not call_log:
+        logger.warning(f"Status callback for unknown call_sid={call_sid} (status={call_status})")
         return {"status": "ok", "message": "Call not found"}
     
-    # Update call status
     status_mapping = {
         "completed": CallStatus.COMPLETED,
         "busy": CallStatus.MISSED,
@@ -338,11 +353,14 @@ async def twilio_status_webhook(
         call_log.ended_at = datetime.utcnow()
         call_log.duration_seconds = int(call_duration)
         
-        # Free up the AI worker
         if call_log.ai_worker_id:
             worker = db.query(AIWorker).filter(AIWorker.id == call_log.ai_worker_id).first()
             if worker:
                 worker.end_call()
+                logger.info(
+                    f"Worker {worker.name} freed after call {call_sid} "
+                    f"(status={call_status}, duration={call_duration}s)"
+                )
         
         db.commit()
     

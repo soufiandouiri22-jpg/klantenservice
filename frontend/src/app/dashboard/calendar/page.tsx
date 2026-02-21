@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import { Plus, Calendar, RefreshCw, Settings, Trash2, Check, ExternalLink, Star } from 'lucide-react'
@@ -44,7 +45,17 @@ const providers = [
 
 export default function CalendarPage() {
   const queryClient = useQueryClient()
+  const searchParams = useSearchParams()
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
+
+  useEffect(() => {
+    if (searchParams.get('connected') === 'true') {
+      toast.success('Google Calendar succesvol gekoppeld!')
+      queryClient.invalidateQueries({ queryKey: ['calendars'] })
+      queryClient.invalidateQueries({ queryKey: ['ai-workers'] })
+      window.history.replaceState({}, '', '/dashboard/calendar')
+    }
+  }, [searchParams, queryClient])
   const [selectedCalendar, setSelectedCalendar] = useState<any>(null)
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null)
 
@@ -119,13 +130,21 @@ export default function CalendarPage() {
   }
 
   const handleConnectOAuth = async (provider: string) => {
+    if (!selectedWorkerId) {
+      toast.error('Selecteer eerst een AI-medewerker')
+      return
+    }
     try {
-      const response = await calendarsApi.getOAuthUrl(provider)
-      // In production, redirect to OAuth URL
-      toast.success(`Koppeling voor ${provider} gestart`)
-      setIsAddModalOpen(false)
-    } catch (error) {
-      toast.error('Fout bij starten OAuth')
+      const providerInfo = providers.find((p) => p.id === provider)
+      const calendar = await calendarsApi.create({
+        name: providerInfo?.name || 'Google Calendar',
+        provider,
+        ai_worker_id: selectedWorkerId,
+      })
+      const response = await calendarsApi.getOAuthUrl(provider, calendar.id)
+      window.location.href = response.auth_url
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Fout bij starten OAuth')
     }
   }
 
@@ -249,11 +268,13 @@ export default function CalendarPage() {
                         <div className="flex items-center gap-3">
                           {calendar.sync_error ? (
                             <Badge variant="danger">Sync fout</Badge>
-                          ) : (
+                          ) : calendar.last_sync_at ? (
                             <Badge variant="success">
                               <Check className="h-3 w-3 mr-1" />
                               Gekoppeld
                             </Badge>
+                          ) : (
+                            <Badge variant="warning">Niet verbonden</Badge>
                           )}
                         </div>
                       </div>
@@ -286,30 +307,49 @@ export default function CalendarPage() {
                       </div>
 
                       <div className="mt-4 flex flex-wrap items-center gap-3 pt-4 border-t border-gray-100">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          leftIcon={<RefreshCw className="h-4 w-4" />}
-                          onClick={() => syncMutation.mutate(calendar.id)}
-                        >
-                          Synchroniseren
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          leftIcon={<Settings className="h-4 w-4" />}
-                          onClick={() => setSelectedCalendar(calendar)}
-                        >
-                          Instellingen
-                        </Button>
-                        {!calendar.is_primary && (
+                        {!calendar.last_sync_at && calendar.provider !== 'caldav' ? (
                           <Button
-                            variant="ghost"
                             size="sm"
-                            onClick={() => updateMutation.mutate({ id: calendar.id, data: { is_primary: true } })}
+                            leftIcon={<ExternalLink className="h-4 w-4" />}
+                            onClick={async () => {
+                              try {
+                                const res = await calendarsApi.getOAuthUrl(calendar.provider, calendar.id)
+                                window.location.href = res.auth_url
+                              } catch {
+                                toast.error('Fout bij starten OAuth')
+                              }
+                            }}
                           >
-                            Als primair instellen
+                            Verbind met Google
                           </Button>
+                        ) : (
+                          <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              leftIcon={<RefreshCw className="h-4 w-4" />}
+                              onClick={() => syncMutation.mutate(calendar.id)}
+                            >
+                              Synchroniseren
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              leftIcon={<Settings className="h-4 w-4" />}
+                              onClick={() => setSelectedCalendar(calendar)}
+                            >
+                              Instellingen
+                            </Button>
+                            {!calendar.is_primary && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => updateMutation.mutate({ id: calendar.id, data: { is_primary: true } })}
+                              >
+                                Als primair instellen
+                              </Button>
+                            )}
+                          </>
                         )}
                         <div className="flex-1" />
                         <Button
