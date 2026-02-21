@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
@@ -44,6 +44,14 @@ const providers = [
 ]
 
 export default function CalendarPage() {
+  return (
+    <Suspense>
+      <CalendarPageInner />
+    </Suspense>
+  )
+}
+
+function CalendarPageInner() {
   const queryClient = useQueryClient()
   const searchParams = useSearchParams()
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
