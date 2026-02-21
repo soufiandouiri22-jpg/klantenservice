@@ -242,7 +242,7 @@ function VideoSection() {
   const opacity = useTransform(scrollYProgress, [0, 0.5], [0.4, 1])
 
   return (
-    <section ref={sectionRef} className="py-20 md:py-32 px-4 sm:px-6 bg-gray-50 relative z-10">
+    <section ref={sectionRef} className="py-20 md:py-32 px-4 sm:px-6 bg-white relative z-10">
       <div className="max-w-5xl mx-auto w-full">
         <div className="text-center mb-12">
           <span className="inline-flex items-center gap-2 bg-primary-100 text-primary-700 px-4 py-2 rounded-full text-sm font-medium mb-4">
