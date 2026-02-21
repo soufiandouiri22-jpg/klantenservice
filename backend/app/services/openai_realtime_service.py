@@ -245,8 +245,9 @@ def build_system_instructions(
         "## end_call\n"
         "Gebruik om het gesprek netjes te beëindigen.\n\n"
         "**Wanneer gebruiken:**\n"
-        "- Na je afscheid (\"Fijne dag!\") en de klant heeft teruggegroet of 3 seconden stilte\n"
-        "- Zeg NIETS meer na je afscheid. Gebruik direct end_call."
+        "- ALLEEN nadat de klant heeft teruggegroet na jouw afscheid (bijv. klant zegt \"Dag!\", \"Doei\", \"Bedankt\", \"Goedenavond\")\n"
+        "- NOOIT direct na jouw eigen afscheid — altijd wachten op de klant\n"
+        "- Bij 5+ seconden stilte na je afscheid mag je end_call gebruiken"
     )
 
     sections.append("# Tools\n\n" + "\n\n".join(tool_lines))
