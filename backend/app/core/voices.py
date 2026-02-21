@@ -22,8 +22,8 @@ TTS_SUPPORTED_VOICES = {v["id"] for v in ELEVENLABS_VOICES}
 # Customer-visible voices (all of them — all support TTS previews)
 CUSTOMER_VOICES = ELEVENLABS_VOICES
 
-# Default voice ID (Emma)
-DEFAULT_VOICE_ID = "OlBRrVAItyi00MuGMbna"
+# Default voice ID (Eric)
+DEFAULT_VOICE_ID = "AVIlLDn2TVmdaDycgbo3"
 
 # Sample text for voice previews
 VOICE_SAMPLE_TEXT = (
