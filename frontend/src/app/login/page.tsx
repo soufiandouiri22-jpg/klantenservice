@@ -50,6 +50,7 @@ function LoginContent() {
   const { setAuth } = useAuthStore()
   const [isLoading, setIsLoading] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
+  const [rememberMe, setRememberMe] = useState(false)
   
   // Get redirect URL from query params (used for checkout flow)
   const redirectUrl = searchParams.get('redirect') || '/dashboard'
@@ -65,7 +66,7 @@ function LoginContent() {
   const onSubmit = async (data: LoginForm) => {
     setIsLoading(true)
     try {
-      const response = await authApi.login(data.email, data.password)
+      const response = await authApi.login(data.email, data.password, rememberMe)
       
       // Store tokens
       localStorage.setItem('access_token', response.access_token)
@@ -153,9 +154,11 @@ function LoginContent() {
               />
 
               <div className="flex items-center justify-between">
-                <label className="flex items-center gap-2">
+                <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
                     className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                   />
                   <span className="text-sm text-gray-600">Onthoud mij</span>

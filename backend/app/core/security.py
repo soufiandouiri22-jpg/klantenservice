@@ -52,9 +52,10 @@ def create_access_token(
     return encoded_jwt
 
 
-def create_refresh_token(subject: str, company_id: str) -> str:
+def create_refresh_token(subject: str, company_id: str, remember_me: bool = False) -> str:
     """Create a JWT refresh token."""
-    expire = datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    days = 90 if remember_me else settings.REFRESH_TOKEN_EXPIRE_DAYS
+    expire = datetime.utcnow() + timedelta(days=days)
     
     to_encode = {
         "sub": subject,

@@ -369,6 +369,7 @@ async def login(
     refresh_token = create_refresh_token(
         subject=str(user.id),
         company_id=str(user.company_id),
+        remember_me=credentials.remember_me,
     )
     
     return Token(
