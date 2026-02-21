@@ -329,13 +329,13 @@ function VideoSection() {
         <div className="text-center mb-12">
           <span className="inline-flex items-center gap-2 bg-primary-100 text-primary-700 px-4 py-2 rounded-full text-sm font-medium mb-4">
             <Play className="h-4 w-4" />
-            Bekijk de demo
+            Tutorial
           </span>
           <h2 className="text-3xl md:text-4xl lg:text-5xl font-display font-bold text-gray-900">
-            Zie het in actie
+            Zo werkt het platform
           </h2>
           <p className="mt-4 text-lg text-gray-600 max-w-2xl mx-auto">
-            Bekijk hoe onze AI-telefonist uw klanten te woord staat en afspraken inplant.
+            In minder dan een minuut ziet u hoe u uw AI-telefonist configureert en live zet.
           </p>
         </div>
 
