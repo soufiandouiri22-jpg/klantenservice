@@ -231,6 +231,88 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
   )
 }
 
+// Demo section with scroll-based scale animation
+function DemoSection() {
+  const sectionRef = useRef<HTMLDivElement>(null)
+  const { scrollYProgress } = useScroll({
+    target: sectionRef,
+    offset: ['start end', 'center center'],
+  })
+  const scale = useTransform(scrollYProgress, [0, 1], [0.85, 1])
+  const opacity = useTransform(scrollYProgress, [0, 0.5], [0.4, 1])
+
+  return (
+    <section ref={sectionRef} className="py-20 md:py-32 px-4 sm:px-6 relative bg-white z-10">
+      <div className="max-w-5xl mx-auto w-full">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl md:text-4xl lg:text-5xl font-display font-bold text-gray-900">
+            Zie het in actie
+          </h2>
+          <p className="mt-4 text-lg text-gray-600 max-w-2xl mx-auto">
+            Bekijk hoe onze AI-telefonist uw klanten te woord staat en afspraken inplant.
+          </p>
+        </div>
+
+        <motion.div
+          style={{ scale, opacity }}
+          className="relative mx-auto max-w-4xl"
+        >
+          <div className="rounded-2xl overflow-hidden shadow-2xl shadow-primary-600/20 border border-gray-200">
+            <div className="bg-gray-100 px-4 py-3 flex items-center gap-2 border-b border-gray-200">
+              <div className="flex gap-2">
+                <div className="w-3 h-3 rounded-full bg-red-400" />
+                <div className="w-3 h-3 rounded-full bg-amber-400" />
+                <div className="w-3 h-3 rounded-full bg-green-400" />
+              </div>
+              <div className="flex-1 mx-4">
+                <div className="bg-white rounded-lg px-4 py-1.5 text-sm text-gray-500 max-w-md mx-auto text-center">
+                  klantenservice.ai/demo
+                </div>
+              </div>
+            </div>
+
+            <div className="relative bg-gradient-to-br from-gray-900 to-gray-800 aspect-video flex items-center justify-center">
+              <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:2rem_2rem]" />
+              <button className="relative z-10 flex items-center justify-center w-20 h-20 bg-primary-600 rounded-full shadow-lg shadow-primary-600/50 hover:bg-primary-500 hover:scale-105 transition-all group">
+                <Play className="h-8 w-8 text-white ml-1" fill="currentColor" />
+              </button>
+              <div className="absolute w-20 h-20 rounded-full border-2 border-primary-400 animate-ping opacity-20" />
+              <div className="absolute bottom-4 right-4 flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-lg px-3 py-2">
+                <Headphones className="h-4 w-4 text-primary-400" />
+                <span className="text-sm text-white/80">Demo gesprek</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="absolute -left-4 top-1/2 -translate-y-1/2 bg-white rounded-xl shadow-lg p-4 hidden lg:block">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center">
+                <Phone className="h-5 w-5 text-primary-600" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-900">Inkomend gesprek</p>
+                <p className="text-xs text-gray-500">+31 20 123 4567</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="absolute -right-4 bottom-1/4 bg-white rounded-xl shadow-lg p-4 hidden lg:block">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                <Calendar className="h-5 w-5 text-green-600" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-900">Afspraak ingepland</p>
+                <p className="text-xs text-gray-500">Morgen om 14:00</p>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    </section>
+  )
+}
+
 // Video section with scroll-based scale animation
 function VideoSection() {
   const sectionRef = useRef<HTMLDivElement>(null)
@@ -458,83 +540,7 @@ export default function HomePage() {
       </section>
 
       {/* Demo Video Section */}
-      <section className="py-20 md:py-32 px-4 sm:px-6 relative bg-white z-10">
-        <div className="max-w-5xl mx-auto w-full">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl lg:text-5xl font-display font-bold text-gray-900">
-              Zie het in actie
-            </h2>
-            <p className="mt-4 text-lg text-gray-600 max-w-2xl mx-auto">
-              Bekijk hoe onze AI-telefonist uw klanten te woord staat en afspraken inplant.
-            </p>
-          </div>
-
-          {/* Video Frame with Browser Mockup */}
-          <div className="relative mx-auto max-w-4xl">
-            {/* Browser window frame */}
-            <div className="rounded-2xl overflow-hidden shadow-2xl shadow-primary-600/20 border border-gray-200">
-              {/* Browser header */}
-              <div className="bg-gray-100 px-4 py-3 flex items-center gap-2 border-b border-gray-200">
-                <div className="flex gap-2">
-                  <div className="w-3 h-3 rounded-full bg-red-400"></div>
-                  <div className="w-3 h-3 rounded-full bg-amber-400"></div>
-                  <div className="w-3 h-3 rounded-full bg-green-400"></div>
-                </div>
-                <div className="flex-1 mx-4">
-                  <div className="bg-white rounded-lg px-4 py-1.5 text-sm text-gray-500 max-w-md mx-auto text-center">
-                    klantenservice.ai/demo
-                  </div>
-                </div>
-              </div>
-              
-              {/* Video placeholder */}
-              <div className="relative bg-gradient-to-br from-gray-900 to-gray-800 aspect-video flex items-center justify-center">
-                {/* Decorative elements */}
-                <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:2rem_2rem]" />
-                
-                {/* Play button */}
-                <button className="relative z-10 flex items-center justify-center w-20 h-20 bg-primary-600 rounded-full shadow-lg shadow-primary-600/50 hover:bg-primary-500 hover:scale-105 transition-all group">
-                  <Play className="h-8 w-8 text-white ml-1" fill="currentColor" />
-                </button>
-                
-                {/* Decorative ring animation */}
-                <div className="absolute w-20 h-20 rounded-full border-2 border-primary-400 animate-ping opacity-20" />
-                
-                {/* Corner accent */}
-                <div className="absolute bottom-4 right-4 flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-lg px-3 py-2">
-                  <Headphones className="h-4 w-4 text-primary-400" />
-                  <span className="text-sm text-white/80">Demo gesprek</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Floating indicators */}
-            <div className="absolute -left-4 top-1/2 -translate-y-1/2 bg-white rounded-xl shadow-lg p-4 hidden lg:block">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center">
-                  <Phone className="h-5 w-5 text-primary-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-900">Inkomend gesprek</p>
-                  <p className="text-xs text-gray-500">+31 20 123 4567</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="absolute -right-4 bottom-1/4 bg-white rounded-xl shadow-lg p-4 hidden lg:block">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
-                  <Calendar className="h-5 w-5 text-green-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-900">Afspraak ingepland</p>
-                  <p className="text-xs text-gray-500">Morgen om 14:00</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+      <DemoSection />
 
       {/* How It Works */}
       <section className="py-20 md:py-32 bg-white relative z-10">
