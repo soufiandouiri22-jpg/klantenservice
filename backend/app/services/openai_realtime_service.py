@@ -126,7 +126,7 @@ def build_system_instructions(
     else:
         greeting = (
             f'Begin ALTIJD met: "{time_greeting}! U spreekt met {worker.name} van '
-            f'{company_name}, wat leuk dat u belt! Waarmee kan ik u helpen?"'
+            f'{company_name}, waarmee kan ik u helpen?"'
         )
 
     # ── Tone extra ────────────────────────────────────────────
