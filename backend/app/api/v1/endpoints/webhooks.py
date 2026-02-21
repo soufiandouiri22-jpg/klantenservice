@@ -70,11 +70,18 @@ async def twilio_voice_webhook(
     This is called when a call comes in or status changes.
     """
     form_data = await request.form()
+    form_dict = dict(form_data)
     
-    call_sid = form_data.get("CallSid")
-    call_status = form_data.get("CallStatus")
-    from_number = form_data.get("From")
-    to_number = form_data.get("To")
+    call_sid = form_dict.get("CallSid")
+    call_status = form_dict.get("CallStatus")
+    from_number = form_dict.get("From")
+    to_number = form_dict.get("To")
+    
+    logger.info(
+        f"[VOICE WEBHOOK] call_sid={call_sid} call_status={call_status} "
+        f"from={from_number} to={to_number} "
+        f"all_params={list(form_dict.keys())}"
+    )
     
     if not all([call_sid, from_number, to_number]):
         raise HTTPException(
@@ -131,6 +138,14 @@ async def twilio_voice_webhook(
         ).first()
         if linked_worker:
             available_worker = linked_worker
+        else:
+            busy_check = db.query(AIWorker).filter(AIWorker.id == phone.ai_worker_id).first()
+            if busy_check:
+                logger.info(
+                    f"[VOICE WEBHOOK] Linked worker {busy_check.name} not available: "
+                    f"status={busy_check.status.value}, active={busy_check.is_active}, "
+                    f"current_call_id={busy_check.current_call_id}"
+                )
     
     # Fallback: find any available AI worker for the company
     if not available_worker:
@@ -284,24 +299,17 @@ async def twilio_voice_webhook(
             
             twiml = resp.text
             logger.info(
-                f"ElevenLabs register_call success for {call_sid} "
-                f"(worker={available_worker.name}, voice={voice_id})"
+                f"[VOICE WEBHOOK] ElevenLabs register_call OK for {call_sid} "
+                f"worker={available_worker.name} voice={voice_id} "
+                f"status_code={resp.status_code} "
+                f"response_headers={dict(resp.headers)} "
+                f"twiml={twiml}"
             )
-            logger.info(f"ElevenLabs TwiML for {call_sid}: {twiml[:500]}")
-
-            # Inject a brief pause before <Connect> to give ElevenLabs'
-            # WebSocket time to initialise — prevents silent-call issue
-            # when calls come in quick succession.
-            if "<Connect>" in twiml:
-                twiml = twiml.replace(
-                    "<Connect>",
-                    "<Pause length=\"1\"/><Connect>",
-                )
 
             return Response(content=twiml, media_type="text/xml")
             
     except Exception as e:
-        logger.error(f"ElevenLabs register_call failed for {call_sid}: {e}", exc_info=True)
+        logger.error(f"[VOICE WEBHOOK] ElevenLabs register_call FAILED for {call_sid}: {e}", exc_info=True)
         # Fallback: play a professional TTS message instead of crashing
         twiml = _tts_twiml(
             "Er is een technisch probleem opgetreden. Probeert u het later nog eens.",
@@ -324,20 +332,21 @@ async def twilio_status_webhook(
     Handle Twilio call status updates.
     """
     form_data = await request.form()
+    form_dict = dict(form_data)
     
-    call_sid = form_data.get("CallSid")
-    call_status = form_data.get("CallStatus")
-    call_duration = form_data.get("CallDuration", 0)
+    call_sid = form_dict.get("CallSid")
+    call_status = form_dict.get("CallStatus")
+    call_duration = form_dict.get("CallDuration", 0)
     
     logger.info(
-        f"Twilio status callback: call_sid={call_sid} "
-        f"status={call_status} duration={call_duration}s"
+        f"[STATUS CALLBACK] call_sid={call_sid} status={call_status} "
+        f"duration={call_duration}s all_params={form_dict}"
     )
     
     call_log = db.query(CallLog).filter(CallLog.twilio_call_sid == call_sid).first()
     
     if not call_log:
-        logger.warning(f"Status callback for unknown call_sid={call_sid} (status={call_status})")
+        logger.warning(f"[STATUS CALLBACK] Unknown call_sid={call_sid} (status={call_status})")
         return {"status": "ok", "message": "Call not found"}
     
     status_mapping = {
@@ -358,11 +367,13 @@ async def twilio_status_webhook(
             if worker:
                 worker.end_call()
                 logger.info(
-                    f"Worker {worker.name} freed after call {call_sid} "
-                    f"(status={call_status}, duration={call_duration}s)"
+                    f"[STATUS CALLBACK] Worker {worker.name} freed: "
+                    f"call_sid={call_sid} status={call_status} duration={call_duration}s"
                 )
         
         db.commit()
+    else:
+        logger.info(f"[STATUS CALLBACK] Ignoring status={call_status} for call_sid={call_sid}")
     
     return {"status": "ok"}
 
