@@ -316,12 +316,18 @@ function DemoSection() {
 // Video section with scroll-based scale animation
 function VideoSection() {
   const sectionRef = useRef<HTMLDivElement>(null)
+  const [videoReady, setVideoReady] = useState(false)
   const { scrollYProgress } = useScroll({
     target: sectionRef,
     offset: ['start end', 'center center'],
   })
   const scale = useTransform(scrollYProgress, [0, 1], [0.85, 1])
   const opacity = useTransform(scrollYProgress, [0, 0.5], [0.4, 1])
+
+  useEffect(() => {
+    const timer = setTimeout(() => setVideoReady(true), 3000)
+    return () => clearTimeout(timer)
+  }, [])
 
   return (
     <section ref={sectionRef} className="py-20 md:py-32 px-4 sm:px-6 bg-white relative z-10">
@@ -357,13 +363,13 @@ function VideoSection() {
               </div>
             </div>
 
-            <div className="relative aspect-video">
+            <div className="relative aspect-video bg-gray-900">
               <iframe
                 src="https://www.youtube-nocookie.com/embed/x0K4LZKzW1g?autoplay=1&mute=1&loop=1&playlist=x0K4LZKzW1g&rel=0&modestbranding=1&showinfo=0&controls=0&iv_load_policy=3&disablekb=1"
                 title="Klantenservice.ai - Bekijk hoe het werkt"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
-                className="absolute inset-0 w-full h-full pointer-events-none"
+                className={`absolute inset-0 w-full h-full pointer-events-none transition-opacity duration-1000 ${videoReady ? 'opacity-100' : 'opacity-0'}`}
               />
               <div className="absolute inset-0 z-10" />
             </div>
