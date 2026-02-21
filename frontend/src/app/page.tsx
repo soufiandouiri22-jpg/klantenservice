@@ -261,8 +261,8 @@ function VideoSection() {
           style={{ scale, opacity }}
           className="relative mx-auto max-w-4xl"
         >
-          <div className="rounded-2xl overflow-hidden shadow-2xl shadow-primary-600/20 border border-gray-200">
-            <div className="bg-gray-100 px-4 py-3 flex items-center gap-2 border-b border-gray-200">
+          <div className="rounded-2xl overflow-hidden shadow-2xl shadow-primary-600/20">
+            <div className="bg-gray-100 px-4 py-3 flex items-center gap-2">
               <div className="flex gap-2">
                 <div className="w-3 h-3 rounded-full bg-red-400" />
                 <div className="w-3 h-3 rounded-full bg-amber-400" />
@@ -277,7 +277,7 @@ function VideoSection() {
 
             <div className="relative aspect-video">
               <iframe
-                src="https://www.youtube.com/embed/x0K4LZKzW1g?rel=0&modestbranding=1"
+                src="https://www.youtube-nocookie.com/embed/x0K4LZKzW1g?autoplay=1&mute=1&rel=0&modestbranding=1&showinfo=0&controls=1&iv_load_policy=3"
                 title="Klantenservice.ai - Bekijk hoe het werkt"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
