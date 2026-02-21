@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { motion, useScroll, useTransform } from 'framer-motion'
 import Link from 'next/link'
 import { ArrowRight, Check, Headphones, Calendar, Globe, MessageSquare, Shield, Zap, Plus, Minus, Phone, Mail, Play, UserPlus, Settings, PhoneCall, Link2 } from 'lucide-react'
 import Image from 'next/image'
@@ -227,6 +228,66 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
         </div>
       )}
     </div>
+  )
+}
+
+// Video section with scroll-based scale animation
+function VideoSection() {
+  const sectionRef = useRef<HTMLDivElement>(null)
+  const { scrollYProgress } = useScroll({
+    target: sectionRef,
+    offset: ['start end', 'center center'],
+  })
+  const scale = useTransform(scrollYProgress, [0, 1], [0.85, 1])
+  const opacity = useTransform(scrollYProgress, [0, 0.5], [0.4, 1])
+
+  return (
+    <section ref={sectionRef} className="py-20 md:py-32 px-4 sm:px-6 bg-gray-50 relative z-10">
+      <div className="max-w-5xl mx-auto w-full">
+        <div className="text-center mb-12">
+          <span className="inline-flex items-center gap-2 bg-primary-100 text-primary-700 px-4 py-2 rounded-full text-sm font-medium mb-4">
+            <Play className="h-4 w-4" />
+            Bekijk de demo
+          </span>
+          <h2 className="text-3xl md:text-4xl lg:text-5xl font-display font-bold text-gray-900">
+            Zie het in actie
+          </h2>
+          <p className="mt-4 text-lg text-gray-600 max-w-2xl mx-auto">
+            Bekijk hoe onze AI-telefonist uw klanten te woord staat en afspraken inplant.
+          </p>
+        </div>
+
+        <motion.div
+          style={{ scale, opacity }}
+          className="relative mx-auto max-w-4xl"
+        >
+          <div className="rounded-2xl overflow-hidden shadow-2xl shadow-primary-600/20 border border-gray-200">
+            <div className="bg-gray-100 px-4 py-3 flex items-center gap-2 border-b border-gray-200">
+              <div className="flex gap-2">
+                <div className="w-3 h-3 rounded-full bg-red-400" />
+                <div className="w-3 h-3 rounded-full bg-amber-400" />
+                <div className="w-3 h-3 rounded-full bg-green-400" />
+              </div>
+              <div className="flex-1 mx-4">
+                <div className="bg-white rounded-lg px-4 py-1.5 text-sm text-gray-500 max-w-md mx-auto text-center">
+                  klantenservice.ai
+                </div>
+              </div>
+            </div>
+
+            <div className="relative aspect-video">
+              <iframe
+                src="https://www.youtube.com/embed/x0K4LZKzW1g?rel=0&modestbranding=1"
+                title="Klantenservice.ai - Bekijk hoe het werkt"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                className="absolute inset-0 w-full h-full"
+              />
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    </section>
   )
 }
 
@@ -537,6 +598,9 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* Tutorial Video Section */}
+      <VideoSection />
 
       {/* Testimonials / Case Studies - Full Width Scrolling */}
       <section className="py-20 md:py-32 bg-white overflow-hidden relative z-10">
