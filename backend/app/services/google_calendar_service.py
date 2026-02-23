@@ -337,22 +337,34 @@ async def book_appointment(
 ) -> dict:
     """Book an appointment by creating a Google Calendar event, optionally with a meeting link."""
     from app.services import zoom_meeting_service as zoom_svc
+    from app.services import teams_meeting_service as teams_svc
 
     provider = getattr(calendar, "meeting_link_provider", "none")
     add_meet = provider == "google_meet"
 
-    zoom_link = None
+    external_link = None
+
     if provider == "zoom" and calendar.zoom_access_token_encrypted:
         duration = int((end - start).total_seconds() / 60)
-        zoom_link = await zoom_svc.create_meeting_for_calendar(
+        external_link = await zoom_svc.create_meeting_for_calendar(
             calendar=calendar,
             db=db,
             topic=summary,
             start_time=start,
             duration_minutes=duration,
         )
-        if zoom_link:
-            description = f"{description}\n\nZoom: {zoom_link}".strip()
+    elif provider == "teams" and calendar.teams_access_token_encrypted:
+        external_link = await teams_svc.create_meeting_for_calendar(
+            calendar=calendar,
+            db=db,
+            subject=summary,
+            start_time=start,
+            end_time=end,
+        )
+
+    if external_link:
+        label = "Zoom" if provider == "zoom" else "Microsoft Teams"
+        description = f"{description}\n\n{label}: {external_link}".strip()
 
     access_token = await get_valid_access_token(calendar, db)
     cal_id = calendar.external_calendar_id or "primary"
@@ -367,9 +379,9 @@ async def book_appointment(
         add_google_meet=add_meet,
     )
 
-    meeting_link = event.get("hangoutLink", "") or zoom_link or ""
+    meeting_link = event.get("hangoutLink", "") or external_link or ""
     logger.info(f"Booked appointment: {event.get('id')} on calendar {calendar.id} meeting={meeting_link or 'none'}")
 
-    if zoom_link:
-        event["zoom_link"] = zoom_link
+    if external_link:
+        event["meeting_link"] = external_link
     return event

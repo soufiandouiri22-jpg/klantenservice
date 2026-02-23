@@ -68,11 +68,16 @@ function SettingsForm({
   const advanceRef = useRef<HTMLInputElement>(null)
   const meetRef = useRef<HTMLSelectElement>(null)
   const [connectingZoom, setConnectingZoom] = useState(false)
+  const [connectingTeams, setConnectingTeams] = useState(false)
 
   const handleSave = () => {
     const selectedProvider = meetRef.current?.value || 'none'
     if (selectedProvider === 'zoom' && !calendar.zoom_connected) {
       toast.error('Koppel eerst uw Zoom-account voordat u Zoom selecteert')
+      return
+    }
+    if (selectedProvider === 'teams' && !calendar.teams_connected) {
+      toast.error('Koppel eerst uw Microsoft Teams-account voordat u Teams selecteert')
       return
     }
     onSave({
@@ -106,6 +111,28 @@ function SettingsForm({
       onCancel()
     } catch {
       toast.error('Fout bij ontkoppelen Zoom')
+    }
+  }
+
+  const handleConnectTeams = async () => {
+    setConnectingTeams(true)
+    try {
+      const res = await calendarsApi.getTeamsOAuthUrl(calendar.id)
+      window.location.href = res.auth_url
+    } catch {
+      toast.error('Fout bij starten Microsoft Teams OAuth')
+      setConnectingTeams(false)
+    }
+  }
+
+  const handleDisconnectTeams = async () => {
+    if (!confirm('Weet u zeker dat u Microsoft Teams wilt ontkoppelen?')) return
+    try {
+      await calendarsApi.disconnectTeams(calendar.id)
+      toast.success('Microsoft Teams ontkoppeld')
+      onCancel()
+    } catch {
+      toast.error('Fout bij ontkoppelen Microsoft Teams')
     }
   }
 
@@ -147,47 +174,85 @@ function SettingsForm({
           <option value="none">Geen</option>
           <option value="google_meet">Google Meet</option>
           <option value="zoom">Zoom</option>
-          <option value="teams" disabled>Microsoft Teams (binnenkort)</option>
+          <option value="teams">Microsoft Teams</option>
         </Select>
         <p className="mt-1 text-xs text-gray-400">
           Voegt automatisch een vergaderlink toe aan nieuwe afspraken.
         </p>
       </div>
 
-      {/* Zoom connection status */}
-      <div className="rounded-lg border border-gray-200 p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-100">
-              <Video className="h-4 w-4 text-blue-600" />
+      {/* Meeting provider connections */}
+      <div className="space-y-3">
+        <p className="text-sm font-medium text-gray-700">Vergaderproviders</p>
+        <div className="rounded-lg border border-gray-200 p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-100">
+                <Video className="h-4 w-4 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-900">Zoom</p>
+                <p className="text-xs text-gray-500">
+                  {calendar.zoom_connected ? 'Account gekoppeld' : 'Niet gekoppeld'}
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-medium text-gray-900">Zoom</p>
-              <p className="text-xs text-gray-500">
-                {calendar.zoom_connected ? 'Account gekoppeld' : 'Niet gekoppeld'}
-              </p>
-            </div>
+            {calendar.zoom_connected ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleDisconnectZoom}
+              >
+                <Unlink className="h-4 w-4 text-red-500 mr-1" />
+                Ontkoppelen
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleConnectZoom}
+                isLoading={connectingZoom}
+              >
+                <Video className="h-4 w-4 mr-1" />
+                Koppel Zoom
+              </Button>
+            )}
           </div>
-          {calendar.zoom_connected ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleDisconnectZoom}
-            >
-              <Unlink className="h-4 w-4 text-red-500 mr-1" />
-              Ontkoppelen
-            </Button>
-          ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleConnectZoom}
-              isLoading={connectingZoom}
-            >
-              <Video className="h-4 w-4 mr-1" />
-              Koppel Zoom
-            </Button>
-          )}
+        </div>
+        <div className="rounded-lg border border-gray-200 p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-purple-100">
+                <Video className="h-4 w-4 text-purple-600" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-900">Microsoft Teams</p>
+                <p className="text-xs text-gray-500">
+                  {calendar.teams_connected ? 'Account gekoppeld' : 'Niet gekoppeld'}
+                </p>
+              </div>
+            </div>
+            {calendar.teams_connected ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleDisconnectTeams}
+              >
+                <Unlink className="h-4 w-4 text-red-500 mr-1" />
+                Ontkoppelen
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleConnectTeams}
+                isLoading={connectingTeams}
+              >
+                <Video className="h-4 w-4 mr-1" />
+                Koppel Teams
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -217,6 +282,11 @@ function CalendarPageInner() {
     }
     if (searchParams.get('zoom_connected') === 'true') {
       toast.success('Zoom succesvol gekoppeld!')
+      queryClient.invalidateQueries({ queryKey: ['calendars'] })
+      window.history.replaceState({}, '', '/dashboard/calendar')
+    }
+    if (searchParams.get('teams_connected') === 'true') {
+      toast.success('Microsoft Teams succesvol gekoppeld!')
       queryClient.invalidateQueries({ queryKey: ['calendars'] })
       window.history.replaceState({}, '', '/dashboard/calendar')
     }

@@ -275,6 +275,18 @@ export const calendarsApi = {
     const response = await api.delete(`/calendars/${id}/zoom`)
     return response.data
   },
+
+  getTeamsOAuthUrl: async (calendarId: string) => {
+    const response = await api.get('/calendars/oauth/teams/url', {
+      params: { calendar_id: calendarId },
+    })
+    return response.data
+  },
+
+  disconnectTeams: async (id: string) => {
+    const response = await api.delete(`/calendars/${id}/teams`)
+    return response.data
+  },
 }
 
 // CRM Integrations API

@@ -79,6 +79,11 @@ class CalendarIntegration(Base):
     zoom_access_token_encrypted = Column(Text, nullable=True)
     zoom_refresh_token_encrypted = Column(Text, nullable=True)
     zoom_token_expires_at = Column(DateTime, nullable=True)
+    
+    # Microsoft Teams OAuth tokens (for OnlineMeetings API)
+    teams_access_token_encrypted = Column(Text, nullable=True)
+    teams_refresh_token_encrypted = Column(Text, nullable=True)
+    teams_token_expires_at = Column(DateTime, nullable=True)
 
     # Sync status
     last_sync_at = Column(DateTime, nullable=True)
@@ -110,3 +115,7 @@ class CalendarIntegration(Base):
     @property
     def zoom_connected(self) -> bool:
         return self.zoom_access_token_encrypted is not None
+
+    @property
+    def teams_connected(self) -> bool:
+        return self.teams_access_token_encrypted is not None
