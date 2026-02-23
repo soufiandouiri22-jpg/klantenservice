@@ -30,14 +30,14 @@ const features = [
     description: 'Belangrijke berichten en terugbelverzoeken worden netjes genoteerd.',
   },
   {
-    icon: Shield,
-    title: 'AVG Compliant',
-    description: 'Volledig GDPR-compliant met EU hosting en configureerbare dataretentie.',
-  },
-  {
     icon: Plug,
     title: 'CRM Integratie',
     description: 'Synchroniseer bellers, contacten en gespreksnotities automatisch met uw CRM.',
+  },
+  {
+    icon: Shield,
+    title: 'AVG Compliant',
+    description: 'Volledig GDPR-compliant met EU hosting en configureerbare dataretentie.',
   },
 ]
 
