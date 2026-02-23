@@ -184,6 +184,31 @@ function SettingsForm({
       {/* Meeting provider connections */}
       <div className="space-y-3">
         <p className="text-sm font-medium text-gray-700">Vergaderproviders</p>
+
+        {/* Google Meet — uses existing Google Calendar OAuth */}
+        <div className="rounded-lg border border-gray-200 p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-green-100">
+                <Video className="h-4 w-4 text-green-600" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-900">Google Meet</p>
+                <p className="text-xs text-gray-500">
+                  {calendar.last_sync_at ? 'Gekoppeld via Google Calendar' : 'Koppel eerst Google Calendar'}
+                </p>
+              </div>
+            </div>
+            {calendar.last_sync_at && (
+              <Badge variant="success">
+                <Check className="h-3 w-3 mr-1" />
+                Gereed
+              </Badge>
+            )}
+          </div>
+        </div>
+
+        {/* Zoom */}
         <div className="rounded-lg border border-gray-200 p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -219,6 +244,8 @@ function SettingsForm({
             )}
           </div>
         </div>
+
+        {/* Microsoft Teams */}
         <div className="rounded-lg border border-gray-200 p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
