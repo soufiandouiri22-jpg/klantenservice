@@ -526,6 +526,21 @@ function CalendarPageInner() {
               />
             </div>
 
+            <div>
+              <Select
+                label="Vergaderlink toevoegen aan afspraken"
+                defaultValue={selectedCalendar.meeting_link_provider || 'none'}
+              >
+                <option value="none">Geen</option>
+                <option value="google_meet">Google Meet</option>
+                <option value="zoom" disabled>Zoom (binnenkort)</option>
+                <option value="teams" disabled>Microsoft Teams (binnenkort)</option>
+              </Select>
+              <p className="mt-1 text-xs text-gray-400">
+                Voegt automatisch een vergaderlink toe aan nieuwe afspraken.
+              </p>
+            </div>
+
             <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
               <Button variant="outline" onClick={() => setSelectedCalendar(null)}>
                 Annuleren
