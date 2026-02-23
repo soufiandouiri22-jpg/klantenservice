@@ -37,7 +37,7 @@ const features = [
   {
     icon: Plug,
     title: 'CRM Integratie',
-    description: 'Herkent bellers automatisch, maakt nieuwe contacten aan en schrijft gespreksnotities terug naar uw CRM.',
+    description: 'Synchroniseer bellers, contacten en gespreksnotities automatisch met uw CRM.',
   },
 ]
 
