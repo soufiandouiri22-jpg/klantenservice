@@ -335,10 +335,27 @@ async def book_appointment(
     description: str = "",
     attendee_email: str = "",
 ) -> dict:
-    """Book an appointment by creating a Google Calendar event."""
+    """Book an appointment by creating a Google Calendar event, optionally with a meeting link."""
+    from app.services import zoom_meeting_service as zoom_svc
+
+    provider = getattr(calendar, "meeting_link_provider", "none")
+    add_meet = provider == "google_meet"
+
+    zoom_link = None
+    if provider == "zoom" and calendar.zoom_access_token_encrypted:
+        duration = int((end - start).total_seconds() / 60)
+        zoom_link = await zoom_svc.create_meeting_for_calendar(
+            calendar=calendar,
+            db=db,
+            topic=summary,
+            start_time=start,
+            duration_minutes=duration,
+        )
+        if zoom_link:
+            description = f"{description}\n\nZoom: {zoom_link}".strip()
+
     access_token = await get_valid_access_token(calendar, db)
     cal_id = calendar.external_calendar_id or "primary"
-    add_meet = getattr(calendar, "meeting_link_provider", "none") == "google_meet"
     event = await create_event(
         access_token=access_token,
         calendar_id=cal_id,
@@ -349,6 +366,10 @@ async def book_appointment(
         attendee_email=attendee_email,
         add_google_meet=add_meet,
     )
-    meet_link = event.get("hangoutLink", "")
-    logger.info(f"Booked appointment: {event.get('id')} on calendar {calendar.id} meet={meet_link or 'none'}")
+
+    meeting_link = event.get("hangoutLink", "") or zoom_link or ""
+    logger.info(f"Booked appointment: {event.get('id')} on calendar {calendar.id} meeting={meeting_link or 'none'}")
+
+    if zoom_link:
+        event["zoom_link"] = zoom_link
     return event

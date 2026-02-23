@@ -52,6 +52,10 @@ class Settings(BaseSettings):
     MICROSOFT_CLIENT_SECRET: str = ""
     MICROSOFT_REDIRECT_URI: str = ""
     
+    # Zoom
+    ZOOM_CLIENT_ID: str = ""
+    ZOOM_CLIENT_SECRET: str = ""
+    
     # HubSpot CRM
     HUBSPOT_CLIENT_ID: str = ""
     HUBSPOT_CLIENT_SECRET: str = ""

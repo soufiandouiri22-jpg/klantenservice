@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { Plus, Calendar, RefreshCw, Settings, Trash2, Check, ExternalLink, Star } from 'lucide-react'
+import { Plus, Calendar, RefreshCw, Settings, Trash2, Check, ExternalLink, Star, Video, Unlink } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { Header } from '@/components/layout/Header'
@@ -67,8 +67,14 @@ function SettingsForm({
   const noticeRef = useRef<HTMLInputElement>(null)
   const advanceRef = useRef<HTMLInputElement>(null)
   const meetRef = useRef<HTMLSelectElement>(null)
+  const [connectingZoom, setConnectingZoom] = useState(false)
 
   const handleSave = () => {
+    const selectedProvider = meetRef.current?.value || 'none'
+    if (selectedProvider === 'zoom' && !calendar.zoom_connected) {
+      toast.error('Koppel eerst uw Zoom-account voordat u Zoom selecteert')
+      return
+    }
     onSave({
       availability_rules: {
         ...calendar.availability_rules,
@@ -77,8 +83,30 @@ function SettingsForm({
         min_notice_hours: Number(noticeRef.current?.value) || 1,
         max_advance_days: Number(advanceRef.current?.value) || 60,
       },
-      meeting_link_provider: meetRef.current?.value || 'none',
+      meeting_link_provider: selectedProvider,
     })
+  }
+
+  const handleConnectZoom = async () => {
+    setConnectingZoom(true)
+    try {
+      const res = await calendarsApi.getZoomOAuthUrl(calendar.id)
+      window.location.href = res.auth_url
+    } catch {
+      toast.error('Fout bij starten Zoom OAuth')
+      setConnectingZoom(false)
+    }
+  }
+
+  const handleDisconnectZoom = async () => {
+    if (!confirm('Weet u zeker dat u Zoom wilt ontkoppelen?')) return
+    try {
+      await calendarsApi.disconnectZoom(calendar.id)
+      toast.success('Zoom ontkoppeld')
+      onCancel()
+    } catch {
+      toast.error('Fout bij ontkoppelen Zoom')
+    }
   }
 
   return (
@@ -118,12 +146,49 @@ function SettingsForm({
         >
           <option value="none">Geen</option>
           <option value="google_meet">Google Meet</option>
-          <option value="zoom" disabled>Zoom (binnenkort)</option>
+          <option value="zoom">Zoom</option>
           <option value="teams" disabled>Microsoft Teams (binnenkort)</option>
         </Select>
         <p className="mt-1 text-xs text-gray-400">
           Voegt automatisch een vergaderlink toe aan nieuwe afspraken.
         </p>
+      </div>
+
+      {/* Zoom connection status */}
+      <div className="rounded-lg border border-gray-200 p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-100">
+              <Video className="h-4 w-4 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-900">Zoom</p>
+              <p className="text-xs text-gray-500">
+                {calendar.zoom_connected ? 'Account gekoppeld' : 'Niet gekoppeld'}
+              </p>
+            </div>
+          </div>
+          {calendar.zoom_connected ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleDisconnectZoom}
+            >
+              <Unlink className="h-4 w-4 text-red-500 mr-1" />
+              Ontkoppelen
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleConnectZoom}
+              isLoading={connectingZoom}
+            >
+              <Video className="h-4 w-4 mr-1" />
+              Koppel Zoom
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
@@ -148,6 +213,11 @@ function CalendarPageInner() {
       toast.success('Google Calendar succesvol gekoppeld!')
       queryClient.invalidateQueries({ queryKey: ['calendars'] })
       queryClient.invalidateQueries({ queryKey: ['ai-workers'] })
+      window.history.replaceState({}, '', '/dashboard/calendar')
+    }
+    if (searchParams.get('zoom_connected') === 'true') {
+      toast.success('Zoom succesvol gekoppeld!')
+      queryClient.invalidateQueries({ queryKey: ['calendars'] })
       window.history.replaceState({}, '', '/dashboard/calendar')
     }
   }, [searchParams, queryClient])

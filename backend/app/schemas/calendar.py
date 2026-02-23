@@ -69,6 +69,7 @@ class CalendarIntegrationResponse(CalendarIntegrationBase):
     availability_rules: Dict[str, Any]
     appointment_types: List[Dict[str, Any]]
     meeting_link_provider: Optional[str] = "none"
+    zoom_connected: bool = False
     last_sync_at: Optional[datetime]
     sync_error: Optional[str]
     is_active: bool

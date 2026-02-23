@@ -31,6 +31,7 @@ from app.schemas.calendar import (
 )
 from app.api.deps import get_current_user, get_current_company, require_admin
 from app.services import google_calendar_service as gcal
+from app.services import zoom_meeting_service as zoom_svc
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -125,6 +126,78 @@ async def google_oauth_callback(
     return RedirectResponse(
         url=f"{frontend_url}/dashboard/calendar?connected=true&calendar_id={calendar.id}"
     )
+
+
+# ── Zoom Meeting Provider OAuth ──────────────────────────
+
+
+@router.get("/oauth/zoom/url")
+async def get_zoom_oauth_url(
+    calendar_id: UUID = Query(..., description="Calendar integration ID"),
+    current_user: User = Depends(require_admin),
+    company: Company = Depends(get_current_company),
+    db: Session = Depends(get_db),
+):
+    """Get Zoom OAuth URL so the user can connect their Zoom account for meeting links."""
+    calendar = _get_calendar_or_404(calendar_id, company.id, db)
+    state = json.dumps({"calendar_id": str(calendar.id), "company_id": str(company.id)})
+    auth_url = zoom_svc.build_auth_url(state)
+    return {"auth_url": auth_url}
+
+
+@router.get("/oauth/zoom/callback")
+async def zoom_oauth_callback(
+    code: str = Query(...),
+    state: str = Query(...),
+    db: Session = Depends(get_db),
+):
+    """Zoom OAuth callback — exchanges code for tokens and stores them."""
+    try:
+        state_data = json.loads(state)
+        calendar_id = UUID(state_data["calendar_id"])
+    except (json.JSONDecodeError, KeyError, ValueError):
+        raise HTTPException(status_code=400, detail="Ongeldige state parameter")
+
+    calendar = db.query(CalendarIntegration).filter(
+        CalendarIntegration.id == calendar_id
+    ).first()
+    if not calendar:
+        raise HTTPException(status_code=404, detail="Agenda-integratie niet gevonden")
+
+    try:
+        token_data = await zoom_svc.exchange_code_for_tokens(code)
+    except Exception as e:
+        logger.error(f"Zoom token exchange failed: {e}")
+        raise HTTPException(status_code=400, detail="Kon geen toegang krijgen tot Zoom")
+
+    zoom_svc.store_zoom_tokens(calendar, token_data, db)
+    calendar.meeting_link_provider = "zoom"
+    db.commit()
+
+    logger.info(f"Zoom connected for calendar {calendar.id}")
+
+    frontend_url = settings.FRONTEND_URL
+    return RedirectResponse(
+        url=f"{frontend_url}/dashboard/calendar?zoom_connected=true&calendar_id={calendar.id}"
+    )
+
+
+@router.delete("/{calendar_id}/zoom")
+async def disconnect_zoom(
+    calendar_id: UUID,
+    current_user: User = Depends(require_admin),
+    company: Company = Depends(get_current_company),
+    db: Session = Depends(get_db),
+):
+    """Disconnect Zoom from a calendar integration."""
+    calendar = _get_calendar_or_404(calendar_id, company.id, db)
+    calendar.zoom_access_token_encrypted = None
+    calendar.zoom_refresh_token_encrypted = None
+    calendar.zoom_token_expires_at = None
+    if calendar.meeting_link_provider == "zoom":
+        calendar.meeting_link_provider = "none"
+    db.commit()
+    return {"message": "Zoom ontkoppeld"}
 
 
 # ── CRUD ──────────────────────────────────────────────────
@@ -404,7 +477,7 @@ async def book_appointment(
         "message": "Afspraak ingepland",
         "event_id": event.get("id"),
         "html_link": event.get("htmlLink"),
-        "meet_link": event.get("hangoutLink"),
+        "meet_link": event.get("hangoutLink") or event.get("zoom_link") or None,
         "start": event.get("start"),
         "end": event.get("end"),
     }

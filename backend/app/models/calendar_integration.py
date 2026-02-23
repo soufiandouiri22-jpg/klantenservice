@@ -74,6 +74,11 @@ class CalendarIntegration(Base):
     
     # Meeting link provider (none, google_meet, zoom, teams)
     meeting_link_provider = Column(String(20), default="none")
+    
+    # Zoom OAuth tokens (stored separately from calendar provider tokens)
+    zoom_access_token_encrypted = Column(Text, nullable=True)
+    zoom_refresh_token_encrypted = Column(Text, nullable=True)
+    zoom_token_expires_at = Column(DateTime, nullable=True)
 
     # Sync status
     last_sync_at = Column(DateTime, nullable=True)
@@ -101,3 +106,7 @@ class CalendarIntegration(Base):
         if not self.token_expires_at:
             return True
         return datetime.utcnow() >= self.token_expires_at
+
+    @property
+    def zoom_connected(self) -> bool:
+        return self.zoom_access_token_encrypted is not None

@@ -263,6 +263,18 @@ export const calendarsApi = {
     const response = await api.post(`/calendars/${id}/sync`)
     return response.data
   },
+
+  getZoomOAuthUrl: async (calendarId: string) => {
+    const response = await api.get('/calendars/oauth/zoom/url', {
+      params: { calendar_id: calendarId },
+    })
+    return response.data
+  },
+
+  disconnectZoom: async (id: string) => {
+    const response = await api.delete(`/calendars/${id}/zoom`)
+    return response.data
+  },
 }
 
 // CRM Integrations API
