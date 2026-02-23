@@ -186,6 +186,12 @@ async def create_calendar(
             detail=f"AI-medewerker '{ai_worker.name}' heeft al een agenda gekoppeld ({existing_link.name}). Ontkoppel deze eerst.",
         )
 
+    has_existing = (
+        db.query(CalendarIntegration)
+        .filter(CalendarIntegration.company_id == company.id)
+        .first()
+    )
+
     calendar = CalendarIntegration(
         id=uuid4(),
         company_id=company.id,
@@ -193,6 +199,7 @@ async def create_calendar(
         name=data.name,
         provider=data.provider,
         is_active=True,
+        is_primary=not has_existing,
     )
 
     if data.provider == CalendarProvider.CALDAV:
