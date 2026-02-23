@@ -23,16 +23,16 @@ const providers = [
   {
     id: 'google',
     name: 'Google Calendar',
-    icon: '📅',
+    logo: '/app-icons/google-calendar.png',
     description: 'Koppel uw Google Calendar account',
-    color: 'bg-blue-100 text-blue-700',
+    color: 'bg-blue-100',
   },
   {
     id: 'microsoft',
     name: 'Microsoft Outlook',
-    icon: '📧',
+    logo: '/app-icons/Outlook_2013_23477.png',
     description: 'Koppel uw Outlook/Office 365 agenda',
-    color: 'bg-sky-100 text-sky-700',
+    color: 'bg-sky-100',
   },
   {
     id: 'caldav',
@@ -565,8 +565,12 @@ function CalendarPageInner() {
                     <CardBody>
                       <div className="flex items-start justify-between">
                         <div className="flex items-start gap-4">
-                          <div className={`flex h-12 w-12 items-center justify-center rounded-lg text-2xl ${providerInfo.color}`}>
-                            {providerInfo.icon}
+                          <div className={`flex h-12 w-12 items-center justify-center rounded-lg overflow-hidden ${providerInfo.color}`}>
+                            {providerInfo.logo ? (
+                              <img src={providerInfo.logo} alt={providerInfo.name} className="h-8 w-8 object-contain" />
+                            ) : (
+                              <span className="text-2xl">{providerInfo.icon}</span>
+                            )}
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
@@ -747,8 +751,12 @@ function CalendarPageInner() {
                     }}
                     className="flex items-center gap-4 p-4 rounded-lg border border-gray-200 hover:border-primary-300 hover:bg-primary-50 transition-colors text-left"
                   >
-                    <div className={`flex h-12 w-12 items-center justify-center rounded-lg text-2xl ${provider.color}`}>
-                      {provider.icon}
+                    <div className={`flex h-12 w-12 items-center justify-center rounded-lg overflow-hidden ${provider.color}`}>
+                      {provider.logo ? (
+                        <img src={provider.logo} alt={provider.name} className="h-8 w-8 object-contain" />
+                      ) : (
+                        <span className="text-2xl">{provider.icon}</span>
+                      )}
                     </div>
                     <div>
                       <h4 className="font-medium text-gray-900">{provider.name}</h4>

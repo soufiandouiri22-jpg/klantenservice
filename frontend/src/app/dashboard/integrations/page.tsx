@@ -31,24 +31,24 @@ const providers = [
     id: 'hubspot',
     name: 'HubSpot',
     description: 'Koppel uw HubSpot CRM voor automatische contactherkenning',
-    color: 'bg-orange-100 text-orange-700',
-    icon: '🟠',
+    color: 'bg-orange-50',
+    logo: '/company-logos/hubspot.png',
     available: true,
   },
   {
     id: 'pipedrive',
     name: 'Pipedrive',
     description: 'Koppel uw Pipedrive CRM',
-    color: 'bg-green-100 text-green-700',
-    icon: '🟢',
+    color: 'bg-green-50',
+    logo: '/company-logos/pipedrive.png',
     available: false,
   },
   {
     id: 'salesforce',
     name: 'Salesforce',
     description: 'Koppel uw Salesforce CRM',
-    color: 'bg-blue-100 text-blue-700',
-    icon: '🔵',
+    color: 'bg-blue-50',
+    logo: '/company-logos/salesforce.png',
     available: false,
   },
 ]
@@ -203,9 +203,9 @@ function IntegrationsPageInner() {
                       <div className="flex items-start justify-between">
                         <div className="flex items-start gap-4">
                           <div
-                            className={`flex h-12 w-12 items-center justify-center rounded-lg text-2xl ${providerInfo.color}`}
+                            className={`flex h-12 w-12 items-center justify-center rounded-lg overflow-hidden ${providerInfo.color}`}
                           >
-                            {providerInfo.icon}
+                            <img src={providerInfo.logo} alt={providerInfo.name} className="h-10 w-10 object-contain" />
                           </div>
                           <div>
                             <h3 className="font-medium text-gray-900">
@@ -375,9 +375,9 @@ function IntegrationsPageInner() {
               }`}
             >
               <div
-                className={`flex h-12 w-12 items-center justify-center rounded-lg text-2xl ${provider.color}`}
+                className={`flex h-12 w-12 items-center justify-center rounded-lg overflow-hidden ${provider.color}`}
               >
-                {provider.icon}
+                <img src={provider.logo} alt={provider.name} className="h-10 w-10 object-contain" />
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2">
