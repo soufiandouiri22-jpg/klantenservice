@@ -205,7 +205,7 @@ function IntegrationsPageInner() {
                           <div
                             className={`flex h-12 w-12 items-center justify-center rounded-lg overflow-hidden ${providerInfo.color}`}
                           >
-                            <img src={providerInfo.logo} alt={providerInfo.name} className="h-10 w-10 object-contain" />
+                            <img src={providerInfo.logo} alt={providerInfo.name} className="h-8 w-8 object-contain" />
                           </div>
                           <div>
                             <h3 className="font-medium text-gray-900">
@@ -377,7 +377,7 @@ function IntegrationsPageInner() {
               <div
                 className={`flex h-12 w-12 items-center justify-center rounded-lg overflow-hidden ${provider.color}`}
               >
-                <img src={provider.logo} alt={provider.name} className="h-10 w-10 object-contain" />
+                <img src={provider.logo} alt={provider.name} className="h-8 w-8 object-contain" />
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2">
