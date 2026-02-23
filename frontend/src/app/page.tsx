@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, useScroll, useTransform } from 'framer-motion'
 import Link from 'next/link'
-import { ArrowRight, Check, Headphones, Calendar, Globe, MessageSquare, Shield, Plug, Plus, Minus, Phone, Mail, Play, UserPlus, Settings, PhoneCall, Link2 } from 'lucide-react'
+import { ArrowRight, Check, Headphones, Calendar, Globe, MessageSquare, Shield, Zap, Plug, Plus, Minus, Phone, Mail, Play, UserPlus, Settings, PhoneCall, Link2 } from 'lucide-react'
 import Image from 'next/image'
 import PublicHeader from '@/components/layout/PublicHeader'
 import Footer from '@/components/layout/Footer'
