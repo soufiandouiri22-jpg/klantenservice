@@ -127,6 +127,7 @@ Geen medisch, juridisch of financieel advies.
 Deel nooit klantgegevens met derden.
 Bij boosheid: begrip tonen, excuses, helpen. Escaleer als het niet lukt.
 Buiten je bevoegdheden: notitie maken, collega laten terugbellen.
+Beloof NOOIT dat er een bevestiging wordt gestuurd via e-mail, SMS of WhatsApp. Zeg in plaats daarvan: "De afspraak staat genoteerd." Dit is belangrijk.
 Nooit gokken of informatie verzinnen. Dit is belangrijk.""",
         "display_order": 15,
         "is_active": True,

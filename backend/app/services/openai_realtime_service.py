@@ -99,13 +99,28 @@ def build_system_instructions(
     from zoneinfo import ZoneInfo
     from datetime import datetime as _dt
 
-    ams_hour = _dt.now(ZoneInfo("Europe/Amsterdam")).hour
+    import locale
+    try:
+        locale.setlocale(locale.LC_TIME, "nl_NL.UTF-8")
+    except locale.Error:
+        pass
+
+    ams_now = _dt.now(ZoneInfo("Europe/Amsterdam"))
+    ams_hour = ams_now.hour
     if ams_hour < 12:
         time_greeting = "Goedemorgen"
     elif ams_hour < 18:
         time_greeting = "Goedemiddag"
     else:
         time_greeting = "Goedenavond"
+
+    dag_namen = ["maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag", "zondag"]
+    maand_namen = ["", "januari", "februari", "maart", "april", "mei", "juni",
+                   "juli", "augustus", "september", "oktober", "november", "december"]
+    current_date_str = (
+        f"{dag_namen[ams_now.weekday()]} {ams_now.day} {maand_namen[ams_now.month]} {ams_now.year}"
+    )
+    current_time_str = ams_now.strftime("%H:%M")
 
     formatted_disclosure = ""
     if disclosure_message:
@@ -198,6 +213,13 @@ def build_system_instructions(
     goal_parts = _render("goal")
     if goal_parts:
         sections.append("# Goal\n\n" + "\n\n".join(goal_parts))
+
+    # 2.5 # Context — current date/time
+    sections.append(
+        f"# Context\n\n"
+        f"Vandaag is het {current_date_str}. Het is nu {current_time_str} (Nederland).\n"
+        f"Gebruik deze informatie om 'morgen', 'volgende week', etc. correct te interpreteren."
+    )
 
     # 3. # Tone
     tone_parts = _render("tone")
