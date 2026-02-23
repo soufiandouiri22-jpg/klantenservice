@@ -37,7 +37,7 @@ const features = [
   {
     icon: Plug,
     title: 'CRM Integratie',
-    description: 'Herkent bellers automatisch via HubSpot en schrijft gespreksnotities terug naar uw CRM.',
+    description: 'Herkent bellers automatisch en schrijft gespreksnotities terug naar uw CRM.',
   },
 ]
 
