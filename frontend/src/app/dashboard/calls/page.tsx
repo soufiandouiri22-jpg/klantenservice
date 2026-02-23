@@ -354,9 +354,11 @@ export default function CallsPage() {
             {callDetail.recording_url && (
               <div>
                 <p className="text-sm text-gray-500 mb-2">Opname</p>
-                <Button variant="outline" leftIcon={<Play className="h-4 w-4" />}>
-                  Opname afspelen
-                </Button>
+                <audio
+                  controls
+                  className="w-full"
+                  src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/calls/${callDetail.id}/recording?token=${localStorage.getItem('access_token')}`}
+                />
               </div>
             )}
           </div>

@@ -4,10 +4,14 @@ klantenservice.ai - Call Log Endpoints
 from datetime import datetime, timedelta
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from uuid import UUID
+import httpx
+import logging
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.models.user import User
 from app.models.company import Company
@@ -23,6 +27,7 @@ from app.schemas.call_log import (
 )
 from app.api.deps import get_current_user, get_current_company
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -279,3 +284,53 @@ async def get_active_calls(
         })
     
     return result
+
+
+@router.get("/{call_id}/recording")
+async def get_call_recording(
+    call_id: UUID,
+    token: str = Query(..., description="JWT access token (needed because <audio> can't send headers)"),
+    db: Session = Depends(get_db),
+):
+    """Proxy Twilio recording audio so the frontend can play it without Twilio auth."""
+    from app.core.security import decode_token
+
+    payload = decode_token(token)
+    if not payload or "sub" not in payload:
+        raise HTTPException(status_code=401, detail="Ongeldige token")
+
+    user = db.query(User).filter(User.id == payload["sub"]).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="Gebruiker niet gevonden")
+
+    company = db.query(Company).filter(Company.id == user.company_id).first()
+    if not company:
+        raise HTTPException(status_code=403, detail="Geen bedrijf gekoppeld")
+
+    call = db.query(CallLog).filter(
+        CallLog.id == call_id,
+        CallLog.company_id == company.id,
+    ).first()
+
+    if not call:
+        raise HTTPException(status_code=404, detail="Gesprek niet gevonden")
+    if not call.recording_url:
+        raise HTTPException(status_code=404, detail="Geen opname beschikbaar")
+
+    audio_url = call.recording_url
+    if not audio_url.endswith(".mp3"):
+        audio_url += ".mp3"
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            audio_url,
+            auth=(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN),
+        )
+        if resp.status_code != 200:
+            raise HTTPException(status_code=502, detail="Kon opname niet ophalen")
+
+    return StreamingResponse(
+        iter([resp.content]),
+        media_type="audio/mpeg",
+        headers={"Content-Disposition": f"inline; filename=recording-{call_id}.mp3"},
+    )

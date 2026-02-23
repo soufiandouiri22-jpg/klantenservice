@@ -423,6 +423,27 @@ async def twilio_status_webhook(
                         logger.info(f"CRM note created for contact {contact['id']}")
             except Exception as crm_err:
                 logger.warning(f"CRM post-call note failed (non-blocking): {crm_err}")
+    elif call_status == "in-progress":
+        # Start call recording via Twilio REST API
+        try:
+            recording_callback = (
+                "https://api.klantenservice.ai/api/v1/webhooks/twilio/recording"
+                if settings.APP_ENV == "production"
+                else "http://localhost:8000/api/v1/webhooks/twilio/recording"
+            )
+            async with httpx.AsyncClient() as http:
+                await http.post(
+                    f"https://api.twilio.com/2010-04-01/Accounts/{settings.TWILIO_ACCOUNT_SID}/Calls/{call_sid}/Recordings.json",
+                    auth=(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN),
+                    data={
+                        "RecordingChannels": "dual",
+                        "RecordingStatusCallback": recording_callback,
+                        "RecordingStatusCallbackEvent": "completed",
+                    },
+                )
+            logger.info(f"[STATUS CALLBACK] Recording started for call_sid={call_sid}")
+        except Exception as rec_err:
+            logger.warning(f"[STATUS CALLBACK] Failed to start recording for {call_sid}: {rec_err}")
     else:
         logger.info(f"[STATUS CALLBACK] Ignoring status={call_status} for call_sid={call_sid}")
     
