@@ -71,6 +71,7 @@ class CalendarIntegrationResponse(CalendarIntegrationBase):
     meeting_link_provider: Optional[str] = "none"
     zoom_connected: bool = False
     teams_connected: bool = False
+    gmeet_connected: bool = False
     last_sync_at: Optional[datetime]
     sync_error: Optional[str]
     is_active: bool

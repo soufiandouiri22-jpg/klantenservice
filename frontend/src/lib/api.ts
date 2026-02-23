@@ -287,6 +287,18 @@ export const calendarsApi = {
     const response = await api.delete(`/calendars/${id}/teams`)
     return response.data
   },
+
+  getGmeetOAuthUrl: async (calendarId: string) => {
+    const response = await api.get('/calendars/oauth/gmeet/url', {
+      params: { calendar_id: calendarId },
+    })
+    return response.data
+  },
+
+  disconnectGmeet: async (id: string) => {
+    const response = await api.delete(`/calendars/${id}/gmeet`)
+    return response.data
+  },
 }
 
 // CRM Integrations API

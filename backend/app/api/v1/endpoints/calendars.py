@@ -33,6 +33,7 @@ from app.api.deps import get_current_user, get_current_company, require_admin
 from app.services import google_calendar_service as gcal
 from app.services import zoom_meeting_service as zoom_svc
 from app.services import teams_meeting_service as teams_svc
+from app.services import google_meet_service as gmeet_svc
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -67,6 +68,20 @@ async def get_teams_oauth_url(
     calendar = _get_calendar_or_404(calendar_id, company.id, db)
     state = json.dumps({"calendar_id": str(calendar.id), "company_id": str(company.id)})
     auth_url = teams_svc.build_auth_url(state)
+    return {"auth_url": auth_url}
+
+
+@router.get("/oauth/gmeet/url")
+async def get_gmeet_oauth_url(
+    calendar_id: UUID = Query(..., description="Calendar integration ID"),
+    current_user: User = Depends(require_admin),
+    company: Company = Depends(get_current_company),
+    db: Session = Depends(get_db),
+):
+    """Get Google OAuth URL for standalone Google Meet (non-Google calendar providers)."""
+    calendar = _get_calendar_or_404(calendar_id, company.id, db)
+    state = json.dumps({"calendar_id": str(calendar.id), "company_id": str(company.id)})
+    auth_url = gmeet_svc.build_auth_url(state)
     return {"auth_url": auth_url}
 
 
@@ -271,6 +286,64 @@ async def disconnect_teams(
         calendar.meeting_link_provider = "none"
     db.commit()
     return {"message": "Microsoft Teams ontkoppeld"}
+
+
+# ── Standalone Google Meet OAuth ─────────────────────────
+
+
+@router.get("/oauth/gmeet/callback")
+async def gmeet_oauth_callback(
+    code: str = Query(...),
+    state: str = Query(...),
+    db: Session = Depends(get_db),
+):
+    """Google Meet standalone OAuth callback — for non-Google calendar providers."""
+    try:
+        state_data = json.loads(state)
+        calendar_id = UUID(state_data["calendar_id"])
+    except (json.JSONDecodeError, KeyError, ValueError):
+        raise HTTPException(status_code=400, detail="Ongeldige state parameter")
+
+    calendar = db.query(CalendarIntegration).filter(
+        CalendarIntegration.id == calendar_id
+    ).first()
+    if not calendar:
+        raise HTTPException(status_code=404, detail="Agenda-integratie niet gevonden")
+
+    try:
+        token_data = await gmeet_svc.exchange_code_for_tokens(code)
+    except Exception as e:
+        logger.error(f"Google Meet token exchange failed: {e}")
+        raise HTTPException(status_code=400, detail="Kon geen toegang krijgen tot Google Meet")
+
+    gmeet_svc.store_gmeet_tokens(calendar, token_data, db)
+    calendar.meeting_link_provider = "google_meet"
+    db.commit()
+
+    logger.info(f"Google Meet (standalone) connected for calendar {calendar.id}")
+
+    frontend_url = settings.FRONTEND_URL
+    return RedirectResponse(
+        url=f"{frontend_url}/dashboard/calendar?gmeet_connected=true&calendar_id={calendar.id}"
+    )
+
+
+@router.delete("/{calendar_id}/gmeet")
+async def disconnect_gmeet(
+    calendar_id: UUID,
+    current_user: User = Depends(require_admin),
+    company: Company = Depends(get_current_company),
+    db: Session = Depends(get_db),
+):
+    """Disconnect standalone Google Meet from a calendar integration."""
+    calendar = _get_calendar_or_404(calendar_id, company.id, db)
+    calendar.gmeet_access_token_encrypted = None
+    calendar.gmeet_refresh_token_encrypted = None
+    calendar.gmeet_token_expires_at = None
+    if calendar.meeting_link_provider == "google_meet":
+        calendar.meeting_link_provider = "none"
+    db.commit()
+    return {"message": "Google Meet ontkoppeld"}
 
 
 # ── CRUD ──────────────────────────────────────────────────

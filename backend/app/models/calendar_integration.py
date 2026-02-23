@@ -84,6 +84,11 @@ class CalendarIntegration(Base):
     teams_access_token_encrypted = Column(Text, nullable=True)
     teams_refresh_token_encrypted = Column(Text, nullable=True)
     teams_token_expires_at = Column(DateTime, nullable=True)
+    
+    # Google Meet OAuth tokens (standalone, for non-Google calendar providers)
+    gmeet_access_token_encrypted = Column(Text, nullable=True)
+    gmeet_refresh_token_encrypted = Column(Text, nullable=True)
+    gmeet_token_expires_at = Column(DateTime, nullable=True)
 
     # Sync status
     last_sync_at = Column(DateTime, nullable=True)
@@ -119,3 +124,7 @@ class CalendarIntegration(Base):
     @property
     def teams_connected(self) -> bool:
         return self.teams_access_token_encrypted is not None
+
+    @property
+    def gmeet_connected(self) -> bool:
+        return self.gmeet_access_token_encrypted is not None

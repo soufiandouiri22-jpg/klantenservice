@@ -69,6 +69,8 @@ function SettingsForm({
   const meetRef = useRef<HTMLSelectElement>(null)
   const [connectingZoom, setConnectingZoom] = useState(false)
   const [connectingTeams, setConnectingTeams] = useState(false)
+  const [connectingGmeet, setConnectingGmeet] = useState(false)
+  const isGoogleCalendar = calendar.provider === 'google'
 
   const handleSave = () => {
     const selectedProvider = meetRef.current?.value || 'none'
@@ -78,6 +80,10 @@ function SettingsForm({
     }
     if (selectedProvider === 'teams' && !calendar.teams_connected) {
       toast.error('Koppel eerst uw Microsoft Teams-account voordat u Teams selecteert')
+      return
+    }
+    if (selectedProvider === 'google_meet' && !isGoogleCalendar && !calendar.gmeet_connected) {
+      toast.error('Koppel eerst uw Google-account voordat u Google Meet selecteert')
       return
     }
     onSave({
@@ -136,6 +142,28 @@ function SettingsForm({
     }
   }
 
+  const handleConnectGmeet = async () => {
+    setConnectingGmeet(true)
+    try {
+      const res = await calendarsApi.getGmeetOAuthUrl(calendar.id)
+      window.location.href = res.auth_url
+    } catch {
+      toast.error('Fout bij starten Google Meet OAuth')
+      setConnectingGmeet(false)
+    }
+  }
+
+  const handleDisconnectGmeet = async () => {
+    if (!confirm('Weet u zeker dat u Google Meet wilt ontkoppelen?')) return
+    try {
+      await calendarsApi.disconnectGmeet(calendar.id)
+      toast.success('Google Meet ontkoppeld')
+      onCancel()
+    } catch {
+      toast.error('Fout bij ontkoppelen Google Meet')
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
@@ -185,7 +213,7 @@ function SettingsForm({
       <div className="space-y-3">
         <p className="text-sm font-medium text-gray-700">Vergaderproviders</p>
 
-        {/* Google Meet — uses existing Google Calendar OAuth */}
+        {/* Google Meet */}
         <div className="rounded-lg border border-gray-200 p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -195,15 +223,38 @@ function SettingsForm({
               <div>
                 <p className="text-sm font-medium text-gray-900">Google Meet</p>
                 <p className="text-xs text-gray-500">
-                  {calendar.last_sync_at ? 'Gekoppeld via Google Calendar' : 'Koppel eerst Google Calendar'}
+                  {isGoogleCalendar
+                    ? (calendar.last_sync_at ? 'Gekoppeld via Google Calendar' : 'Koppel eerst Google Calendar')
+                    : (calendar.gmeet_connected ? 'Google-account gekoppeld' : 'Niet gekoppeld')}
                 </p>
               </div>
             </div>
-            {calendar.last_sync_at && (
-              <Badge variant="success">
-                <Check className="h-3 w-3 mr-1" />
-                Gereed
-              </Badge>
+            {isGoogleCalendar ? (
+              calendar.last_sync_at && (
+                <Badge variant="success">
+                  <Check className="h-3 w-3 mr-1" />
+                  Gereed
+                </Badge>
+              )
+            ) : calendar.gmeet_connected ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleDisconnectGmeet}
+              >
+                <Unlink className="h-4 w-4 text-red-500 mr-1" />
+                Ontkoppelen
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleConnectGmeet}
+                isLoading={connectingGmeet}
+              >
+                <Video className="h-4 w-4 mr-1" />
+                Koppel Google
+              </Button>
             )}
           </div>
         </div>
@@ -314,6 +365,11 @@ function CalendarPageInner() {
     }
     if (searchParams.get('teams_connected') === 'true') {
       toast.success('Microsoft Teams succesvol gekoppeld!')
+      queryClient.invalidateQueries({ queryKey: ['calendars'] })
+      window.history.replaceState({}, '', '/dashboard/calendar')
+    }
+    if (searchParams.get('gmeet_connected') === 'true') {
+      toast.success('Google Meet succesvol gekoppeld!')
       queryClient.invalidateQueries({ queryKey: ['calendars'] })
       window.history.replaceState({}, '', '/dashboard/calendar')
     }

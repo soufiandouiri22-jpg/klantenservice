@@ -338,9 +338,11 @@ async def book_appointment(
     """Book an appointment by creating a Google Calendar event, optionally with a meeting link."""
     from app.services import zoom_meeting_service as zoom_svc
     from app.services import teams_meeting_service as teams_svc
+    from app.services import google_meet_service as gmeet_svc
 
     provider = getattr(calendar, "meeting_link_provider", "none")
-    add_meet = provider == "google_meet"
+    is_google_calendar = calendar.provider == "google"
+    add_meet = provider == "google_meet" and is_google_calendar
 
     external_link = None
 
@@ -361,9 +363,18 @@ async def book_appointment(
             start_time=start,
             end_time=end,
         )
+    elif provider == "google_meet" and not is_google_calendar and calendar.gmeet_access_token_encrypted:
+        external_link = await gmeet_svc.create_meeting_for_calendar(
+            calendar=calendar,
+            db=db,
+            summary=summary,
+            start=start,
+            end=end,
+        )
 
     if external_link:
-        label = "Zoom" if provider == "zoom" else "Microsoft Teams"
+        labels = {"zoom": "Zoom", "teams": "Microsoft Teams", "google_meet": "Google Meet"}
+        label = labels.get(provider, "Meeting")
         description = f"{description}\n\n{label}: {external_link}".strip()
 
     access_token = await get_valid_access_token(calendar, db)
