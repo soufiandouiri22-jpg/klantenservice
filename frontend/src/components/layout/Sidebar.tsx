@@ -30,12 +30,12 @@ const navigation = [
   { name: 'AI-medewerkers', href: '/dashboard/ai-workers', icon: Headphones },
   { name: 'Telefonie', href: '/dashboard/phone', icon: Phone },
   { name: 'Agenda', href: '/dashboard/calendar', icon: Calendar },
-  { name: 'Integraties', href: '/dashboard/integrations', icon: Plug },
   { name: 'Website-kennis', href: '/dashboard/knowledge', icon: Globe },
   { name: 'Training', href: '/dashboard/training', icon: GraduationCap },
   { name: 'Gesprekken', href: '/dashboard/calls', icon: PhoneIncoming },
   { name: 'Afspraken', href: '/dashboard/appointments', icon: ClipboardList },
   { name: 'Notities', href: '/dashboard/notes', icon: StickyNote },
+  { name: 'Integraties', href: '/dashboard/integrations', icon: Plug },
 ]
 
 const bottomNavigation = [
