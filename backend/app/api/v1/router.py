@@ -10,6 +10,7 @@ from app.api.v1.endpoints import (
     ai_workers,
     phone_numbers,
     calendars,
+    crm,
     websites,
     training,
     calls,
@@ -74,6 +75,13 @@ api_router.include_router(
     calendars.router,
     prefix="/calendars",
     tags=["Agenda's"]
+)
+
+# CRM Integrations
+api_router.include_router(
+    crm.router,
+    prefix="/crm",
+    tags=["CRM"]
 )
 
 # Website Knowledge

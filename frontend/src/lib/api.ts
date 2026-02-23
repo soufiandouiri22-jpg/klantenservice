@@ -265,6 +265,46 @@ export const calendarsApi = {
   },
 }
 
+// CRM Integrations API
+export const crmApi = {
+  list: async () => {
+    const response = await api.get('/crm')
+    return response.data
+  },
+
+  get: async (id: string) => {
+    const response = await api.get(`/crm/${id}`)
+    return response.data
+  },
+
+  create: async (data: any) => {
+    const response = await api.post('/crm', data)
+    return response.data
+  },
+
+  update: async (id: string, data: any) => {
+    const response = await api.patch(`/crm/${id}`, data)
+    return response.data
+  },
+
+  delete: async (id: string) => {
+    const response = await api.delete(`/crm/${id}`)
+    return response.data
+  },
+
+  getOAuthUrl: async (provider: string, crmId: string) => {
+    const response = await api.get(`/crm/oauth/${provider}/url`, {
+      params: { crm_id: crmId },
+    })
+    return response.data
+  },
+
+  test: async (id: string) => {
+    const response = await api.post(`/crm/${id}/test`)
+    return response.data
+  },
+}
+
 // Websites API
 export const websitesApi = {
   list: async () => {

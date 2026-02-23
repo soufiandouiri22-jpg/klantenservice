@@ -52,6 +52,10 @@ class Settings(BaseSettings):
     MICROSOFT_CLIENT_SECRET: str = ""
     MICROSOFT_REDIRECT_URI: str = ""
     
+    # HubSpot CRM
+    HUBSPOT_CLIENT_ID: str = ""
+    HUBSPOT_CLIENT_SECRET: str = ""
+    
     # Sentry
     SENTRY_DSN: str = ""
     

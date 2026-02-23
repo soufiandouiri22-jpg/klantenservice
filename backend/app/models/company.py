@@ -107,6 +107,7 @@ class Company(Base):
     call_logs = relationship("CallLog", back_populates="company", cascade="all, delete-orphan")
     appointments = relationship("Appointment", back_populates="company", cascade="all, delete-orphan")
     internal_notes = relationship("InternalNote", back_populates="company", cascade="all, delete-orphan")
+    crm_integrations = relationship("CRMIntegration", back_populates="company", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<Company {self.name}>"

@@ -41,6 +41,7 @@ def build_system_instructions(
     example_answers: Optional[list] = None,
     system_prompts: Optional[str] = None,
     db=None,
+    caller_context: Optional[dict] = None,
 ) -> str:
     """
     Build system instructions for the ElevenLabs Conversational AI agent.
@@ -214,12 +215,29 @@ def build_system_instructions(
     if goal_parts:
         sections.append("# Goal\n\n" + "\n\n".join(goal_parts))
 
-    # 2.5 # Context — current date/time
-    sections.append(
-        f"# Context\n\n"
-        f"Vandaag is het {current_date_str}. Het is nu {current_time_str} (Nederland).\n"
-        f"Gebruik deze informatie om 'morgen', 'volgende week', etc. correct te interpreteren."
-    )
+    # 2.5 # Context — current date/time + caller info
+    context_lines = [
+        f"Vandaag is het {current_date_str}. Het is nu {current_time_str} (Nederland).",
+        "Gebruik deze informatie om 'morgen', 'volgende week', etc. correct te interpreteren.",
+    ]
+    if caller_context:
+        name_parts = []
+        if caller_context.get("first_name"):
+            name_parts.append(caller_context["first_name"])
+        if caller_context.get("last_name"):
+            name_parts.append(caller_context["last_name"])
+        if name_parts:
+            caller_name = " ".join(name_parts)
+            context_lines.append(f"\nDe beller is een bekende klant: {caller_name}.")
+            context_lines.append(
+                f"Begroet de klant persoonlijk met hun naam (bijv. '{time_greeting} {'meneer' if not caller_context.get('first_name') else ''} {name_parts[-1]}')."
+            )
+        if caller_context.get("company_name"):
+            context_lines.append(f"Bedrijf van de beller: {caller_context['company_name']}.")
+        if caller_context.get("email"):
+            context_lines.append(f"E-mail: {caller_context['email']}.")
+
+    sections.append("# Context\n\n" + "\n".join(context_lines))
 
     # 3. # Tone
     tone_parts = _render("tone")

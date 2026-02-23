@@ -216,6 +216,28 @@ async def twilio_voice_webhook(
     # Example answers are NOT loaded into the system prompt — the AI
     # retrieves them via search_knowledge when a relevant question is asked.
 
+    # ── CRM caller lookup ──────────────────────────────────────
+    caller_context = None
+    try:
+        from app.models.crm_integration import CRMIntegration
+        from app.services import hubspot_service as hubspot
+        crm_integration = db.query(CRMIntegration).filter(
+            CRMIntegration.company_id == company.id,
+            CRMIntegration.is_active == True,
+            CRMIntegration.sync_contacts_on_call == True,
+        ).first()
+        if crm_integration and crm_integration.access_token_encrypted:
+            try:
+                access_token = await hubspot.get_valid_access_token(crm_integration, db)
+                contact = await hubspot.search_contact_by_phone(access_token, from_number)
+                if contact:
+                    caller_context = contact
+                    logger.info(f"CRM lookup found contact: {contact.get('first_name')} {contact.get('last_name')}")
+            except Exception as crm_err:
+                logger.warning(f"CRM lookup failed (non-blocking): {crm_err}")
+    except Exception as crm_import_err:
+        logger.debug(f"CRM module not available: {crm_import_err}")
+
     # Disclosure message
     disclosure_message = company.disclosure_message if company.disclosure_message else None
 
@@ -228,6 +250,7 @@ async def twilio_voice_webhook(
         training_rules=training_rules,
         example_answers=None,
         db=db,
+        caller_context=caller_context,
     )
 
     logger.info(
@@ -372,6 +395,34 @@ async def twilio_status_webhook(
                 )
         
         db.commit()
+
+        # Write call summary back to CRM if configured
+        if call_status == "completed" and call_log.summary:
+            try:
+                from app.models.crm_integration import CRMIntegration
+                from app.services import hubspot_service as hubspot
+                crm = db.query(CRMIntegration).filter(
+                    CRMIntegration.company_id == call_log.company_id,
+                    CRMIntegration.is_active == True,
+                    CRMIntegration.write_call_notes == True,
+                ).first()
+                if crm and crm.access_token_encrypted:
+                    access_token = await hubspot.get_valid_access_token(crm, db)
+                    contact = await hubspot.search_contact_by_phone(
+                        access_token, call_log.caller_number
+                    )
+                    if contact:
+                        note_body = (
+                            f"Telefoongesprek via klantenservice.ai\n"
+                            f"Duur: {call_duration}s\n\n"
+                            f"{call_log.summary}"
+                        )
+                        await hubspot.create_engagement_note(
+                            access_token, contact["id"], note_body
+                        )
+                        logger.info(f"CRM note created for contact {contact['id']}")
+            except Exception as crm_err:
+                logger.warning(f"CRM post-call note failed (non-blocking): {crm_err}")
     else:
         logger.info(f"[STATUS CALLBACK] Ignoring status={call_status} for call_sid={call_sid}")
     
