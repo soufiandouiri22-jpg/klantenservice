@@ -39,7 +39,35 @@ settings = get_settings()
 router = APIRouter()
 
 
-# ── OAuth Flow (MUST come before /{calendar_id} routes) ──
+# ── OAuth Flow (specific routes MUST come before /{provider} catch-all) ──
+
+
+@router.get("/oauth/zoom/url")
+async def get_zoom_oauth_url(
+    calendar_id: UUID = Query(..., description="Calendar integration ID"),
+    current_user: User = Depends(require_admin),
+    company: Company = Depends(get_current_company),
+    db: Session = Depends(get_db),
+):
+    """Get Zoom OAuth URL so the user can connect their Zoom account for meeting links."""
+    calendar = _get_calendar_or_404(calendar_id, company.id, db)
+    state = json.dumps({"calendar_id": str(calendar.id), "company_id": str(company.id)})
+    auth_url = zoom_svc.build_auth_url(state)
+    return {"auth_url": auth_url}
+
+
+@router.get("/oauth/teams/url")
+async def get_teams_oauth_url(
+    calendar_id: UUID = Query(..., description="Calendar integration ID"),
+    current_user: User = Depends(require_admin),
+    company: Company = Depends(get_current_company),
+    db: Session = Depends(get_db),
+):
+    """Get Microsoft Teams OAuth URL so the user can connect their Teams account."""
+    calendar = _get_calendar_or_404(calendar_id, company.id, db)
+    state = json.dumps({"calendar_id": str(calendar.id), "company_id": str(company.id)})
+    auth_url = teams_svc.build_auth_url(state)
+    return {"auth_url": auth_url}
 
 
 @router.get("/oauth/{provider}/url")
@@ -50,7 +78,7 @@ async def get_oauth_url(
     company: Company = Depends(get_current_company),
     db: Session = Depends(get_db),
 ):
-    """Get OAuth authorization URL. Redirect the user's browser to this URL."""
+    """Get OAuth authorization URL for calendar providers (Google, Microsoft)."""
     if provider == CalendarProvider.CALDAV:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -132,20 +160,6 @@ async def google_oauth_callback(
 # ── Zoom Meeting Provider OAuth ──────────────────────────
 
 
-@router.get("/oauth/zoom/url")
-async def get_zoom_oauth_url(
-    calendar_id: UUID = Query(..., description="Calendar integration ID"),
-    current_user: User = Depends(require_admin),
-    company: Company = Depends(get_current_company),
-    db: Session = Depends(get_db),
-):
-    """Get Zoom OAuth URL so the user can connect their Zoom account for meeting links."""
-    calendar = _get_calendar_or_404(calendar_id, company.id, db)
-    state = json.dumps({"calendar_id": str(calendar.id), "company_id": str(company.id)})
-    auth_url = zoom_svc.build_auth_url(state)
-    return {"auth_url": auth_url}
-
-
 @router.get("/oauth/zoom/callback")
 async def zoom_oauth_callback(
     code: str = Query(...),
@@ -202,20 +216,6 @@ async def disconnect_zoom(
 
 
 # ── Microsoft Teams Meeting Provider OAuth ───────────────
-
-
-@router.get("/oauth/teams/url")
-async def get_teams_oauth_url(
-    calendar_id: UUID = Query(..., description="Calendar integration ID"),
-    current_user: User = Depends(require_admin),
-    company: Company = Depends(get_current_company),
-    db: Session = Depends(get_db),
-):
-    """Get Microsoft Teams OAuth URL so the user can connect their Teams account."""
-    calendar = _get_calendar_or_404(calendar_id, company.id, db)
-    state = json.dumps({"calendar_id": str(calendar.id), "company_id": str(company.id)})
-    auth_url = teams_svc.build_auth_url(state)
-    return {"auth_url": auth_url}
 
 
 @router.get("/oauth/teams/callback")
