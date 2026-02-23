@@ -164,7 +164,8 @@ function IntegrationsPageInner() {
                 <h3 className="font-medium text-gray-900">Hoe werkt het?</h3>
                 <p className="mt-1 text-sm text-gray-500">
                   Koppel uw CRM-systeem zodat de AI bij inkomende gesprekken automatisch
-                  de beller herkent. Na het gesprek wordt een samenvatting teruggeschreven
+                  de beller herkent en persoonlijk begroet. Nieuwe bellers worden automatisch
+                  als contact aangemaakt. Na elk gesprek wordt een samenvatting teruggeschreven
                   naar uw CRM. Zo hoeft u niets meer handmatig over te typen.
                 </p>
               </div>
