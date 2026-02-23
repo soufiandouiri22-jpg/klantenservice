@@ -358,6 +358,12 @@ function CalendarPageInner() {
       queryClient.invalidateQueries({ queryKey: ['ai-workers'] })
       window.history.replaceState({}, '', '/dashboard/calendar')
     }
+    if (searchParams.get('microsoft_connected') === 'true') {
+      toast.success('Microsoft Outlook succesvol gekoppeld!')
+      queryClient.invalidateQueries({ queryKey: ['calendars'] })
+      queryClient.invalidateQueries({ queryKey: ['ai-workers'] })
+      window.history.replaceState({}, '', '/dashboard/calendar')
+    }
     if (searchParams.get('zoom_connected') === 'true') {
       toast.success('Zoom succesvol gekoppeld!')
       queryClient.invalidateQueries({ queryKey: ['calendars'] })
@@ -455,7 +461,7 @@ function CalendarPageInner() {
     try {
       const providerInfo = providers.find((p) => p.id === provider)
       const calendar = await calendarsApi.create({
-        name: providerInfo?.name || 'Google Calendar',
+        name: providerInfo?.name || provider,
         provider,
         ai_worker_id: selectedWorkerId,
       })
@@ -638,7 +644,7 @@ function CalendarPageInner() {
                               }
                             }}
                           >
-                            Verbind met Google
+                            {calendar.provider === 'microsoft' ? 'Verbind met Microsoft' : 'Verbind met Google'}
                           </Button>
                         ) : (
                           <>

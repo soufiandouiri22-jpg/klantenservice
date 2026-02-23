@@ -31,6 +31,7 @@ from app.schemas.calendar import (
 )
 from app.api.deps import get_current_user, get_current_company, require_admin
 from app.services import google_calendar_service as gcal
+from app.services import outlook_calendar_service as outlook
 from app.services import zoom_meeting_service as zoom_svc
 from app.services import teams_meeting_service as teams_svc
 from app.services import google_meet_service as gmeet_svc
@@ -100,16 +101,18 @@ async def get_oauth_url(
             detail="CalDAV gebruikt geen OAuth",
         )
 
-    if provider != CalendarProvider.GOOGLE:
+    calendar = _get_calendar_or_404(calendar_id, company.id, db)
+    state = json.dumps({"calendar_id": str(calendar.id), "company_id": str(company.id)})
+
+    if provider == CalendarProvider.GOOGLE:
+        auth_url = gcal.build_auth_url(state)
+    elif provider == CalendarProvider.MICROSOFT:
+        auth_url = outlook.build_auth_url(state)
+    else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Alleen Google Calendar wordt momenteel ondersteund",
+            detail="Onbekende provider",
         )
-
-    calendar = _get_calendar_or_404(calendar_id, company.id, db)
-
-    state = json.dumps({"calendar_id": str(calendar.id), "company_id": str(company.id)})
-    auth_url = gcal.build_auth_url(state)
 
     return {"auth_url": auth_url, "provider": provider.value}
 
@@ -169,6 +172,64 @@ async def google_oauth_callback(
     frontend_url = settings.FRONTEND_URL
     return RedirectResponse(
         url=f"{frontend_url}/dashboard/calendar?connected=true&calendar_id={calendar.id}"
+    )
+
+
+@router.get("/oauth/microsoft/callback")
+async def microsoft_oauth_callback(
+    code: str = Query(...),
+    state: str = Query(...),
+    db: Session = Depends(get_db),
+):
+    """
+    Microsoft OAuth callback. Microsoft redirects here after user consent.
+    Exchanges the code for tokens and stores them encrypted.
+    """
+    try:
+        state_data = json.loads(state)
+        calendar_id = UUID(state_data["calendar_id"])
+    except (json.JSONDecodeError, KeyError, ValueError):
+        raise HTTPException(status_code=400, detail="Ongeldige state parameter")
+
+    calendar = db.query(CalendarIntegration).filter(
+        CalendarIntegration.id == calendar_id
+    ).first()
+    if not calendar:
+        raise HTTPException(status_code=404, detail="Agenda-integratie niet gevonden")
+
+    try:
+        token_data = await outlook.exchange_code_for_tokens(code)
+    except Exception as e:
+        logger.error(f"Microsoft token exchange failed: {e}")
+        raise HTTPException(status_code=400, detail="Kon geen toegang krijgen tot Microsoft Outlook")
+
+    calendar.access_token_encrypted = encrypt_value(token_data["access_token"])
+    calendar.token_expires_at = datetime.utcnow() + timedelta(
+        seconds=token_data.get("expires_in", 3600)
+    )
+    if "refresh_token" in token_data:
+        calendar.refresh_token_encrypted = encrypt_value(token_data["refresh_token"])
+
+    try:
+        access_token = token_data["access_token"]
+        calendars = await outlook.list_outlook_calendars(access_token)
+        primary = next((c for c in calendars if c["primary"]), calendars[0] if calendars else None)
+        if primary:
+            calendar.external_calendar_id = primary["id"]
+            calendar.external_calendar_name = primary["summary"]
+    except Exception as e:
+        logger.warning(f"Could not fetch Outlook calendar list: {e}")
+
+    calendar.last_sync_at = datetime.utcnow()
+    calendar.sync_error = None
+    calendar.is_active = True
+    db.commit()
+
+    logger.info(f"Microsoft Outlook connected for integration {calendar.id}")
+
+    frontend_url = settings.FRONTEND_URL
+    return RedirectResponse(
+        url=f"{frontend_url}/dashboard/calendar?microsoft_connected=true&calendar_id={calendar.id}"
     )
 
 
@@ -492,7 +553,7 @@ async def delete_calendar(
     db.commit()
 
 
-# ── Calendar List (from Google) ───────────────────────────
+# ── Calendar List (from provider) ─────────────────────────
 
 
 @router.get("/{calendar_id}/google-calendars")
@@ -509,22 +570,41 @@ async def list_google_calendars_endpoint(
     return {"calendars": calendars}
 
 
-@router.patch("/{calendar_id}/select-calendar")
-async def select_google_calendar(
+@router.get("/{calendar_id}/microsoft-calendars")
+async def list_microsoft_calendars_endpoint(
     calendar_id: UUID,
-    external_calendar_id: str = Query(..., description="Google Calendar ID to use"),
+    current_user: User = Depends(get_current_user),
+    company: Company = Depends(get_current_company),
+    db: Session = Depends(get_db),
+):
+    """List all Outlook calendars the user has access to (after OAuth)."""
+    calendar = _get_calendar_or_404(calendar_id, company.id, db)
+    access_token = await outlook.get_valid_access_token(calendar, db)
+    calendars = await outlook.list_outlook_calendars(access_token)
+    return {"calendars": calendars}
+
+
+@router.patch("/{calendar_id}/select-calendar")
+async def select_calendar(
+    calendar_id: UUID,
+    external_calendar_id: str = Query(..., description="Calendar ID to use"),
     current_user: User = Depends(require_admin),
     company: Company = Depends(get_current_company),
     db: Session = Depends(get_db),
 ):
-    """Select which Google Calendar to use for this integration."""
+    """Select which calendar to use for this integration (Google or Microsoft)."""
     calendar = _get_calendar_or_404(calendar_id, company.id, db)
-    access_token = await gcal.get_valid_access_token(calendar, db)
 
-    calendars = await gcal.list_google_calendars(access_token)
+    if calendar.provider == CalendarProvider.MICROSOFT:
+        access_token = await outlook.get_valid_access_token(calendar, db)
+        calendars = await outlook.list_outlook_calendars(access_token)
+    else:
+        access_token = await gcal.get_valid_access_token(calendar, db)
+        calendars = await gcal.list_google_calendars(access_token)
+
     selected = next((c for c in calendars if c["id"] == external_calendar_id), None)
     if not selected:
-        raise HTTPException(status_code=404, detail="Google Calendar niet gevonden")
+        raise HTTPException(status_code=404, detail="Agenda niet gevonden")
 
     calendar.external_calendar_id = selected["id"]
     calendar.external_calendar_name = selected["summary"]
@@ -544,17 +624,18 @@ async def get_availability(
     company: Company = Depends(get_current_company),
     db: Session = Depends(get_db),
 ):
-    """Get available time slots from the connected Google Calendar."""
+    """Get available time slots from the connected calendar."""
     calendar = _get_calendar_or_404(calendar_id, company.id, db)
 
     if not calendar.access_token_encrypted:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Agenda is nog niet gekoppeld met Google. Doorloop eerst de OAuth-stap.",
+            detail="Agenda is nog niet gekoppeld. Doorloop eerst de OAuth-stap.",
         )
 
     try:
-        slots_raw = await gcal.get_availability_for_range(
+        svc = outlook if calendar.provider == CalendarProvider.MICROSOFT else gcal
+        slots_raw = await svc.get_availability_for_range(
             calendar=calendar,
             db=db,
             start_date=request.start_date,
@@ -563,7 +644,7 @@ async def get_availability(
         )
     except Exception as e:
         logger.error(f"Availability check failed for calendar {calendar_id}: {e}")
-        raise HTTPException(status_code=502, detail="Kon beschikbaarheid niet ophalen bij Google")
+        raise HTTPException(status_code=502, detail="Kon beschikbaarheid niet ophalen")
 
     slots = [
         AvailabilitySlot(
@@ -596,17 +677,18 @@ async def book_appointment(
     company: Company = Depends(get_current_company),
     db: Session = Depends(get_db),
 ):
-    """Book an appointment in the connected Google Calendar."""
+    """Book an appointment in the connected calendar."""
     calendar = _get_calendar_or_404(calendar_id, company.id, db)
 
     if not calendar.access_token_encrypted:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Agenda is nog niet gekoppeld met Google.",
+            detail="Agenda is nog niet gekoppeld.",
         )
 
     try:
-        event = await gcal.book_appointment(
+        svc = outlook if calendar.provider == CalendarProvider.MICROSOFT else gcal
+        event = await svc.book_appointment(
             calendar=calendar,
             db=db,
             summary=summary,
@@ -617,7 +699,17 @@ async def book_appointment(
         )
     except Exception as e:
         logger.error(f"Booking failed for calendar {calendar_id}: {e}")
-        raise HTTPException(status_code=502, detail="Kon afspraak niet aanmaken in Google Calendar")
+        raise HTTPException(status_code=502, detail="Kon afspraak niet aanmaken")
+
+    if calendar.provider == CalendarProvider.MICROSOFT:
+        return {
+            "message": "Afspraak ingepland",
+            "event_id": event.get("id"),
+            "html_link": event.get("webLink"),
+            "meet_link": event.get("meeting_link") or None,
+            "start": event.get("start"),
+            "end": event.get("end"),
+        }
 
     return {
         "message": "Afspraak ingepland",
@@ -669,8 +761,13 @@ async def sync_calendar(
         raise HTTPException(status_code=400, detail="Agenda is nog niet gekoppeld.")
 
     try:
-        access_token = await gcal.get_valid_access_token(calendar, db)
-        calendars = await gcal.list_google_calendars(access_token)
+        if calendar.provider == CalendarProvider.MICROSOFT:
+            access_token = await outlook.get_valid_access_token(calendar, db)
+            calendars = await outlook.list_outlook_calendars(access_token)
+        else:
+            access_token = await gcal.get_valid_access_token(calendar, db)
+            calendars = await gcal.list_google_calendars(access_token)
+
         calendar.last_sync_at = datetime.utcnow()
         calendar.sync_error = None
         db.commit()
@@ -679,7 +776,7 @@ async def sync_calendar(
             "message": "Synchronisatie gelukt",
             "calendar_id": str(calendar.id),
             "last_sync_at": calendar.last_sync_at.isoformat(),
-            "google_calendars_found": len(calendars),
+            "calendars_found": len(calendars),
         }
     except Exception as e:
         calendar.sync_error = str(e)
