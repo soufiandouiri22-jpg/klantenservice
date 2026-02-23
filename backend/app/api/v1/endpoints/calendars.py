@@ -404,6 +404,7 @@ async def book_appointment(
         "message": "Afspraak ingepland",
         "event_id": event.get("id"),
         "html_link": event.get("htmlLink"),
+        "meet_link": event.get("hangoutLink"),
         "start": event.get("start"),
         "end": event.get("end"),
     }

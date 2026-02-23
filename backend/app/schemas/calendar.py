@@ -54,6 +54,7 @@ class CalendarIntegrationUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     availability_rules: Optional[AvailabilityRules] = None
     appointment_types: Optional[List[AppointmentType]] = None
+    meeting_link_provider: Optional[str] = None
     is_active: Optional[bool] = None
     is_primary: Optional[bool] = None
 
@@ -67,6 +68,7 @@ class CalendarIntegrationResponse(CalendarIntegrationBase):
     external_calendar_name: Optional[str]
     availability_rules: Dict[str, Any]
     appointment_types: List[Dict[str, Any]]
+    meeting_link_provider: Optional[str] = "none"
     last_sync_at: Optional[datetime]
     sync_error: Optional[str]
     is_active: bool

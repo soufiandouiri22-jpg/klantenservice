@@ -72,6 +72,9 @@ class CalendarIntegration(Base):
         {"id": "meeting", "name": "Afspraak", "duration_minutes": 60},
     ])
     
+    # Meeting link provider (none, google_meet, zoom, teams)
+    meeting_link_provider = Column(String(20), default="none")
+
     # Sync status
     last_sync_at = Column(DateTime, nullable=True)
     sync_error = Column(Text, nullable=True)

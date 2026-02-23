@@ -163,8 +163,11 @@ async def create_event(
     description: str = "",
     attendee_email: str = "",
     timezone: str = "Europe/Amsterdam",
+    add_google_meet: bool = False,
 ) -> dict:
-    """Create a new event in a Google Calendar."""
+    """Create a new event in a Google Calendar, optionally with a Google Meet link."""
+    import uuid as _uuid
+
     event_body: dict = {
         "summary": summary,
         "start": {"dateTime": start.isoformat(), "timeZone": timezone},
@@ -174,12 +177,24 @@ async def create_event(
         event_body["description"] = description
     if attendee_email:
         event_body["attendees"] = [{"email": attendee_email}]
+    if add_google_meet:
+        event_body["conferenceData"] = {
+            "createRequest": {
+                "requestId": str(_uuid.uuid4()),
+                "conferenceSolutionKey": {"type": "hangoutsMeet"},
+            }
+        }
+
+    params = {}
+    if add_google_meet:
+        params["conferenceDataVersion"] = "1"
 
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             f"{GOOGLE_CALENDAR_API}/calendars/{calendar_id}/events",
             headers=_auth_headers(access_token),
             json=event_body,
+            params=params,
         )
         resp.raise_for_status()
         return resp.json()
@@ -323,6 +338,7 @@ async def book_appointment(
     """Book an appointment by creating a Google Calendar event."""
     access_token = await get_valid_access_token(calendar, db)
     cal_id = calendar.external_calendar_id or "primary"
+    add_meet = getattr(calendar, "meeting_link_provider", "none") == "google_meet"
     event = await create_event(
         access_token=access_token,
         calendar_id=cal_id,
@@ -331,6 +347,8 @@ async def book_appointment(
         end=end,
         description=description,
         attendee_email=attendee_email,
+        add_google_meet=add_meet,
     )
-    logger.info(f"Booked appointment: {event.get('id')} on calendar {calendar.id}")
+    meet_link = event.get("hangoutLink", "")
+    logger.info(f"Booked appointment: {event.get('id')} on calendar {calendar.id} meet={meet_link or 'none'}")
     return event

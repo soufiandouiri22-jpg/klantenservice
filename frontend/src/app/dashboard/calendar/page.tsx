@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
@@ -48,6 +48,93 @@ export default function CalendarPage() {
     <Suspense>
       <CalendarPageInner />
     </Suspense>
+  )
+}
+
+function SettingsForm({
+  calendar,
+  onSave,
+  onCancel,
+  isSaving,
+}: {
+  calendar: any
+  onSave: (data: any) => void
+  onCancel: () => void
+  isSaving: boolean
+}) {
+  const durationRef = useRef<HTMLInputElement>(null)
+  const bufferRef = useRef<HTMLInputElement>(null)
+  const noticeRef = useRef<HTMLInputElement>(null)
+  const advanceRef = useRef<HTMLInputElement>(null)
+  const meetRef = useRef<HTMLSelectElement>(null)
+
+  const handleSave = () => {
+    onSave({
+      availability_rules: {
+        ...calendar.availability_rules,
+        default_appointment_duration_minutes: Number(durationRef.current?.value) || 30,
+        buffer_after_minutes: Number(bufferRef.current?.value) || 15,
+        min_notice_hours: Number(noticeRef.current?.value) || 1,
+        max_advance_days: Number(advanceRef.current?.value) || 60,
+      },
+      meeting_link_provider: meetRef.current?.value || 'none',
+    })
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Input
+          ref={durationRef}
+          label="Standaard afspraakduur (minuten)"
+          type="number"
+          defaultValue={calendar.availability_rules?.default_appointment_duration_minutes || 30}
+        />
+        <Input
+          ref={bufferRef}
+          label="Buffer na afspraak (minuten)"
+          type="number"
+          defaultValue={calendar.availability_rules?.buffer_after_minutes || 15}
+        />
+        <Input
+          ref={noticeRef}
+          label="Minimale vooraanmelding (uren)"
+          type="number"
+          defaultValue={calendar.availability_rules?.min_notice_hours || 1}
+        />
+        <Input
+          ref={advanceRef}
+          label="Max. dagen vooruit boeken"
+          type="number"
+          defaultValue={calendar.availability_rules?.max_advance_days || 60}
+        />
+      </div>
+
+      <div>
+        <Select
+          ref={meetRef}
+          label="Vergaderlink toevoegen aan afspraken"
+          defaultValue={calendar.meeting_link_provider || 'none'}
+        >
+          <option value="none">Geen</option>
+          <option value="google_meet">Google Meet</option>
+          <option value="zoom" disabled>Zoom (binnenkort)</option>
+          <option value="teams" disabled>Microsoft Teams (binnenkort)</option>
+        </Select>
+        <p className="mt-1 text-xs text-gray-400">
+          Voegt automatisch een vergaderlink toe aan nieuwe afspraken.
+        </p>
+      </div>
+
+      <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+        <Button variant="outline" onClick={onCancel}>
+          Annuleren
+        </Button>
+        <Button onClick={handleSave} isLoading={isSaving}>
+          Opslaan
+        </Button>
+      </div>
+    </div>
   )
 }
 
@@ -502,54 +589,17 @@ function CalendarPageInner() {
         size="lg"
       >
         {selectedCalendar && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Input
-                label="Standaard afspraakduur (minuten)"
-                type="number"
-                defaultValue={selectedCalendar.availability_rules?.default_appointment_duration_minutes || 30}
-              />
-              <Input
-                label="Buffer na afspraak (minuten)"
-                type="number"
-                defaultValue={selectedCalendar.availability_rules?.buffer_after_minutes || 15}
-              />
-              <Input
-                label="Minimale vooraanmelding (uren)"
-                type="number"
-                defaultValue={selectedCalendar.availability_rules?.min_notice_hours || 1}
-              />
-              <Input
-                label="Max. dagen vooruit boeken"
-                type="number"
-                defaultValue={selectedCalendar.availability_rules?.max_advance_days || 60}
-              />
-            </div>
-
-            <div>
-              <Select
-                label="Vergaderlink toevoegen aan afspraken"
-                defaultValue={selectedCalendar.meeting_link_provider || 'none'}
-              >
-                <option value="none">Geen</option>
-                <option value="google_meet">Google Meet</option>
-                <option value="zoom" disabled>Zoom (binnenkort)</option>
-                <option value="teams" disabled>Microsoft Teams (binnenkort)</option>
-              </Select>
-              <p className="mt-1 text-xs text-gray-400">
-                Voegt automatisch een vergaderlink toe aan nieuwe afspraken.
-              </p>
-            </div>
-
-            <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
-              <Button variant="outline" onClick={() => setSelectedCalendar(null)}>
-                Annuleren
-              </Button>
-              <Button onClick={() => setSelectedCalendar(null)}>
-                Opslaan
-              </Button>
-            </div>
-          </div>
+          <SettingsForm
+            calendar={selectedCalendar}
+            onSave={(data: any) => {
+              updateMutation.mutate(
+                { id: selectedCalendar.id, data },
+                { onSuccess: () => setSelectedCalendar(null) },
+              )
+            }}
+            onCancel={() => setSelectedCalendar(null)}
+            isSaving={updateMutation.isPending}
+          />
         )}
       </Modal>
     </DashboardLayout>
