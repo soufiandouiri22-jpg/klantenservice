@@ -7,8 +7,8 @@ Create Date: 2026-02-20
 from alembic import op
 import sqlalchemy as sa
 
-revision = "032"
-down_revision = "031"
+revision = "032_teams_tokens"
+down_revision = "031_zoom_tokens"
 branch_labels = None
 depends_on = None
 
