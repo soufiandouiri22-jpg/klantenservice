@@ -382,7 +382,7 @@ function IntegrationsPageInner() {
                 <div className="flex items-center gap-2">
                   <h4 className="font-medium text-gray-900">{provider.name}</h4>
                   {!provider.available && (
-                    <Badge variant="default">Binnenkort</Badge>
+                    <Badge variant="gray">Binnenkort</Badge>
                   )}
                 </div>
                 <p className="text-sm text-gray-500">{provider.description}</p>
