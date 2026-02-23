@@ -138,7 +138,7 @@ function SettingsForm({
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
         <Input
           ref={durationRef}
           label="Standaard afspraakduur (minuten)"
