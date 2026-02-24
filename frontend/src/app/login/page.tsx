@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useState } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useForm } from 'react-hook-form'
@@ -55,6 +55,14 @@ function LoginContent() {
   // Get redirect URL from query params (used for checkout flow)
   const redirectUrl = searchParams.get('redirect') || '/dashboard'
 
+  useEffect(() => {
+    const token = localStorage.getItem('access_token')
+    const remembered = localStorage.getItem('remember_me')
+    if (token && remembered === 'true') {
+      router.replace(redirectUrl)
+    }
+  }, [router, redirectUrl])
+
   const {
     register,
     handleSubmit,
@@ -71,6 +79,11 @@ function LoginContent() {
       // Store tokens
       localStorage.setItem('access_token', response.access_token)
       localStorage.setItem('refresh_token', response.refresh_token)
+      if (rememberMe) {
+        localStorage.setItem('remember_me', 'true')
+      } else {
+        localStorage.removeItem('remember_me')
+      }
       
       // Get user and company info
       const [user, company] = await Promise.all([

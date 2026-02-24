@@ -51,9 +51,10 @@ function CallbackContent() {
         // Exchange code for tokens
         const tokens = await authApi.googleCallback(code, state)
         
-        // Store tokens
+        // Store tokens — Google login is always remembered
         localStorage.setItem('access_token', tokens.access_token)
         localStorage.setItem('refresh_token', tokens.refresh_token)
+        localStorage.setItem('remember_me', 'true')
         
         // Get user and company info
         const [user, company] = await Promise.all([

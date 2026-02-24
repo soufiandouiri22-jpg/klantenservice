@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { motion, useScroll, useTransform } from 'framer-motion'
 import Link from 'next/link'
 import { ArrowRight, Check, Headphones, Calendar, Globe, MessageSquare, Shield, Zap, Plug, Plus, Minus, Phone, Mail, Play, UserPlus, Settings, PhoneCall, Link2 } from 'lucide-react'
@@ -493,6 +494,16 @@ function TestimonialSlider() {
 }
 
 export default function HomePage() {
+  const router = useRouter()
+
+  useEffect(() => {
+    const token = localStorage.getItem('access_token')
+    const remembered = localStorage.getItem('remember_me')
+    if (token && remembered === 'true') {
+      router.replace('/dashboard')
+    }
+  }, [router])
+
   return (
     <div className="min-h-screen bg-white">
       <PublicHeader />

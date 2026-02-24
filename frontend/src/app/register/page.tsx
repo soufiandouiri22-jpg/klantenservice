@@ -82,6 +82,14 @@ function RegisterContent() {
   // Get redirect URL from query params (used for checkout flow)
   const redirectUrl = searchParams.get('redirect') || '/dashboard'
 
+  useEffect(() => {
+    const token = localStorage.getItem('access_token')
+    const remembered = localStorage.getItem('remember_me')
+    if (token && remembered === 'true') {
+      router.replace('/dashboard')
+    }
+  }, [router])
+
   const {
     register,
     handleSubmit,
