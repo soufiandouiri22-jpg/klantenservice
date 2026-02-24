@@ -183,16 +183,24 @@ const faqs = [
     answer: 'Absoluut! U kunt uw website koppelen, FAQ\'s toevoegen, en gedragsregels instellen. De AI leert automatisch van uw bedrijfsinformatie.',
   },
   {
+    question: 'Welke agenda\'s en CRM-systemen worden ondersteund?',
+    answer: 'De AI plant afspraken in via Google Calendar, Microsoft Outlook of CalDAV. Voor CRM ondersteunen we HubSpot, met Pipedrive en Salesforce binnenkort. Bij afspraken kan automatisch een Zoom, Microsoft Teams of Google Meet link worden toegevoegd.',
+  },
+  {
+    question: 'Kan ik gesprekken terugluisteren?',
+    answer: 'Ja, alle gesprekken worden opgenomen en zijn terug te luisteren via het dashboard. U vindt ze onder Gesprekken, inclusief een samenvatting en transcriptie.',
+  },
+  {
     question: 'Wat gebeurt er als de AI een vraag niet kan beantwoorden?',
     answer: 'De AI maakt een interne notitie met de vraag en vraagt om een terugbelnummer. U ontvangt direct een notificatie zodat u de klant kunt terugbellen.',
   },
   {
-    question: 'Hoe zit het met privacy en AVG?',
-    answer: 'Wij zijn volledig AVG/GDPR compliant. Alle data wordt in de EU gehost, en u heeft volledige controle over dataretentie en verwijdering.',
+    question: 'Wat kost het?',
+    answer: 'Ons Starter-abonnement begint bij \u20ac149 per maand met 1 AI-medewerker. Het Business-abonnement kost \u20ac299 per maand met meerdere AI-medewerkers en uitgebreide integraties. U kunt 14 dagen gratis proberen.',
   },
   {
-    question: 'Kan ik upgraden of downgraden?',
-    answer: 'Ja, u kunt op elk moment uw abonnement aanpassen. Wijzigingen gaan direct in en worden pro-rata verrekend.',
+    question: 'Hoe zit het met privacy en AVG?',
+    answer: 'Wij zijn volledig AVG/GDPR compliant. Alle data wordt in de EU gehost, en u heeft volledige controle over dataretentie en verwijdering.',
   },
 ]
 
