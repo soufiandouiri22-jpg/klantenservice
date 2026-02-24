@@ -371,11 +371,12 @@ function RegisterContent() {
                         {...register('last_name')}
                       />
                     </div>
+                    <input type="password" name="fake-password" autoComplete="off" className="hidden" tabIndex={-1} aria-hidden="true" />
                     <Input
                       label="Wachtwoord"
                       type="password"
                       placeholder="••••••••"
-                      autoComplete="new-password"
+                      autoComplete="off"
                       error={errors.password?.message}
                       helperText="Minimaal 8 karakters met hoofdletter, kleine letter en cijfer"
                       {...register('password')}
@@ -384,7 +385,7 @@ function RegisterContent() {
                       label="Wachtwoord bevestigen"
                       type="password"
                       placeholder="••••••••"
-                      autoComplete="new-password"
+                      autoComplete="off"
                       error={passwordsMismatch ? 'Wachtwoorden komen niet overeen' : errors.confirm_password?.message}
                       {...register('confirm_password')}
                     />
