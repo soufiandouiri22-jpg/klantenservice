@@ -142,6 +142,7 @@ function LoginContent() {
                 label="E-mailadres"
                 type="email"
                 placeholder="uw@email.nl"
+                autoComplete="username"
                 error={errors.email?.message}
                 {...register('email')}
               />
@@ -149,6 +150,7 @@ function LoginContent() {
                 label="Wachtwoord"
                 type="password"
                 placeholder="••••••••"
+                autoComplete="current-password"
                 error={errors.password?.message}
                 {...register('password')}
               />
