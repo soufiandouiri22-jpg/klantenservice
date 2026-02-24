@@ -92,7 +92,7 @@ function RegisterContent() {
     setValue,
   } = useForm<RegisterForm>({
     resolver: zodResolver(registerSchema),
-    defaultValues: { terms_accepted: true, marketing_consent: false },
+    defaultValues: { terms_accepted: true, marketing_consent: true },
     mode: 'onTouched',
   })
 
