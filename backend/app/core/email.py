@@ -43,11 +43,11 @@ def send_verification_code_email(
             <title>Verifieer uw e-mailadres</title>
         </head>
         <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <div style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
+            <div style="background-color: #2563eb; padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
                 <h1 style="color: white; margin: 0; font-size: 24px;">Verifieer uw e-mail</h1>
             </div>
             
-            <div style="background: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
+            <div style="background-color: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
                 <p style="font-size: 16px; margin-bottom: 20px;">
                     Hoi {first_name},
                 </p>
@@ -58,7 +58,7 @@ def send_verification_code_email(
                 
                 <div style="text-align: center; margin: 30px 0;">
                     <div style="background: #ffffff; border: 2px solid #2563eb; border-radius: 12px; padding: 20px 40px; display: inline-block;">
-                        <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #1d4ed8; font-family: monospace;">
+                        <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #2563eb; font-family: monospace;">
                             {formatted_code}
                         </span>
                     </div>
@@ -131,11 +131,11 @@ def send_invite_email(
             <title>Uitnodiging voor {company_name}</title>
         </head>
         <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <div style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
+            <div style="background-color: #2563eb; padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
                 <h1 style="color: white; margin: 0; font-size: 24px;">Je bent uitgenodigd!</h1>
             </div>
             
-            <div style="background: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
+            <div style="background-color: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
                 <p style="font-size: 16px; margin-bottom: 20px;">
                     Hoi {first_name},
                 </p>
@@ -210,11 +210,11 @@ def send_welcome_email(
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
         </head>
         <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <div style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
+            <div style="background-color: #2563eb; padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
                 <h1 style="color: white; margin: 0; font-size: 24px;">Welkom bij klantenservice.ai!</h1>
             </div>
             
-            <div style="background: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
+            <div style="background-color: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
                 <p style="font-size: 16px; margin-bottom: 20px;">
                     Hoi {first_name},
                 </p>
