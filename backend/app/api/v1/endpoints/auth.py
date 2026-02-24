@@ -3,6 +3,7 @@ klantenservice.ai - Authentication Endpoints
 """
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from uuid import uuid4
 import re
@@ -96,26 +97,25 @@ def get_platform_voice_defaults(db: Session) -> dict:
     return defaults
 
 
+class RegisterRequest(BaseModel):
+    company_data: CompanyCreate
+    user_data: UserCreate
+    terms_accepted: bool = True
+    marketing_consent: bool = False
+
+
 @router.post("/register", response_model=RegisterResponse, status_code=status.HTTP_201_CREATED)
 async def register(
-    company_data: CompanyCreate,
-    user_data: UserCreate,
-    terms_accepted: bool = False,
-    marketing_consent: bool = False,
+    payload: RegisterRequest,
     db: Session = Depends(get_db)
 ):
     """
     Register a new company and owner account.
-    
-    terms_accepted must be True (user agreed to terms & privacy).
-    marketing_consent is optional (opt-in for email marketing).
-    Returns email address (no tokens). User must verify email before logging in.
+    By submitting the form the user accepts the terms & privacy policy.
     """
-    if not terms_accepted:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="U dient akkoord te gaan met de algemene voorwaarden en het privacybeleid.",
-        )
+    company_data = payload.company_data
+    user_data = payload.user_data
+    marketing_consent = payload.marketing_consent
     # Check if email already exists
     existing_user = db.query(User).filter(User.email == user_data.email).first()
     if existing_user:
