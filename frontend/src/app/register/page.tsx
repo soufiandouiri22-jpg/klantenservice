@@ -361,12 +361,14 @@ function RegisterContent() {
                       <Input
                         label="Voornaam"
                         placeholder="Jan"
+                        autoComplete="off"
                         error={errors.first_name?.message}
                         {...register('first_name')}
                       />
                       <Input
                         label="Achternaam"
                         placeholder="Jansen"
+                        autoComplete="off"
                         error={errors.last_name?.message}
                         {...register('last_name')}
                       />
