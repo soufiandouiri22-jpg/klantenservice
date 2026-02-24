@@ -495,14 +495,19 @@ function TestimonialSlider() {
 
 export default function HomePage() {
   const router = useRouter()
+  const [checking, setChecking] = useState(true)
 
   useEffect(() => {
     const token = localStorage.getItem('access_token')
     const remembered = localStorage.getItem('remember_me')
     if (token && remembered === 'true') {
       router.replace('/dashboard')
+      return
     }
+    setChecking(false)
   }, [router])
+
+  if (checking) return null
 
   return (
     <div className="min-h-screen bg-white">

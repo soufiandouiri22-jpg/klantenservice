@@ -51,6 +51,7 @@ function LoginContent() {
   const [isLoading, setIsLoading] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
   const [rememberMe, setRememberMe] = useState(false)
+  const [checking, setChecking] = useState(true)
   
   // Get redirect URL from query params (used for checkout flow)
   const redirectUrl = searchParams.get('redirect') || '/dashboard'
@@ -60,8 +61,12 @@ function LoginContent() {
     const remembered = localStorage.getItem('remember_me')
     if (token && remembered === 'true') {
       router.replace(redirectUrl)
+      return
     }
+    setChecking(false)
   }, [router, redirectUrl])
+
+  if (checking) return null
 
   const {
     register,

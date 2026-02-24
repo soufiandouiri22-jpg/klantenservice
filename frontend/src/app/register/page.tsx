@@ -70,6 +70,7 @@ function RegisterContent() {
   const [isLoading, setIsLoading] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
   const [step, setStep] = useState(1)
+  const [checking, setChecking] = useState(true)
   
   // KVK autocomplete state
   const [kvkResults, setKvkResults] = useState<any[]>([])
@@ -87,8 +88,12 @@ function RegisterContent() {
     const remembered = localStorage.getItem('remember_me')
     if (token && remembered === 'true') {
       router.replace('/dashboard')
+      return
     }
+    setChecking(false)
   }, [router])
+
+  if (checking) return null
 
   const {
     register,
