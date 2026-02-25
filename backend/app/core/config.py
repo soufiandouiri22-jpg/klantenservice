@@ -90,8 +90,8 @@ class Settings(BaseSettings):
     ELEVENLABS_AGENT_ID: str = ""  # Created via API; used for register_call
     
     # KVK (Kamer van Koophandel)
-    KVK_API_KEY: str = "l7xx1f2691f2520d487b902f4e0b57a0b197"  # Test key; replace with production key
-    KVK_API_URL: str = "https://api.kvk.nl/test/api/v2"  # Use https://api.kvk.nl/api/v2 for production
+    KVK_API_KEY: str = "l74f93124b88e640109dad5323a65f58bd"
+    KVK_API_URL: str = "https://api.kvk.nl/api/v2"
     
     # Frontend URL (for invite links)
     FRONTEND_URL: str = "http://localhost:3000"
