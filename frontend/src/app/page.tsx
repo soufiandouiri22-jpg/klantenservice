@@ -185,7 +185,7 @@ const faqs = [
   },
   {
     question: 'Welke agenda\'s en CRM-systemen worden ondersteund?',
-    answer: 'De AI plant afspraken in via Google Calendar, Microsoft Outlook of CalDAV. Voor CRM ondersteunen we HubSpot, met Pipedrive en Salesforce binnenkort. Bij afspraken kan automatisch een Zoom, Microsoft Teams of Google Meet link worden toegevoegd.',
+    answer: 'De AI plant afspraken in via Google Calendar, Microsoft Outlook of CalDAV. Voor CRM ondersteunen we HubSpot, Pipedrive en Salesforce. Bij afspraken kan automatisch een Zoom, Microsoft Teams of Google Meet link worden toegevoegd.',
   },
   {
     question: 'Kan ik gesprekken terugluisteren?',
