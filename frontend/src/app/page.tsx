@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { motion, useScroll, useTransform } from 'framer-motion'
+import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
-import { ArrowRight, Check, Headphones, Calendar, Globe, MessageSquare, Shield, Zap, Plug, Plus, Minus, Phone, Mail, Play, UserPlus, Settings, PhoneCall, Link2 } from 'lucide-react'
+import { ArrowRight, Check, Headphones, Calendar, Globe, MessageSquare, Shield, Zap, Plug, Plus, Minus, Phone, Mail, Play, UserPlus, Settings, PhoneCall, Link2, Mic, Eye, Puzzle, TrendingUp, ShieldCheck } from 'lucide-react'
 import Image from 'next/image'
 import PublicHeader from '@/components/layout/PublicHeader'
 import Footer from '@/components/layout/Footer'
@@ -322,6 +322,162 @@ function DemoSection() {
   )
 }
 
+const showcaseItems = [
+  {
+    icon: Mic,
+    title: 'Eén keer instellen, altijd klaar',
+    description: 'Configureer uw AI-medewerker één keer en hij handelt alles af: telefoongesprekken, afspraken inplannen, CRM bijwerken en notities maken. Geen dubbel werk, alles draait automatisch.',
+    visual: { emoji: '🎙️', gradient: 'from-blue-500 to-indigo-600' },
+  },
+  {
+    icon: Eye,
+    title: 'Elk gesprek inzichtelijk',
+    description: 'Luister gesprekken terug, lees automatische samenvattingen en bekijk volledige transcripties. Weet precies wat er is besproken en waar actie nodig is.',
+    visual: { emoji: '📊', gradient: 'from-emerald-500 to-teal-600' },
+  },
+  {
+    icon: Puzzle,
+    title: 'Koppel uw bestaande tools',
+    description: 'Verbind met Google Calendar, Outlook, HubSpot, Salesforce, Zoom, Microsoft Teams en meer in een paar klikken. Geen technische kennis nodig, alles werkt direct samen.',
+    visual: { emoji: '🔗', gradient: 'from-violet-500 to-purple-600' },
+  },
+  {
+    icon: TrendingUp,
+    title: 'Schaal zonder grenzen',
+    description: 'Of het nu een rustige maandag is of een piekmoment, uw AI-medewerkers handelen elk gesprek af. Geen wachttijden, geen gemiste oproepen, geen extra personeel nodig.',
+    visual: { emoji: '📈', gradient: 'from-orange-500 to-red-500' },
+  },
+  {
+    icon: ShieldCheck,
+    title: 'U blijft in controle',
+    description: 'Bepaal precies wat de AI wel en niet mag zeggen, stel gedragsregels in en configureer dataretentie. Volledig AVG-compliant met hosting in de EU.',
+    visual: { emoji: '🛡️', gradient: 'from-sky-500 to-blue-600' },
+  },
+]
+
+function ShowcaseSection() {
+  const [activeIndex, setActiveIndex] = useState(0)
+  const sectionRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setActiveIndex((prev) => (prev + 1) % showcaseItems.length)
+    }, 6000)
+    return () => clearInterval(interval)
+  }, [activeIndex])
+
+  return (
+    <section ref={sectionRef} className="py-20 md:py-32 px-4 sm:px-6 bg-gray-50 relative z-10">
+      <div className="max-w-6xl mx-auto w-full">
+        <div className="text-center mb-16">
+          <span className="inline-flex items-center gap-2 bg-primary-100 text-primary-700 px-4 py-2 rounded-full text-sm font-medium mb-4">
+            <Zap className="h-4 w-4" />
+            Waarom klantenservice.ai?
+          </span>
+          <h2 className="text-3xl md:text-4xl lg:text-5xl font-display font-bold text-gray-900">
+            Alles wat uw bedrijf nodig heeft
+          </h2>
+          <p className="mt-4 text-lg text-gray-600 max-w-2xl mx-auto">
+            Eén platform voor al uw telefonische klantenservice.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-start">
+          {/* Left: Accordion */}
+          <div className="space-y-3">
+            {showcaseItems.map((item, index) => {
+              const Icon = item.icon
+              const isActive = activeIndex === index
+              return (
+                <motion.div
+                  key={index}
+                  onClick={() => setActiveIndex(index)}
+                  className={`rounded-2xl border cursor-pointer transition-all duration-300 ${
+                    isActive
+                      ? 'bg-white border-primary-200 shadow-lg shadow-primary-100/50'
+                      : 'bg-white/60 border-gray-200 hover:bg-white hover:border-gray-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 px-5 py-4">
+                    <div className={`flex h-9 w-9 items-center justify-center rounded-lg transition-colors ${
+                      isActive ? 'bg-primary-100 text-primary-600' : 'bg-gray-100 text-gray-500'
+                    }`}>
+                      <Icon className="h-5 w-5" />
+                    </div>
+                    <h3 className={`font-semibold transition-colors ${
+                      isActive ? 'text-gray-900' : 'text-gray-700'
+                    }`}>
+                      {item.title}
+                    </h3>
+                    <div className="ml-auto">
+                      {isActive ? (
+                        <Minus className="h-5 w-5 text-primary-500" />
+                      ) : (
+                        <Plus className="h-5 w-5 text-gray-400" />
+                      )}
+                    </div>
+                  </div>
+                  <AnimatePresence>
+                    {isActive && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.3, ease: 'easeInOut' }}
+                        className="overflow-hidden"
+                      >
+                        <div className="px-5 pb-5">
+                          <p className="text-gray-600 leading-relaxed pl-12">
+                            {item.description}
+                          </p>
+                          {/* Progress bar */}
+                          <div className="mt-4 ml-12 h-1 bg-gray-100 rounded-full overflow-hidden">
+                            <motion.div
+                              className="h-full bg-primary-500 rounded-full"
+                              initial={{ width: '0%' }}
+                              animate={{ width: '100%' }}
+                              transition={{ duration: 6, ease: 'linear' }}
+                              key={`progress-${activeIndex}`}
+                            />
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
+              )
+            })}
+          </div>
+
+          {/* Right: Visual */}
+          <div className="hidden lg:flex items-center justify-center">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeIndex}
+                initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -20, scale: 0.95 }}
+                transition={{ duration: 0.4, ease: 'easeInOut' }}
+                className="w-full"
+              >
+                <div className={`relative aspect-[4/3] rounded-3xl bg-gradient-to-br ${showcaseItems[activeIndex].visual.gradient} p-8 flex items-center justify-center shadow-2xl`}>
+                  <div className="absolute inset-0 rounded-3xl bg-white/10 backdrop-blur-sm" />
+                  <div className="relative text-center">
+                    <span className="text-8xl mb-6 block">{showcaseItems[activeIndex].visual.emoji}</span>
+                    <h3 className="text-2xl font-bold text-white">
+                      {showcaseItems[activeIndex].title}
+                    </h3>
+                  </div>
+                </div>
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 // Video section with scroll-based scale animation
 function VideoSection() {
   const sectionRef = useRef<HTMLDivElement>(null)
@@ -634,8 +790,8 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Tutorial Video Section — hidden, replaced by carousel later */}
-      {/* <VideoSection /> */}
+      {/* Feature Showcase Accordion */}
+      <ShowcaseSection />
 
       {/* Testimonials / Case Studies - Full Width Scrolling */}
       <section className="py-20 md:py-32 bg-white overflow-hidden relative z-10">
