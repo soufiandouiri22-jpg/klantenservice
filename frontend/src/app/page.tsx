@@ -205,6 +205,20 @@ const faqs = [
   },
 ]
 
+function FadeUp({ children, delay = 0, className = '' }: { children: React.ReactNode; delay?: number; className?: string }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 30 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: '-50px' }}
+      transition={{ duration: 0.6, delay, ease: [0.21, 0.47, 0.32, 0.98] }}
+      className={className}
+    >
+      {children}
+    </motion.div>
+  )
+}
+
 // Grid background component
 function GridBackground() {
   return (
@@ -253,14 +267,14 @@ function DemoSection() {
   return (
     <section ref={sectionRef} className="py-20 md:py-32 px-4 sm:px-6 relative bg-white z-10">
       <div className="max-w-5xl mx-auto w-full">
-        <div className="text-center mb-12">
+        <FadeUp className="text-center mb-12">
           <h2 className="text-3xl md:text-4xl lg:text-5xl font-display font-bold text-gray-900">
             Zie het in actie
           </h2>
           <p className="mt-4 text-lg text-gray-600 max-w-2xl mx-auto">
             Bekijk hoe onze AI-telefonist uw klanten te woord staat en afspraken inplant.
           </p>
-        </div>
+        </FadeUp>
 
         <motion.div
           style={{ scale, opacity }}
@@ -325,51 +339,82 @@ function DemoSection() {
 const showcaseItems = [
   {
     icon: Mic,
+    label: 'Instellen',
     title: 'Eén keer instellen, altijd klaar',
     description: 'Configureer uw AI-medewerker één keer en hij handelt alles af: telefoongesprekken, afspraken inplannen, CRM bijwerken en notities maken. Geen dubbel werk, alles draait automatisch.',
-    visual: { emoji: '🎙️', gradient: 'from-blue-500 to-indigo-600' },
+    highlights: ['Telefoongesprekken', 'Afspraken inplannen', 'CRM bijwerken', 'Notities maken'],
+    gradient: 'from-blue-600 to-indigo-600',
   },
   {
     icon: Eye,
+    label: 'Inzicht',
     title: 'Elk gesprek inzichtelijk',
     description: 'Luister gesprekken terug, lees automatische samenvattingen en bekijk volledige transcripties. Weet precies wat er is besproken en waar actie nodig is.',
-    visual: { emoji: '📊', gradient: 'from-emerald-500 to-teal-600' },
+    highlights: ['Opnames terugluisteren', 'Samenvattingen', 'Transcripties', 'Actiepunten'],
+    gradient: 'from-emerald-600 to-teal-600',
   },
   {
     icon: Puzzle,
+    label: 'Integraties',
     title: 'Koppel uw bestaande tools',
     description: 'Verbind met Google Calendar, Outlook, HubSpot, Salesforce, Zoom, Microsoft Teams en meer in een paar klikken. Geen technische kennis nodig, alles werkt direct samen.',
-    visual: { emoji: '🔗', gradient: 'from-violet-500 to-purple-600' },
+    highlights: ['Google Calendar', 'HubSpot & Salesforce', 'Zoom & Teams', 'Microsoft Outlook'],
+    gradient: 'from-violet-600 to-purple-600',
   },
   {
     icon: TrendingUp,
+    label: 'Schalen',
     title: 'Schaal zonder grenzen',
     description: 'Of het nu een rustige maandag is of een piekmoment, uw AI-medewerkers handelen elk gesprek af. Geen wachttijden, geen gemiste oproepen, geen extra personeel nodig.',
-    visual: { emoji: '📈', gradient: 'from-orange-500 to-red-500' },
+    highlights: ['Geen wachttijden', 'Geen gemiste oproepen', 'Piekbelasting opvangen', '24/7 beschikbaar'],
+    gradient: 'from-orange-500 to-red-500',
   },
   {
     icon: ShieldCheck,
+    label: 'Controle',
     title: 'U blijft in controle',
     description: 'Bepaal precies wat de AI wel en niet mag zeggen, stel gedragsregels in en configureer dataretentie. Volledig AVG-compliant met hosting in de EU.',
-    visual: { emoji: '🛡️', gradient: 'from-sky-500 to-blue-600' },
+    highlights: ['Gedragsregels instellen', 'Dataretentie configureren', 'AVG-compliant', 'EU hosting'],
+    gradient: 'from-sky-600 to-blue-600',
   },
 ]
 
 function ShowcaseSection() {
   const [activeIndex, setActiveIndex] = useState(0)
-  const sectionRef = useRef<HTMLDivElement>(null)
+  const [progress, setProgress] = useState(0)
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const DURATION = 5000
+
+  const startTimer = () => {
+    if (intervalRef.current) clearInterval(intervalRef.current)
+    setProgress(0)
+    const tick = 30
+    let elapsed = 0
+    intervalRef.current = setInterval(() => {
+      elapsed += tick
+      setProgress(elapsed / DURATION)
+      if (elapsed >= DURATION) {
+        setActiveIndex((prev) => (prev + 1) % showcaseItems.length)
+      }
+    }, tick)
+  }
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setActiveIndex((prev) => (prev + 1) % showcaseItems.length)
-    }, 6000)
-    return () => clearInterval(interval)
+    startTimer()
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
   }, [activeIndex])
 
+  const selectTab = (index: number) => {
+    if (index === activeIndex) return
+    setActiveIndex(index)
+  }
+
+  const item = showcaseItems[activeIndex]
+
   return (
-    <section ref={sectionRef} className="py-20 md:py-32 px-4 sm:px-6 bg-gray-50 relative z-10">
-      <div className="max-w-6xl mx-auto w-full">
-        <div className="text-center mb-16">
+    <section className="py-20 md:py-32 px-4 sm:px-6 bg-white relative z-10">
+      <div className="max-w-5xl mx-auto w-full">
+        <FadeUp className="text-center mb-12">
           <span className="inline-flex items-center gap-2 bg-primary-100 text-primary-700 px-4 py-2 rounded-full text-sm font-medium mb-4">
             <Zap className="h-4 w-4" />
             Waarom klantenservice.ai?
@@ -377,102 +422,81 @@ function ShowcaseSection() {
           <h2 className="text-3xl md:text-4xl lg:text-5xl font-display font-bold text-gray-900">
             Alles wat uw bedrijf nodig heeft
           </h2>
-          <p className="mt-4 text-lg text-gray-600 max-w-2xl mx-auto">
-            Eén platform voor al uw telefonische klantenservice.
-          </p>
-        </div>
+        </FadeUp>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-start">
-          {/* Left: Accordion */}
-          <div className="space-y-3">
-            {showcaseItems.map((item, index) => {
-              const Icon = item.icon
+        {/* Tabs */}
+        <div className="flex justify-center mb-10">
+          <div className="inline-flex gap-1 bg-gray-100 rounded-xl p-1">
+            {showcaseItems.map((tab, index) => {
+              const Icon = tab.icon
               const isActive = activeIndex === index
               return (
-                <motion.div
+                <button
                   key={index}
-                  onClick={() => setActiveIndex(index)}
-                  className={`rounded-2xl border cursor-pointer transition-all duration-300 ${
+                  onClick={() => selectTab(index)}
+                  className={`relative flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-300 ${
                     isActive
-                      ? 'bg-white border-primary-200 shadow-lg shadow-primary-100/50'
-                      : 'bg-white/60 border-gray-200 hover:bg-white hover:border-gray-300'
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700'
                   }`}
                 >
-                  <div className="flex items-center gap-3 px-5 py-4">
-                    <div className={`flex h-9 w-9 items-center justify-center rounded-lg transition-colors ${
-                      isActive ? 'bg-primary-100 text-primary-600' : 'bg-gray-100 text-gray-500'
-                    }`}>
-                      <Icon className="h-5 w-5" />
-                    </div>
-                    <h3 className={`font-semibold transition-colors ${
-                      isActive ? 'text-gray-900' : 'text-gray-700'
-                    }`}>
-                      {item.title}
-                    </h3>
-                    <div className="ml-auto">
-                      {isActive ? (
-                        <Minus className="h-5 w-5 text-primary-500" />
-                      ) : (
-                        <Plus className="h-5 w-5 text-gray-400" />
-                      )}
-                    </div>
-                  </div>
-                  <AnimatePresence>
-                    {isActive && (
+                  <Icon className="h-4 w-4" />
+                  <span className="hidden sm:inline">{tab.label}</span>
+                  {isActive && (
+                    <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full overflow-hidden">
                       <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.3, ease: 'easeInOut' }}
-                        className="overflow-hidden"
-                      >
-                        <div className="px-5 pb-5">
-                          <p className="text-gray-600 leading-relaxed pl-12">
-                            {item.description}
-                          </p>
-                          {/* Progress bar */}
-                          <div className="mt-4 ml-12 h-1 bg-gray-100 rounded-full overflow-hidden">
-                            <motion.div
-                              className="h-full bg-primary-500 rounded-full"
-                              initial={{ width: '0%' }}
-                              animate={{ width: '100%' }}
-                              transition={{ duration: 6, ease: 'linear' }}
-                              key={`progress-${activeIndex}`}
-                            />
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </motion.div>
+                        className="h-full bg-primary-500"
+                        style={{ width: `${progress * 100}%` }}
+                      />
+                    </div>
+                  )}
+                </button>
               )
             })}
           </div>
-
-          {/* Right: Visual */}
-          <div className="hidden lg:flex items-center justify-center">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={activeIndex}
-                initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -20, scale: 0.95 }}
-                transition={{ duration: 0.4, ease: 'easeInOut' }}
-                className="w-full"
-              >
-                <div className={`relative aspect-[4/3] rounded-3xl bg-gradient-to-br ${showcaseItems[activeIndex].visual.gradient} p-8 flex items-center justify-center shadow-2xl`}>
-                  <div className="absolute inset-0 rounded-3xl bg-white/10 backdrop-blur-sm" />
-                  <div className="relative text-center">
-                    <span className="text-8xl mb-6 block">{showcaseItems[activeIndex].visual.emoji}</span>
-                    <h3 className="text-2xl font-bold text-white">
-                      {showcaseItems[activeIndex].title}
-                    </h3>
-                  </div>
-                </div>
-              </motion.div>
-            </AnimatePresence>
-          </div>
         </div>
+
+        {/* Content card */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeIndex}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+            transition={{ duration: 0.35, ease: [0.21, 0.47, 0.32, 0.98] }}
+          >
+            <div className={`relative rounded-3xl bg-gradient-to-br ${item.gradient} p-8 md:p-12 overflow-hidden`}>
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.15),transparent_60%)]" />
+              <div className="absolute bottom-0 right-0 w-64 h-64 bg-white/5 rounded-full translate-x-20 translate-y-20" />
+
+              <div className="relative grid md:grid-cols-2 gap-8 items-center">
+                <div>
+                  <h3 className="text-2xl md:text-3xl font-bold text-white mb-4">
+                    {item.title}
+                  </h3>
+                  <p className="text-white/80 text-base md:text-lg leading-relaxed">
+                    {item.description}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  {item.highlights.map((highlight, i) => (
+                    <motion.div
+                      key={highlight}
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: i * 0.08, duration: 0.3 }}
+                      className="bg-white/15 backdrop-blur-sm rounded-xl px-4 py-3 text-white text-sm font-medium flex items-center gap-2"
+                    >
+                      <Check className="h-4 w-4 text-white/70 flex-shrink-0" />
+                      {highlight}
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </AnimatePresence>
       </div>
     </section>
   )
@@ -730,7 +754,7 @@ export default function HomePage() {
       {/* How It Works */}
       <section className="py-20 md:py-32 bg-white relative z-10">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <div className="text-center mb-16">
+          <FadeUp className="text-center mb-16">
             <span className="inline-flex items-center gap-2 bg-primary-100 text-primary-700 px-4 py-2 rounded-full text-sm font-medium mb-4">
               <Zap className="h-4 w-4" />
               Binnen 8 minuten live
@@ -741,7 +765,7 @@ export default function HomePage() {
             <p className="mt-4 text-lg text-gray-600 max-w-2xl mx-auto">
               In drie eenvoudige stappen is uw AI-telefonist operationeel
             </p>
-          </div>
+          </FadeUp>
 
           <div className="grid md:grid-cols-3 gap-6 md:gap-8">
             {howItWorks.map((item, index) => (
@@ -795,14 +819,14 @@ export default function HomePage() {
 
       {/* Testimonials / Case Studies - Full Width Scrolling */}
       <section className="py-20 md:py-32 bg-white overflow-hidden relative z-10">
-        <div className="text-center mb-16 px-4 sm:px-6">
+        <FadeUp className="text-center mb-16 px-4 sm:px-6">
           <h2 className="text-3xl md:text-4xl lg:text-5xl font-display font-bold text-gray-900">
             Wat onze klanten bereiken
           </h2>
           <p className="mt-4 text-lg text-gray-600">
             Echte resultaten. Echte bedrijven. Echte tijdsbesparing.
           </p>
-        </div>
+        </FadeUp>
 
         {/* Interactive Scrolling Cards */}
         <TestimonialSlider />
@@ -831,14 +855,14 @@ export default function HomePage() {
       {/* Features */}
       <section id="features" className="py-20 md:py-32 bg-white relative z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-          <div className="text-center mb-16">
+          <FadeUp className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl lg:text-5xl font-display font-bold text-gray-900">
               Alles wat u nodig heeft
             </h2>
             <p className="mt-4 text-lg text-gray-600">
               Een complete oplossing voor uw telefonische klantenservice
             </p>
-          </div>
+          </FadeUp>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {features.map((feature, index) => (
               <AnimatedCard key={feature.title} delay={index * 100}>
@@ -858,7 +882,7 @@ export default function HomePage() {
       {/* Integrations */}
       <section className="py-20 md:py-32 bg-white relative z-10">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <div className="text-center mb-16">
+          <FadeUp className="text-center mb-16">
             <span className="inline-flex items-center gap-2 bg-primary-100 text-primary-700 px-4 py-2 rounded-full text-sm font-medium mb-4">
               <Link2 className="h-4 w-4" />
               Naadloos geïntegreerd
@@ -869,7 +893,7 @@ export default function HomePage() {
             <p className="mt-4 text-lg text-gray-600 max-w-2xl mx-auto">
               Onze AI-telefonist integreert direct met de agenda- en communicatietools die u al gebruikt
             </p>
-          </div>
+          </FadeUp>
 
           {/* Integration logos grid */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
@@ -936,7 +960,7 @@ export default function HomePage() {
       {/* Pricing */}
       <section id="pricing" className="py-20 md:py-32 relative bg-white z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-          <div className="text-center mb-16">
+          <FadeUp className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl lg:text-5xl font-display font-bold text-gray-900">
               Eenvoudige, transparante prijzen
             </h2>
@@ -948,7 +972,7 @@ export default function HomePage() {
               <span className="text-orange-500">•</span>
               <span className="text-orange-600">Annuleren kan altijd</span>
             </div>
-          </div>
+          </FadeUp>
           <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
             {plans.map((plan) => (
               <div
@@ -1025,14 +1049,14 @@ export default function HomePage() {
       {/* FAQ */}
       <section id="faq" className="py-20 md:py-32 bg-white relative z-10">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-          <div className="text-center mb-16">
+          <FadeUp className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl lg:text-5xl font-display font-bold text-gray-900">
               Veelgestelde vragen
             </h2>
             <p className="mt-4 text-lg text-gray-600">
               Alles wat u wilt weten voordat u begint
             </p>
-          </div>
+          </FadeUp>
           <div className="space-y-4">
             {faqs.map((faq, index) => (
               <FAQItem key={index} question={faq.question} answer={faq.answer} />
@@ -1044,6 +1068,7 @@ export default function HomePage() {
       {/* CTA Card */}
       <section className="py-20 md:py-32 px-4 sm:px-6 bg-white relative z-10">
         <div className="max-w-4xl mx-auto">
+          <FadeUp>
           <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-6 md:p-8 lg:p-12 xl:p-16 text-center">
             <h2 className="text-2xl md:text-3xl lg:text-4xl font-display font-bold text-gray-900">
               Klaar om te starten?
@@ -1061,6 +1086,7 @@ export default function HomePage() {
               </Link>
             </div>
           </div>
+          </FadeUp>
         </div>
       </section>
 
