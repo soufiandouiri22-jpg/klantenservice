@@ -56,6 +56,14 @@ function LoginContent() {
   // Get redirect URL from query params (used for checkout flow)
   const redirectUrl = searchParams.get('redirect') || '/dashboard'
 
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<LoginForm>({
+    resolver: zodResolver(loginSchema),
+  })
+
   useEffect(() => {
     const token = localStorage.getItem('access_token')
     const remembered = localStorage.getItem('remember_me')
@@ -71,14 +79,6 @@ function LoginContent() {
       <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-primary-600" />
     </div>
   )
-
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<LoginForm>({
-    resolver: zodResolver(loginSchema),
-  })
 
   const onSubmit = async (data: LoginForm) => {
     setIsLoading(true)

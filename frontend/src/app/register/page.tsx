@@ -83,22 +83,6 @@ function RegisterContent() {
   // Get redirect URL from query params (used for checkout flow)
   const redirectUrl = searchParams.get('redirect') || '/dashboard'
 
-  useEffect(() => {
-    const token = localStorage.getItem('access_token')
-    const remembered = localStorage.getItem('remember_me')
-    if (token && remembered === 'true') {
-      router.replace('/dashboard')
-      return
-    }
-    setChecking(false)
-  }, [router])
-
-  if (checking) return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-primary-600" />
-    </div>
-  )
-
   const {
     register,
     handleSubmit,
@@ -116,6 +100,16 @@ function RegisterContent() {
   const watchPassword = watch('password', '')
   const watchConfirmPassword = watch('confirm_password', '')
   const passwordsMismatch = watchConfirmPassword.length > 0 && watchPassword !== watchConfirmPassword
+
+  useEffect(() => {
+    const token = localStorage.getItem('access_token')
+    const remembered = localStorage.getItem('remember_me')
+    if (token && remembered === 'true') {
+      router.replace('/dashboard')
+      return
+    }
+    setChecking(false)
+  }, [router])
 
   // Close KVK dropdown when clicking outside
   useEffect(() => {
@@ -161,6 +155,12 @@ function RegisterContent() {
     setSelectedKvkData(result)
     setShowKvkDropdown(false)
   }, [setValue])
+
+  if (checking) return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-primary-600" />
+    </div>
+  )
 
   const handleNextStep = async () => {
     const isValid = await trigger(['company_name', 'company_email'])
