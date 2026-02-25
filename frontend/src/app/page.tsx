@@ -341,14 +341,14 @@ const showcaseItems = [
     icon: Mic,
     label: 'Instellen',
     title: 'Eén keer instellen, altijd klaar',
-    description: 'Configureer uw AI-medewerker één keer en hij handelt alles af: telefoongesprekken, afspraken inplannen, CRM bijwerken en notities maken. Geen dubbel werk, alles draait automatisch.',
+    description: 'Configureer uw AI-medewerker één keer en hij handelt alles af: telefoongesprekken, afspraken inplannen, CRM bijwerken en notities maken. Alles draait automatisch.',
     highlights: ['Telefoongesprekken', 'Afspraken inplannen', 'CRM bijwerken', 'Notities maken'],
   },
   {
     icon: Eye,
     label: 'Inzicht',
     title: 'Elk gesprek inzichtelijk',
-    description: 'Luister gesprekken terug, lees automatische samenvattingen en bekijk volledige transcripties. Weet precies wat er is besproken en waar actie nodig is.',
+    description: 'Luister gesprekken terug, lees automatische samenvattingen en bekijk volledige transcripties. Weet altijd precies wat er is besproken en waar actie nodig is.',
     highlights: ['Opnames terugluisteren', 'Samenvattingen', 'Transcripties', 'Actiepunten'],
   },
   {
@@ -369,7 +369,7 @@ const showcaseItems = [
     icon: ShieldCheck,
     label: 'Controle',
     title: 'U blijft in controle',
-    description: 'Bepaal precies wat de AI wel en niet mag zeggen, stel gedragsregels in en configureer dataretentie. Volledig AVG-compliant met hosting in de EU.',
+    description: 'Bepaal precies wat de AI wel en niet mag zeggen, stel gedragsregels in en configureer dataretentie. Uw data blijft veilig met AVG-compliance en hosting in de EU.',
     highlights: ['Gedragsregels instellen', 'Dataretentie configureren', 'AVG-compliant', 'EU hosting'],
   },
 ]
@@ -452,7 +452,7 @@ function ShowcaseSection() {
         </div>
 
         {/* Content card */}
-        <div className="relative rounded-3xl bg-gradient-to-br from-primary-600 to-primary-700 p-8 md:p-12 overflow-hidden">
+        <div className="relative rounded-3xl bg-gradient-to-br from-primary-600 to-primary-700 p-8 md:p-12 overflow-hidden min-h-[420px] sm:min-h-0">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.1),transparent_60%)]" />
           <div className="absolute bottom-0 right-0 w-64 h-64 bg-white/5 rounded-full translate-x-20 translate-y-20" />
 
@@ -474,14 +474,14 @@ function ShowcaseSection() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {item.highlights.map((highlight, i) => (
                   <motion.div
                     key={highlight}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: i * 0.06, duration: 0.25 }}
-                    className="bg-white/15 backdrop-blur-sm rounded-xl px-4 py-3 text-white text-sm font-medium flex items-center gap-2"
+                    className="bg-white/15 backdrop-blur-sm rounded-xl px-3 py-2.5 text-white text-sm font-medium flex items-center gap-2"
                   >
                     <Check className="h-4 w-4 text-white/70 flex-shrink-0" />
                     {highlight}
