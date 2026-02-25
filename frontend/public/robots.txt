@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard/
+Disallow: /admin/
+Disallow: /api/
+Disallow: /verify
+Disallow: /checkout
+Disallow: /invite/
+
+Sitemap: https://klantenservice.ai/sitemap.xml
