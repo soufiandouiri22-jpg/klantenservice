@@ -634,8 +634,8 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Tutorial Video Section */}
-      <VideoSection />
+      {/* Tutorial Video Section — hidden, replaced by carousel later */}
+      {/* <VideoSection /> */}
 
       {/* Testimonials / Case Studies - Full Width Scrolling */}
       <section className="py-20 md:py-32 bg-white overflow-hidden relative z-10">
