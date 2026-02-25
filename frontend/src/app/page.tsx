@@ -343,7 +343,6 @@ const showcaseItems = [
     title: 'Eén keer instellen, altijd klaar',
     description: 'Configureer uw AI-medewerker één keer en hij handelt alles af: telefoongesprekken, afspraken inplannen, CRM bijwerken en notities maken. Geen dubbel werk, alles draait automatisch.',
     highlights: ['Telefoongesprekken', 'Afspraken inplannen', 'CRM bijwerken', 'Notities maken'],
-    gradient: 'from-blue-600 to-indigo-600',
   },
   {
     icon: Eye,
@@ -351,7 +350,6 @@ const showcaseItems = [
     title: 'Elk gesprek inzichtelijk',
     description: 'Luister gesprekken terug, lees automatische samenvattingen en bekijk volledige transcripties. Weet precies wat er is besproken en waar actie nodig is.',
     highlights: ['Opnames terugluisteren', 'Samenvattingen', 'Transcripties', 'Actiepunten'],
-    gradient: 'from-emerald-600 to-teal-600',
   },
   {
     icon: Puzzle,
@@ -359,7 +357,6 @@ const showcaseItems = [
     title: 'Koppel uw bestaande tools',
     description: 'Verbind met Google Calendar, Outlook, HubSpot, Salesforce, Zoom, Microsoft Teams en meer in een paar klikken. Geen technische kennis nodig, alles werkt direct samen.',
     highlights: ['Google Calendar', 'HubSpot & Salesforce', 'Zoom & Teams', 'Microsoft Outlook'],
-    gradient: 'from-violet-600 to-purple-600',
   },
   {
     icon: TrendingUp,
@@ -367,7 +364,6 @@ const showcaseItems = [
     title: 'Schaal zonder grenzen',
     description: 'Of het nu een rustige maandag is of een piekmoment, uw AI-medewerkers handelen elk gesprek af. Geen wachttijden, geen gemiste oproepen, geen extra personeel nodig.',
     highlights: ['Geen wachttijden', 'Geen gemiste oproepen', 'Piekbelasting opvangen', '24/7 beschikbaar'],
-    gradient: 'from-orange-500 to-red-500',
   },
   {
     icon: ShieldCheck,
@@ -375,7 +371,6 @@ const showcaseItems = [
     title: 'U blijft in controle',
     description: 'Bepaal precies wat de AI wel en niet mag zeggen, stel gedragsregels in en configureer dataretentie. Volledig AVG-compliant met hosting in de EU.',
     highlights: ['Gedragsregels instellen', 'Dataretentie configureren', 'AVG-compliant', 'EU hosting'],
-    gradient: 'from-sky-600 to-blue-600',
   },
 ]
 
@@ -383,7 +378,7 @@ function ShowcaseSection() {
   const [activeIndex, setActiveIndex] = useState(0)
   const [progress, setProgress] = useState(0)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const DURATION = 5000
+  const DURATION = 10000
 
   const startTimer = () => {
     if (intervalRef.current) clearInterval(intervalRef.current)
@@ -457,46 +452,45 @@ function ShowcaseSection() {
         </div>
 
         {/* Content card */}
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={activeIndex}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -12 }}
-            transition={{ duration: 0.35, ease: [0.21, 0.47, 0.32, 0.98] }}
-          >
-            <div className={`relative rounded-3xl bg-gradient-to-br ${item.gradient} p-8 md:p-12 overflow-hidden`}>
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.15),transparent_60%)]" />
-              <div className="absolute bottom-0 right-0 w-64 h-64 bg-white/5 rounded-full translate-x-20 translate-y-20" />
+        <div className="relative rounded-3xl bg-gradient-to-br from-primary-600 to-primary-700 p-8 md:p-12 overflow-hidden">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.1),transparent_60%)]" />
+          <div className="absolute bottom-0 right-0 w-64 h-64 bg-white/5 rounded-full translate-x-20 translate-y-20" />
 
-              <div className="relative grid md:grid-cols-2 gap-8 items-center">
-                <div>
-                  <h3 className="text-2xl md:text-3xl font-bold text-white mb-4">
-                    {item.title}
-                  </h3>
-                  <p className="text-white/80 text-base md:text-lg leading-relaxed">
-                    {item.description}
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  {item.highlights.map((highlight, i) => (
-                    <motion.div
-                      key={highlight}
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ delay: i * 0.08, duration: 0.3 }}
-                      className="bg-white/15 backdrop-blur-sm rounded-xl px-4 py-3 text-white text-sm font-medium flex items-center gap-2"
-                    >
-                      <Check className="h-4 w-4 text-white/70 flex-shrink-0" />
-                      {highlight}
-                    </motion.div>
-                  ))}
-                </div>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeIndex}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.35, ease: [0.21, 0.47, 0.32, 0.98] }}
+              className="relative grid md:grid-cols-2 gap-8 items-center"
+            >
+              <div>
+                <h3 className="text-2xl md:text-3xl font-bold text-white mb-4">
+                  {item.title}
+                </h3>
+                <p className="text-white/80 text-base md:text-lg leading-relaxed">
+                  {item.description}
+                </p>
               </div>
-            </div>
-          </motion.div>
-        </AnimatePresence>
+
+              <div className="grid grid-cols-2 gap-3">
+                {item.highlights.map((highlight, i) => (
+                  <motion.div
+                    key={highlight}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: i * 0.06, duration: 0.25 }}
+                    className="bg-white/15 backdrop-blur-sm rounded-xl px-4 py-3 text-white text-sm font-medium flex items-center gap-2"
+                  >
+                    <Check className="h-4 w-4 text-white/70 flex-shrink-0" />
+                    {highlight}
+                  </motion.div>
+                ))}
+              </div>
+            </motion.div>
+          </AnimatePresence>
+        </div>
       </div>
     </section>
   )
