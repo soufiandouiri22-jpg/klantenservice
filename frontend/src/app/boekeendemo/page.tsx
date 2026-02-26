@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, Calendar, Clock, Video, CheckCircle2, Users, Headphones } from 'lucide-react'
 import PublicHeader from '@/components/layout/PublicHeader'
@@ -11,27 +11,6 @@ const CAL_LINK = 'markoborkovic/30min'
 export default function BookDemoPage() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [selectedTime, setSelectedTime] = useState<string | null>(null)
-
-  const [calReady, setCalReady] = useState(false)
-
-  useEffect(() => {
-    const script = document.createElement('script')
-    script.src = 'https://app.cal.com/embed/embed.js'
-    script.async = true
-    script.onload = () => {
-      const cal = (window as any).Cal
-      if (cal) {
-        cal('init', { origin: 'https://cal.com' })
-        cal('ui', {
-          styles: { branding: { brandColor: '#2563eb' } },
-          hideEventTypeDetails: false,
-          layout: 'month_view',
-        })
-        setCalReady(true)
-      }
-    }
-    document.head.appendChild(script)
-  }, [])
 
   const today = new Date()
   const dates: Date[] = []
@@ -53,17 +32,10 @@ export default function BookDemoPage() {
   }
 
   const handleBooking = () => {
-    const cal = (window as any).Cal
-    if (calReady && cal) {
-      const config: any = {}
-      if (selectedDate) config.date = selectedDate
-      cal('openModal', { calLink: CAL_LINK, config })
-    } else {
-      const url = selectedDate
-        ? `https://cal.com/${CAL_LINK}?date=${selectedDate}`
-        : `https://cal.com/${CAL_LINK}`
-      window.open(url, '_blank')
-    }
+    const url = selectedDate
+      ? `https://cal.com/${CAL_LINK}?date=${selectedDate}`
+      : `https://cal.com/${CAL_LINK}`
+    window.open(url, '_blank')
   }
 
   return (
