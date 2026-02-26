@@ -1,39 +1,73 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, Calendar, Clock, Video, CheckCircle2, Users, Headphones } from 'lucide-react'
 import PublicHeader from '@/components/layout/PublicHeader'
 import Footer from '@/components/layout/Footer'
 
+const CAL_LINK = 'markoborkovic/30min'
+
 export default function BookDemoPage() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [selectedTime, setSelectedTime] = useState<string | null>(null)
 
-  // Fake dates for the next 2 weeks (skip weekends)
+  useEffect(() => {
+    (function (C: any, A: string, L: string) {
+      const p = function (a: any, ar: any) { a.q.push(ar) }
+      const d = C.document
+      C.Cal = C.Cal || function () {
+        const cal = C.Cal
+        const ar = arguments
+        if (!cal.loaded) {
+          cal.ns = {}
+          cal.q = cal.q || []
+          d.head.appendChild(d.createElement('script')).src = A
+          cal.loaded = true
+        }
+        if (ar[0] === L) {
+          const api = function () { p(api, arguments) }
+          const namespace = ar[1];
+          (api as any).q = (api as any).q || []
+          typeof namespace === 'string' ? (cal.ns[namespace] = api) && p(api, ar) : p(cal, ar)
+          return
+        }
+        p(cal, ar)
+      }
+    })(window, 'https://app.cal.com/embed/embed.js', 'init');
+    (window as any).Cal('init', { origin: 'https://cal.com' });
+    (window as any).Cal('ui', {
+      styles: { branding: { brandColor: '#2563eb' } },
+      hideEventTypeDetails: false,
+      layout: 'month_view',
+    })
+  }, [])
+
   const today = new Date()
   const dates: Date[] = []
   let daysAdded = 0
-  let currentDate = new Date(today)
-  
+
   while (dates.length < 7) {
-    currentDate = new Date(today)
-    currentDate.setDate(today.getDate() + daysAdded + 1)
-    // Skip weekends (0 = Sunday, 6 = Saturday)
-    if (currentDate.getDay() !== 0 && currentDate.getDay() !== 6) {
-      dates.push(new Date(currentDate))
+    const d = new Date(today)
+    d.setDate(today.getDate() + daysAdded + 1)
+    if (d.getDay() !== 0 && d.getDay() !== 6) {
+      dates.push(new Date(d))
     }
     daysAdded++
   }
 
   const times = ['09:00', '10:00', '11:00', '14:00', '15:00', '16:00']
 
-  const formatDate = (date: Date) => {
-    return date.toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'short' })
-  }
-
   const formatDateKey = (date: Date) => {
     return date.toISOString().split('T')[0]
+  }
+
+  const handleBooking = () => {
+    const cal = (window as any).Cal
+    if (!cal) return
+    const config: any = {}
+    if (selectedDate) config.date = selectedDate
+    cal('openModal', { calLink: CAL_LINK, config })
   }
 
   return (
@@ -212,10 +246,7 @@ export default function BookDemoPage() {
                       </p>
                     </div>
                     <button
-                      onClick={() => {
-                        // TODO: Integrate with real Calendly
-                        alert('Calendly integratie komt binnenkort! Neem contact op via info@klantenservice.ai')
-                      }}
+                      onClick={handleBooking}
                       className="w-full bg-primary-600 text-white px-6 py-4 rounded-lg font-semibold hover:bg-primary-700 transition-colors flex items-center justify-center gap-2"
                     >
                       <Calendar className="h-5 w-5" />
@@ -230,7 +261,7 @@ export default function BookDemoPage() {
                 {/* Powered by badge */}
                 <div className="mt-6 pt-4 border-t border-gray-100 text-center">
                   <p className="text-xs text-gray-400">
-                    Powered by Calendly
+                    Powered by Cal.com
                   </p>
                 </div>
               </div>
