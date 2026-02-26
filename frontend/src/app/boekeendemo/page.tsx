@@ -12,35 +12,25 @@ export default function BookDemoPage() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [selectedTime, setSelectedTime] = useState<string | null>(null)
 
+  const [calReady, setCalReady] = useState(false)
+
   useEffect(() => {
-    (function (C: any, A: string, L: string) {
-      const p = function (a: any, ar: any) { a.q.push(ar) }
-      const d = C.document
-      C.Cal = C.Cal || function () {
-        const cal = C.Cal
-        const ar = arguments
-        if (!cal.loaded) {
-          cal.ns = {}
-          cal.q = cal.q || []
-          d.head.appendChild(d.createElement('script')).src = A
-          cal.loaded = true
-        }
-        if (ar[0] === L) {
-          const api = function () { p(api, arguments) }
-          const namespace = ar[1];
-          (api as any).q = (api as any).q || []
-          typeof namespace === 'string' ? (cal.ns[namespace] = api) && p(api, ar) : p(cal, ar)
-          return
-        }
-        p(cal, ar)
+    const script = document.createElement('script')
+    script.src = 'https://app.cal.com/embed/embed.js'
+    script.async = true
+    script.onload = () => {
+      const cal = (window as any).Cal
+      if (cal) {
+        cal('init', { origin: 'https://cal.com' })
+        cal('ui', {
+          styles: { branding: { brandColor: '#2563eb' } },
+          hideEventTypeDetails: false,
+          layout: 'month_view',
+        })
+        setCalReady(true)
       }
-    })(window, 'https://app.cal.com/embed/embed.js', 'init');
-    (window as any).Cal('init', { origin: 'https://cal.com' });
-    (window as any).Cal('ui', {
-      styles: { branding: { brandColor: '#2563eb' } },
-      hideEventTypeDetails: false,
-      layout: 'month_view',
-    })
+    }
+    document.head.appendChild(script)
   }, [])
 
   const today = new Date()
@@ -64,10 +54,16 @@ export default function BookDemoPage() {
 
   const handleBooking = () => {
     const cal = (window as any).Cal
-    if (!cal) return
-    const config: any = {}
-    if (selectedDate) config.date = selectedDate
-    cal('openModal', { calLink: CAL_LINK, config })
+    if (calReady && cal) {
+      const config: any = {}
+      if (selectedDate) config.date = selectedDate
+      cal('openModal', { calLink: CAL_LINK, config })
+    } else {
+      const url = selectedDate
+        ? `https://cal.com/${CAL_LINK}?date=${selectedDate}`
+        : `https://cal.com/${CAL_LINK}`
+      window.open(url, '_blank')
+    }
   }
 
   return (
