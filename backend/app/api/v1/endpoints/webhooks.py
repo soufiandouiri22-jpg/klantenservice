@@ -13,6 +13,7 @@ import hashlib
 import httpx
 
 import logging
+import asyncio
 
 from app.core.database import get_db
 from app.core.config import settings
@@ -28,6 +29,30 @@ from app.models.website_knowledge import WebsiteKnowledge, IndexStatus
 from app.models.training import TrainingRule
 
 router = APIRouter()
+
+
+async def _start_recording(call_sid: str, delay: float = 3.0):
+    """Start call recording via Twilio REST API after a short delay."""
+    await asyncio.sleep(delay)
+    recording_callback = (
+        "https://api.klantenservice.ai/api/v1/webhooks/twilio/recording"
+        if settings.APP_ENV == "production"
+        else "http://localhost:8000/api/v1/webhooks/twilio/recording"
+    )
+    try:
+        async with httpx.AsyncClient() as http:
+            resp = await http.post(
+                f"https://api.twilio.com/2010-04-01/Accounts/{settings.TWILIO_ACCOUNT_SID}/Calls/{call_sid}/Recordings.json",
+                auth=(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN),
+                data={
+                    "RecordingChannels": "dual",
+                    "RecordingStatusCallback": recording_callback,
+                    "RecordingStatusCallbackEvent": "completed",
+                },
+            )
+            logger.info(f"[RECORDING] Started for call_sid={call_sid} (status={resp.status_code})")
+    except Exception as e:
+        logger.warning(f"[RECORDING] Failed to start for {call_sid}: {e}")
 
 
 def verify_twilio_signature(request: Request, signature: str) -> bool:
@@ -329,6 +354,8 @@ async def twilio_voice_webhook(
                 f"twiml={twiml}"
             )
 
+            asyncio.create_task(_start_recording(call_sid))
+
             return Response(content=twiml, media_type="text/xml")
             
     except Exception as e:
@@ -424,26 +451,7 @@ async def twilio_status_webhook(
             except Exception as crm_err:
                 logger.warning(f"CRM post-call note failed (non-blocking): {crm_err}")
     elif call_status == "in-progress":
-        # Start call recording via Twilio REST API
-        try:
-            recording_callback = (
-                "https://api.klantenservice.ai/api/v1/webhooks/twilio/recording"
-                if settings.APP_ENV == "production"
-                else "http://localhost:8000/api/v1/webhooks/twilio/recording"
-            )
-            async with httpx.AsyncClient() as http:
-                await http.post(
-                    f"https://api.twilio.com/2010-04-01/Accounts/{settings.TWILIO_ACCOUNT_SID}/Calls/{call_sid}/Recordings.json",
-                    auth=(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN),
-                    data={
-                        "RecordingChannels": "dual",
-                        "RecordingStatusCallback": recording_callback,
-                        "RecordingStatusCallbackEvent": "completed",
-                    },
-                )
-            logger.info(f"[STATUS CALLBACK] Recording started for call_sid={call_sid}")
-        except Exception as rec_err:
-            logger.warning(f"[STATUS CALLBACK] Failed to start recording for {call_sid}: {rec_err}")
+        logger.info(f"[STATUS CALLBACK] Call in-progress: call_sid={call_sid} (recording started from voice webhook)")
     else:
         logger.info(f"[STATUS CALLBACK] Ignoring status={call_status} for call_sid={call_sid}")
     
