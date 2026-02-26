@@ -566,11 +566,7 @@ function CalendarPageInner() {
                       <div className="flex items-start justify-between">
                         <div className="flex items-start gap-4">
                           <div className={`flex h-12 w-12 items-center justify-center rounded-lg overflow-hidden ${providerInfo.color}`}>
-                            {providerInfo.logo ? (
-                              <img src={providerInfo.logo} alt={providerInfo.name} className="h-8 w-8 object-contain" />
-                            ) : (
-                              <span className="text-2xl">{providerInfo.icon}</span>
-                            )}
+                            <img src={providerInfo.logo} alt={providerInfo.name} className="h-8 w-8 object-contain" />
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
