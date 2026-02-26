@@ -565,19 +565,11 @@ function CalendarPageInner() {
                     <CardBody>
                       <div className="flex items-start justify-between">
                         <div className="flex items-start gap-4">
-                          <div className={`flex h-12 w-12 items-center justify-center rounded-lg overflow-hidden ${providerInfo.color}`}>
+                          <div className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg overflow-hidden ${providerInfo.color}`}>
                             <img src={providerInfo.logo} alt={providerInfo.name} className="h-8 w-8 object-contain" />
                           </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h3 className="font-medium text-gray-900">{calendar.name}</h3>
-                              {calendar.is_primary && (
-                                <Badge variant="primary">
-                                  <Star className="h-3 w-3 mr-1" />
-                                  Primair
-                                </Badge>
-                              )}
-                            </div>
+                          <div className="min-w-0">
+                            <h3 className="font-medium text-gray-900">{calendar.name}</h3>
                             <p className="text-sm text-gray-500">{providerInfo.name}</p>
                             {calendar.external_calendar_name && (
                               <p className="text-xs text-gray-400 mt-1">
@@ -587,9 +579,17 @@ function CalendarPageInner() {
                             <p className="text-xs text-gray-400 mt-1">
                               Gekoppeld aan: {workers?.find((w: any) => w.id === calendar.ai_worker_id)?.name || 'Geen medewerker'}
                             </p>
+                            {calendar.is_primary && (
+                              <div className="mt-2">
+                                <Badge variant="primary">
+                                  <Star className="h-3 w-3 mr-1" />
+                                  Primair
+                                </Badge>
+                              </div>
+                            )}
                           </div>
                         </div>
-                        <div className="flex items-center gap-3">
+                        <div className="flex-shrink-0 ml-3">
                           {calendar.sync_error ? (
                             <Badge variant="danger">Sync fout</Badge>
                           ) : calendar.last_sync_at ? (
@@ -675,7 +675,6 @@ function CalendarPageInner() {
                             )}
                           </>
                         )}
-                        <div className="flex-1" />
                         <Button
                           variant="ghost"
                           size="sm"
