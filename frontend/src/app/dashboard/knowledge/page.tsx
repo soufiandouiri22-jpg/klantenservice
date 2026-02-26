@@ -190,18 +190,18 @@ export default function KnowledgePage() {
                 <Card>
                   <CardBody>
                     <div className="flex items-start justify-between">
-                      <div className="flex items-start gap-4">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gray-100">
+                      <div className="flex items-start gap-4 min-w-0">
+                        <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-gray-100">
                           <Globe className="h-6 w-6 text-gray-600" />
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <div className="flex items-center gap-2">
-                            <h3 className="font-medium text-gray-900">{website.base_url}</h3>
+                            <h3 className="font-medium text-gray-900 truncate">{website.base_url}</h3>
                             <a
                               href={website.base_url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-gray-400 hover:text-gray-600"
+                              className="flex-shrink-0 text-gray-400 hover:text-gray-600"
                             >
                               <ExternalLink className="h-4 w-4" />
                             </a>
@@ -221,7 +221,7 @@ export default function KnowledgePage() {
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-3">
+                      <div className="flex-shrink-0 ml-3">
                         <Badge variant={getStatusBadge(website.status)}>
                           {website.status === 'completed' && <Check className="h-3 w-3 mr-1" />}
                           {website.status === 'indexing' && <RefreshCw className="h-3 w-3 mr-1 animate-spin" />}
@@ -232,8 +232,8 @@ export default function KnowledgePage() {
                     </div>
 
                     {website.last_error && (
-                      <div className="mt-4 p-3 rounded-lg bg-red-50 border border-red-100">
-                        <p className="text-sm text-red-700">{website.last_error}</p>
+                      <div className="mt-4 p-3 rounded-lg bg-red-50 border border-red-100 overflow-hidden">
+                        <p className="text-sm text-red-700 break-words">{website.last_error}</p>
                       </div>
                     )}
 
@@ -250,7 +250,7 @@ export default function KnowledgePage() {
                         }}
                         disabled={website.status !== 'completed'}
                       >
-                        Testvraag stellen
+                        Testvraag
                       </Button>
                       <Button
                         variant="outline"
@@ -259,9 +259,8 @@ export default function KnowledgePage() {
                         onClick={() => reindexMutation.mutate(website.id)}
                         disabled={website.status === 'indexing'}
                       >
-                        Opnieuw indexeren
+                        Herindexeren
                       </Button>
-                      <div className="flex-1" />
                       <Button
                         variant="ghost"
                         size="sm"
