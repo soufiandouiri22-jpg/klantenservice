@@ -604,8 +604,8 @@ function CalendarPageInner() {
                       </div>
 
                       {calendar.sync_error && (
-                        <div className="mt-4 p-3 rounded-lg bg-red-50 border border-red-100">
-                          <p className="text-sm text-red-700">{calendar.sync_error}</p>
+                        <div className="mt-4 p-3 rounded-lg bg-red-50 border border-red-100 overflow-hidden">
+                          <p className="text-sm text-red-700 break-words">{calendar.sync_error}</p>
                         </div>
                       )}
 
