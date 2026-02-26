@@ -37,7 +37,7 @@ const providers = [
   {
     id: 'caldav',
     name: 'CalDAV',
-    icon: '🔗',
+    logo: '/app-icons/caldav.svg',
     description: 'Koppel een CalDAV-compatibele agenda',
     color: 'bg-gray-100 text-gray-700',
   },
