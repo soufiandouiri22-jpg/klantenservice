@@ -748,11 +748,7 @@ function CalendarPageInner() {
                     className="flex items-center gap-4 p-4 rounded-lg border border-gray-200 hover:border-primary-300 hover:bg-primary-50 transition-colors text-left"
                   >
                     <div className={`flex h-12 w-12 items-center justify-center rounded-lg overflow-hidden ${provider.color}`}>
-                      {provider.logo ? (
-                        <img src={provider.logo} alt={provider.name} className="h-8 w-8 object-contain" />
-                      ) : (
-                        <span className="text-2xl">{provider.icon}</span>
-                      )}
+                      <img src={provider.logo} alt={provider.name} className="h-8 w-8 object-contain" />
                     </div>
                     <div>
                       <h4 className="font-medium text-gray-900">{provider.name}</h4>
