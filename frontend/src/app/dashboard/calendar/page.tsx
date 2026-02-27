@@ -524,7 +524,7 @@ function CalendarPageInner() {
         <Card>
           <CardBody>
             <div className="flex items-start gap-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100">
+              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-amber-100">
                 <Calendar className="h-5 w-5 text-amber-600" />
               </div>
               <div>

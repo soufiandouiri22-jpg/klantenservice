@@ -157,7 +157,7 @@ function IntegrationsPageInner() {
         <Card>
           <CardBody>
             <div className="flex items-start gap-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-100">
+              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-purple-100">
                 <Plug className="h-5 w-5 text-purple-600" />
               </div>
               <div>

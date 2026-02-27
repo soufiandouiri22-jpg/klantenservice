@@ -152,7 +152,7 @@ export default function KnowledgePage() {
         <Card>
           <CardBody>
             <div className="flex items-start gap-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-100">
+              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-primary-100">
                 <Globe className="h-5 w-5 text-primary-600" />
               </div>
               <div>
