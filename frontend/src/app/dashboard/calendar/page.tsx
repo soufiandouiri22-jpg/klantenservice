@@ -630,52 +630,53 @@ function CalendarPageInner() {
                         </div>
                       </div>
 
-                      <div className="mt-4 flex flex-wrap items-center gap-3 pt-4 border-t border-gray-100">
-                        {!calendar.last_sync_at && calendar.provider !== 'caldav' ? (
-                          <Button
-                            size="sm"
-                            leftIcon={<ExternalLink className="h-4 w-4" />}
-                            onClick={async () => {
-                              try {
-                                const res = await calendarsApi.getOAuthUrl(calendar.provider, calendar.id)
-                                window.location.href = res.auth_url
-                              } catch {
-                                toast.error('Fout bij starten OAuth')
-                              }
-                            }}
-                          >
-                            {calendar.provider === 'microsoft' ? 'Verbind met Microsoft' : 'Verbind met Google'}
-                          </Button>
-                        ) : (
-                          <>
+                      <div className="mt-4 flex items-center gap-3 pt-4 border-t border-gray-100">
+                        <div className="flex flex-wrap items-center gap-3 flex-1">
+                          {!calendar.last_sync_at && calendar.provider !== 'caldav' ? (
                             <Button
-                              variant="outline"
                               size="sm"
-                              leftIcon={<RefreshCw className="h-4 w-4" />}
-                              onClick={() => syncMutation.mutate(calendar.id)}
+                              leftIcon={<ExternalLink className="h-4 w-4" />}
+                              onClick={async () => {
+                                try {
+                                  const res = await calendarsApi.getOAuthUrl(calendar.provider, calendar.id)
+                                  window.location.href = res.auth_url
+                                } catch {
+                                  toast.error('Fout bij starten OAuth')
+                                }
+                              }}
                             >
-                              Synchroniseren
+                              {calendar.provider === 'microsoft' ? 'Verbind met Microsoft' : 'Verbind met Google'}
                             </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              leftIcon={<Settings className="h-4 w-4" />}
-                              onClick={() => setSelectedCalendar(calendar)}
-                            >
-                              Instellingen
-                            </Button>
-                            {!calendar.is_primary && (
+                          ) : (
+                            <>
                               <Button
-                                variant="ghost"
+                                variant="outline"
                                 size="sm"
-                                onClick={() => updateMutation.mutate({ id: calendar.id, data: { is_primary: true } })}
+                                leftIcon={<RefreshCw className="h-4 w-4" />}
+                                onClick={() => syncMutation.mutate(calendar.id)}
                               >
-                                Als primair instellen
+                                Synchroniseren
                               </Button>
-                            )}
-                          </>
-                        )}
-                        <div className="flex-1" />
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                leftIcon={<Settings className="h-4 w-4" />}
+                                onClick={() => setSelectedCalendar(calendar)}
+                              >
+                                Instellingen
+                              </Button>
+                              {!calendar.is_primary && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => updateMutation.mutate({ id: calendar.id, data: { is_primary: true } })}
+                                >
+                                  Als primair instellen
+                                </Button>
+                              )}
+                            </>
+                          )}
+                        </div>
                         <Button
                           variant="ghost"
                           size="sm"

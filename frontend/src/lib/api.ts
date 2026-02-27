@@ -960,6 +960,11 @@ export const kvkApi = {
     return response.data
   },
 
+  getVestiging: async (vestigingsnummer: string) => {
+    const response = await api.get(`/kvk/vestiging/${vestigingsnummer}`)
+    return response.data
+  },
+
   validateBtw: async (btwNummer: string) => {
     const response = await api.get('/kvk/valideer-btw', { params: { btw_nummer: btwNummer } })
     return response.data

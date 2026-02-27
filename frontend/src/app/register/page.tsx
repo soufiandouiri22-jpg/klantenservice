@@ -148,12 +148,20 @@ function RegisterContent() {
     }, 400)
   }, [])
 
-  const handleSelectKvkResult = useCallback((result: any) => {
-    // Fill in company name from KVK
+  const handleSelectKvkResult = useCallback(async (result: any) => {
     setValue('company_name', result.naam, { shouldValidate: true })
-    // Store the full KVK data for sending to backend
-    setSelectedKvkData(result)
     setShowKvkDropdown(false)
+
+    if (result.vestigingsnummer) {
+      try {
+        const vestiging = await kvkApi.getVestiging(result.vestigingsnummer)
+        if (vestiging.adres) {
+          setSelectedKvkData({ ...result, adres: vestiging.adres })
+          return
+        }
+      } catch { /* fall back to search result address */ }
+    }
+    setSelectedKvkData(result)
   }, [setValue])
 
   if (checking) return (

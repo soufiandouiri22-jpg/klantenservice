@@ -27,6 +27,7 @@ class KvkSearchResult(BaseModel):
     adres: Optional[KvkAddress] = None
     type: Optional[str] = None
     actief: Optional[str] = None
+    vestigingsnummer: Optional[str] = None
 
 
 class KvkSearchResponse(BaseModel):
@@ -86,6 +87,7 @@ async def search_kvk(
                 adres=adres,
                 type=item.get("type"),
                 actief=item.get("actief"),
+                vestigingsnummer=item.get("vestigingsnummer"),
             ))
 
         return KvkSearchResponse(
@@ -99,6 +101,42 @@ async def search_kvk(
     except Exception as e:
         logger.error(f"KVK API error: {e}")
         return KvkSearchResponse(resultaten=[], totaal=0)
+
+
+@router.get("/vestiging/{vestigingsnummer}")
+async def get_vestiging(vestigingsnummer: str):
+    """
+    Fetch full address details from KVK vestigingsprofiel.
+    The /zoeken endpoint doesn't return postcode/huisnummer, so we need this.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(
+                f"https://api.kvk.nl/api/v1/vestigingsprofielen/{vestigingsnummer}",
+                headers={"apikey": settings.KVK_API_KEY},
+            )
+
+        if response.status_code != 200:
+            return {"adres": None}
+
+        data = response.json()
+        adressen = data.get("adressen", [])
+        if not adressen:
+            return {"adres": None}
+
+        adres = adressen[0]
+        return {
+            "adres": KvkAddress(
+                straatnaam=adres.get("straatnaam"),
+                huisnummer=adres.get("huisnummer"),
+                postcode=adres.get("postcode"),
+                plaats=adres.get("plaats"),
+            )
+        }
+
+    except Exception as e:
+        logger.error(f"KVK vestiging error: {e}")
+        return {"adres": None}
 
 
 @router.get("/valideer-kvk")

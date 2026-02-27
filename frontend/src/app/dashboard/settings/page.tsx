@@ -357,27 +357,35 @@ function SettingsContent() {
     }, 400)
   }, [])
 
-  const handleSelectKvkCompany = useCallback((result: any) => {
-    // Build update payload from KVK data
-    const update: any = { name: result.naam, kvk_number: result.kvk_nummer }
-    if (result.adres) {
-      if (result.adres.straatnaam) {
-        update.address = result.adres.huisnummer
-          ? `${result.adres.straatnaam} ${result.adres.huisnummer}`
-          : result.adres.straatnaam
-      }
-      if (result.adres.postcode) update.postal_code = result.adres.postcode
-      if (result.adres.plaats) update.city = result.adres.plaats
-    }
-    updateCompanyMutation.mutate(update)
+  const handleSelectKvkCompany = useCallback(async (result: any) => {
     setShowKvkDropdown(false)
     if (companyNameRef.current) companyNameRef.current.value = result.naam
     if (kvkNumberRef.current) kvkNumberRef.current.value = result.kvk_nummer || ''
+
+    let adres = result.adres
+    if (result.vestigingsnummer) {
+      try {
+        const vestiging = await kvkApi.getVestiging(result.vestigingsnummer)
+        if (vestiging.adres) adres = vestiging.adres
+      } catch { /* fall back to search result address */ }
+    }
+
+    const update: any = { name: result.naam, kvk_number: result.kvk_nummer }
+    if (adres) {
+      if (adres.straatnaam) {
+        update.address = adres.huisnummer
+          ? `${adres.straatnaam} ${adres.huisnummer}`
+          : adres.straatnaam
+      }
+      if (adres.postcode) update.postal_code = adres.postcode
+      if (adres.plaats) update.city = adres.plaats
+    }
+    updateCompanyMutation.mutate(update)
     if (addressRef.current) addressRef.current.value = update.address || ''
     if (postalCodeRef.current) postalCodeRef.current.value = update.postal_code || ''
     if (cityRef.current) cityRef.current.value = update.city || ''
     setKvkStatus('valid')
-    setKvkValidName(`${result.naam}${result.adres?.plaats ? ` · ${result.adres.plaats}` : ''}`)
+    setKvkValidName(`${result.naam}${adres?.plaats ? ` · ${adres.plaats}` : ''}`)
     toast.success(`Bedrijfsgegevens bijgewerkt vanuit KVK (${result.kvk_nummer})`)
   }, [updateCompanyMutation])
 
