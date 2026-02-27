@@ -237,8 +237,7 @@ export default function AppointmentsPage() {
                   const apt = arg.event.extendedProps
                   return (
                     <div className="w-full overflow-hidden px-0.5 text-[11px] leading-tight">
-                      <div className="font-semibold">{arg.timeText}</div>
-                      <div className="opacity-90 truncate">{apt.title} - {apt.customer_name}</div>
+                      <div className="font-semibold truncate">{apt.title} - {apt.customer_name}</div>
                     </div>
                   )
                 }}
