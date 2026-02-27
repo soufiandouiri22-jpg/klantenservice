@@ -288,18 +288,18 @@ export default function AppointmentsPage() {
                 {todayAppointments.map((apt: any) => (
                   <div
                     key={apt.id}
-                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 hover:bg-gray-50 cursor-pointer"
+                    className="flex items-start justify-between gap-3 p-4 hover:bg-gray-50 cursor-pointer"
                     onClick={() => setSelectedAppointment(apt)}
                   >
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-start gap-4 min-w-0">
                       <div className="flex flex-col items-center justify-center w-16 h-16 flex-shrink-0 rounded-lg bg-primary-50">
                         <span className="text-xl font-bold text-primary-600">
                           {new Date(apt.starts_at).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <p className="font-medium text-gray-900">{apt.title}</p>
-                        <div className="flex items-center gap-2 text-sm text-gray-500">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-gray-500">
                           <User className="h-3 w-3" />
                           <span>{apt.customer_name}</span>
                           <span>•</span>
@@ -308,9 +308,11 @@ export default function AppointmentsPage() {
                         </div>
                       </div>
                     </div>
-                    <Badge variant={getStatusBadge(apt.status)}>
-                      {getStatusLabel(apt.status)}
-                    </Badge>
+                    <div className="flex-shrink-0">
+                      <Badge variant={getStatusBadge(apt.status)}>
+                        {getStatusLabel(apt.status)}
+                      </Badge>
+                    </div>
                   </div>
                 ))}
               </div>
