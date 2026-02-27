@@ -857,6 +857,11 @@ export const adminApi = {
     const response = await api.get('/admin/analytics', { params: { period } })
     return response.data
   },
+
+  getRealtimeVisitors: async () => {
+    const response = await api.get('/admin/analytics/realtime')
+    return response.data
+  },
   
   // Customers
   getCustomers: async () => {

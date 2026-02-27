@@ -697,6 +697,27 @@ async def get_analytics(
     return result
 
 
+@router.get("/analytics/realtime")
+async def get_realtime_visitors(
+    current_user: User = Depends(require_superadmin),
+):
+    """Fetch current realtime visitors from Plausible."""
+    if not settings.PLAUSIBLE_API_KEY:
+        return {"visitors": 0}
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                f"https://plausible.io/api/v1/stats/realtime/visitors",
+                params={"site_id": settings.PLAUSIBLE_SITE_ID},
+                headers={"Authorization": f"Bearer {settings.PLAUSIBLE_API_KEY}"},
+            )
+            if resp.status_code == 200:
+                return {"visitors": int(resp.text)}
+    except Exception as e:
+        logger.warning(f"[ANALYTICS] Realtime fetch failed: {e}")
+    return {"visitors": 0}
+
+
 @router.get("/metrics/business", response_model=BusinessMetrics)
 async def get_business_metrics(
     db: Session = Depends(get_db),

@@ -71,6 +71,12 @@ export function AnalyticsTab() {
     refetchInterval: 120000,
   })
 
+  const { data: realtime } = useQuery({
+    queryKey: ['admin-analytics-realtime'],
+    queryFn: () => adminApi.getRealtimeVisitors(),
+    refetchInterval: 30000,
+  })
+
   const agg = data?.aggregate || {}
   const timeseries = data?.timeseries || []
   const topPages = data?.top_pages || []
@@ -84,7 +90,18 @@ export function AnalyticsTab() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">Website Analytics</h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-lg font-semibold text-gray-900">Website Analytics</h2>
+            {(realtime?.visitors ?? 0) > 0 && (
+              <div className="flex items-center gap-1.5 bg-green-50 text-green-700 px-2.5 py-1 rounded-full">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+                </span>
+                <span className="text-xs font-medium">{realtime.visitors} nu online</span>
+              </div>
+            )}
+          </div>
           <p className="text-sm text-gray-500">Bezoekersdata via Plausible Analytics</p>
         </div>
         <div className="flex items-center gap-2">
