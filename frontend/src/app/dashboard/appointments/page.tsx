@@ -235,11 +235,10 @@ export default function AppointmentsPage() {
                 events={calendarEvents}
                 eventContent={(arg) => {
                   const apt = arg.event.extendedProps
-                  const time = arg.timeText
                   return (
-                    <div className="overflow-hidden px-1 py-0.5 text-xs leading-tight">
-                      <span className="font-semibold">{time}</span>{' '}
-                      <span>{apt.title} - {apt.customer_name}</span>
+                    <div className="w-full overflow-hidden px-0.5 text-[11px] leading-tight">
+                      <div className="font-semibold">{arg.timeText}</div>
+                      <div className="opacity-90 truncate">{apt.title} - {apt.customer_name}</div>
                     </div>
                   )
                 }}
