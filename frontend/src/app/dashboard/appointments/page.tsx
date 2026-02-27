@@ -293,7 +293,7 @@ export default function AppointmentsPage() {
                   >
                     <div className="flex items-center gap-4">
                       <div className="flex flex-col items-center justify-center w-16 h-16 flex-shrink-0 rounded-lg bg-primary-50">
-                        <span className="text-2xl font-bold text-primary-600">
+                        <span className="text-xl font-bold text-primary-600">
                           {new Date(apt.starts_at).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </div>
@@ -372,7 +372,7 @@ export default function AppointmentsPage() {
                     onClick={() => setSelectedAppointment(apt)}
                   >
                     <div className="flex items-center gap-4">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gray-100">
+                      <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-gray-100">
                         <Calendar className="h-6 w-6 text-gray-600" />
                       </div>
                       <div>
