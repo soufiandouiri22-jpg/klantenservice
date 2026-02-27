@@ -17,6 +17,11 @@ class SubscriptionPlan(str, Enum):
     enterprise = "enterprise"  # 7 AI-medewerkers
 
 
+class BillingInterval(str, Enum):
+    monthly = "monthly"
+    yearly = "yearly"
+
+
 class Company(Base):
     """
     Company model - represents a tenant in the multi-tenant system.
@@ -49,6 +54,11 @@ class Company(Base):
         nullable=False
     )
     subscription_status = Column(String(20), default="active")  # active, paused, cancelled
+    billing_interval = Column(
+        SQLEnum(BillingInterval),
+        default=BillingInterval.monthly,
+        nullable=False
+    )
     subscription_started_at = Column(DateTime, nullable=True)
     subscription_ends_at = Column(DateTime, nullable=True)
     

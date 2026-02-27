@@ -16,7 +16,7 @@ from sqlalchemy import func, and_, case, or_
 from app.api.deps import get_db, get_current_user
 from app.core.config import get_settings
 from app.models.user import User
-from app.models.company import Company
+from app.models.company import Company, BillingInterval
 from app.models.ai_worker import AIWorker, AIWorkerStatus
 from app.models.call_log import CallLog, CallStatus, CallTranscript
 from app.models.training import ExampleAnswer
@@ -583,18 +583,26 @@ async def get_business_metrics(
     business_customers = plan_counts.business or 0
     enterprise_customers = plan_counts.enterprise or 0
     
-    # Calculate MRR with SQL (only active, not trialing)
-    # Plan prices in cents: starter=4900, business=14900, enterprise=49900
-    mrr_cents = db.query(
-        func.sum(case(
-            (Company.subscription_plan == "starter", 4900),
-            (Company.subscription_plan == "business", 14900),
-            (Company.subscription_plan == "enterprise", 49900),
-            else_=0
-        ))
+    # Calculate MRR (only active, not trialing)
+    # Monthly prices in cents: starter=€149, business=€299
+    # Yearly prices in cents (total/year): starter=€1490, business=€2990
+    # MRR for yearly = yearly_price / 12
+    MONTHLY_PRICES = {"starter": 14900, "business": 29900, "enterprise": 0}
+    YEARLY_PRICES_MRR = {"starter": 12417, "business": 24917, "enterprise": 0}  # yearly / 12
+
+    active_companies = db.query(
+        Company.subscription_plan, Company.billing_interval
     ).filter(
         Company.subscription_status == "active"
-    ).scalar() or 0
+    ).all()
+
+    mrr_cents = 0
+    for plan, interval in active_companies:
+        plan_key = plan.value if hasattr(plan, "value") else str(plan)
+        if interval == BillingInterval.yearly:
+            mrr_cents += YEARLY_PRICES_MRR.get(plan_key, 0)
+        else:
+            mrr_cents += MONTHLY_PRICES.get(plan_key, 0)
     
     # New customers this month (single query)
     new_customers_this_month = db.query(func.count(Company.id)).filter(
@@ -710,6 +718,7 @@ async def get_customers(
             email=company.email,
             subscription_plan=company.subscription_plan.value if company.subscription_plan else "starter",
             subscription_status=company.subscription_status or "active",
+            billing_interval=company.billing_interval.value if company.billing_interval else "monthly",
             is_active=company.is_active,
             is_kill_switched=company.is_kill_switched or False,
             created_at=company.created_at,
@@ -789,6 +798,7 @@ async def get_customer_detail(
         phone=company.phone,
         subscription_plan=company.subscription_plan.value if company.subscription_plan else "starter",
         subscription_status=company.subscription_status or "active",
+        billing_interval=company.billing_interval.value if company.billing_interval else "monthly",
         stripe_customer_id=company.stripe_customer_id,
         is_active=company.is_active,
         is_verified=company.is_verified,

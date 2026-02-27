@@ -30,6 +30,7 @@ interface Customer {
   email: string
   subscription_plan: string
   subscription_status: string
+  billing_interval: string
   is_active: boolean
   is_kill_switched: boolean
   created_at: string
@@ -207,7 +208,12 @@ export function CustomersTab() {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      {getPlanBadge(customer.subscription_plan)}
+                      <div className="flex items-center gap-1.5">
+                        {getPlanBadge(customer.subscription_plan)}
+                        <span className="text-xs text-gray-400">
+                          {customer.billing_interval === 'yearly' ? '/jr' : '/mo'}
+                        </span>
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-1">

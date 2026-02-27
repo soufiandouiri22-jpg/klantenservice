@@ -230,7 +230,10 @@ export function OverviewTab() {
                 <div className="grid grid-cols-3 gap-4">
                   <div className="border rounded-lg p-4">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">Starter</span>
+                      <div>
+                        <span className="text-sm text-gray-600">Starter</span>
+                        <p className="text-xs text-gray-400">€149/mo • €1.490/jr</p>
+                      </div>
                       <span className="text-lg font-semibold">{business?.starter_customers || 0}</span>
                     </div>
                     <div className="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">
@@ -242,7 +245,10 @@ export function OverviewTab() {
                   </div>
                   <div className="border rounded-lg p-4">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">Business</span>
+                      <div>
+                        <span className="text-sm text-gray-600">Business</span>
+                        <p className="text-xs text-gray-400">€299/mo • €2.990/jr</p>
+                      </div>
                       <span className="text-lg font-semibold">{business?.business_customers || 0}</span>
                     </div>
                     <div className="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">
@@ -254,7 +260,10 @@ export function OverviewTab() {
                   </div>
                   <div className="border rounded-lg p-4">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">Enterprise</span>
+                      <div>
+                        <span className="text-sm text-gray-600">Enterprise</span>
+                        <p className="text-xs text-gray-400">Op aanvraag</p>
+                      </div>
                       <span className="text-lg font-semibold">{business?.enterprise_customers || 0}</span>
                     </div>
                     <div className="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">

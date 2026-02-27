@@ -152,6 +152,7 @@ class CustomerListItem(BaseModel):
     email: str
     subscription_plan: str
     subscription_status: str
+    billing_interval: str = "monthly"
     is_active: bool
     is_kill_switched: bool
     created_at: datetime
@@ -195,6 +196,7 @@ class CustomerDetail(BaseModel):
     # Subscription
     subscription_plan: str
     subscription_status: str
+    billing_interval: str = "monthly"
     stripe_customer_id: Optional[str]
     
     # Status

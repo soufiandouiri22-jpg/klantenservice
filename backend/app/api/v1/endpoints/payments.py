@@ -12,7 +12,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.api.deps import get_current_user
 from app.models.user import User
-from app.models.company import Company, SubscriptionPlan
+from app.models.company import Company, SubscriptionPlan, BillingInterval
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -187,6 +187,7 @@ async def get_subscription_status(
     result = {
         "plan": company.subscription_plan.value,
         "status": company.subscription_status,
+        "billing_interval": company.billing_interval.value if company.billing_interval else "monthly",
         "max_ai_workers": company.ai_worker_limit,
         "has_stripe": bool(company.stripe_customer_id),
         "stripe_subscription_id": company.stripe_subscription_id,
@@ -287,16 +288,25 @@ async def handle_checkout_completed(session: dict, db: Session):
     if subscription_id:
         company.stripe_subscription_id = subscription_id
         
-        # Get subscription status from Stripe to determine if trial
+        # Get subscription status and billing interval from Stripe
         try:
             subscription = stripe.Subscription.retrieve(subscription_id)
             company.subscription_status = subscription.status  # "trialing" or "active"
+            
+            # Determine billing interval from Stripe subscription
+            if subscription.get("items", {}).get("data"):
+                price = subscription["items"]["data"][0].get("price", {})
+                stripe_interval = price.get("recurring", {}).get("interval", "month")
+                company.billing_interval = (
+                    BillingInterval.yearly if stripe_interval == "year"
+                    else BillingInterval.monthly
+                )
             
             # Mark trial as used when they start trialing
             if subscription.status == "trialing":
                 company.trial_used = True
                 
-            logger.info(f"Subscription status from Stripe: {subscription.status}")
+            logger.info(f"Subscription status from Stripe: {subscription.status}, interval: {company.billing_interval.value}")
         except stripe.error.StripeError as e:
             logger.warning(f"Could not fetch subscription status: {e}")
             company.subscription_status = "active"
@@ -308,7 +318,7 @@ async def handle_checkout_completed(session: dict, db: Session):
     
     db.commit()
     
-    logger.info(f"Checkout completed for company {company.name}, plan: {plan}, status: {company.subscription_status}")
+    logger.info(f"Checkout completed for company {company.name}, plan: {plan}, interval: {company.billing_interval.value}, status: {company.subscription_status}")
 
 
 async def handle_subscription_created(subscription: dict, db: Session):
@@ -337,9 +347,18 @@ async def handle_subscription_created(subscription: dict, db: Session):
         company.subscription_plan = SubscriptionPlan[plan]
         company.max_ai_workers = PLAN_LIMITS.get(plan, 1)
     
+    # Store billing interval from Stripe subscription
+    if subscription.get("items", {}).get("data"):
+        price = subscription["items"]["data"][0].get("price", {})
+        stripe_interval = price.get("recurring", {}).get("interval", "month")
+        company.billing_interval = (
+            BillingInterval.yearly if stripe_interval == "year"
+            else BillingInterval.monthly
+        )
+    
     db.commit()
     
-    logger.info(f"Subscription created for company {company.name}, status: {subscription['status']}")
+    logger.info(f"Subscription created for company {company.name}, status: {subscription['status']}, interval: {company.billing_interval.value}")
 
 
 async def handle_subscription_updated(subscription: dict, db: Session):
@@ -380,9 +399,18 @@ async def handle_subscription_updated(subscription: dict, db: Session):
         company.subscription_plan = SubscriptionPlan[plan]
         company.max_ai_workers = PLAN_LIMITS.get(plan, 1)
     
+    # Update billing interval if changed
+    if subscription.get("items", {}).get("data"):
+        price = subscription["items"]["data"][0].get("price", {})
+        stripe_interval = price.get("recurring", {}).get("interval", "month")
+        company.billing_interval = (
+            BillingInterval.yearly if stripe_interval == "year"
+            else BillingInterval.monthly
+        )
+    
     db.commit()
     
-    logger.info(f"Subscription updated for company {company.name}, status: {subscription['status']}")
+    logger.info(f"Subscription updated for company {company.name}, status: {subscription['status']}, interval: {company.billing_interval.value}")
 
 
 async def handle_subscription_deleted(subscription: dict, db: Session):

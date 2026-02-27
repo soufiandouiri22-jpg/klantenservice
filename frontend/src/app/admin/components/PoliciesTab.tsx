@@ -189,32 +189,34 @@ export function PoliciesTab() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="space-y-4">
         <div>
           <h2 className="text-lg font-semibold text-gray-900">Aanvullend Bedrijfsbeleid</h2>
           <p className="text-sm text-gray-500">
             Optionele beleidsregels die worden meegegeven aan alle AI-medewerkers.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <Button
             variant="outline"
+            size="sm"
             onClick={() => setIsPreviewModalOpen(true)}
           >
-            <Eye className="h-4 w-4 mr-2" />
-            Preview
+            <Eye className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Preview</span>
           </Button>
           <Button
             variant="outline"
+            size="sm"
             onClick={() => seedMutation.mutate()}
             disabled={seedMutation.isPending}
           >
-            <RefreshCw className={`h-4 w-4 mr-2 ${seedMutation.isPending ? 'animate-spin' : ''}`} />
-            Standaard laden
+            <RefreshCw className={`h-4 w-4 sm:mr-2 ${seedMutation.isPending ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">Standaard laden</span>
           </Button>
-          <Button onClick={() => setIsCreateModalOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Nieuwe beleidsregel
+          <Button size="sm" onClick={() => setIsCreateModalOpen(true)}>
+            <Plus className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Nieuwe beleidsregel</span>
           </Button>
         </div>
       </div>
@@ -329,28 +331,30 @@ export function PoliciesTab() {
                   ) : (
                     // View Mode
                     <div>
-                      <div className="flex items-start justify-between">
+                      <div className="flex items-start gap-3">
                         <div 
-                          className="flex items-center gap-3 cursor-pointer flex-1"
+                          className="flex items-start gap-3 cursor-pointer flex-1 min-w-0"
                           onClick={() => togglePromptExpand(prompt.id)}
                         >
-                          {expandedPrompts.has(prompt.id) ? (
-                            <ChevronDown className="h-5 w-5 text-gray-400" />
-                          ) : (
-                            <ChevronRight className="h-5 w-5 text-gray-400" />
-                          )}
-                          <div className={`p-1.5 rounded ${categoryColors[prompt.category] || categoryColors.custom}`}>
+                          <div className="flex-shrink-0 mt-0.5">
+                            {expandedPrompts.has(prompt.id) ? (
+                              <ChevronDown className="h-5 w-5 text-gray-400" />
+                            ) : (
+                              <ChevronRight className="h-5 w-5 text-gray-400" />
+                            )}
+                          </div>
+                          <div className={`flex-shrink-0 p-1.5 rounded ${categoryColors[prompt.category] || categoryColors.custom}`}>
                             <CategoryIcon className="h-4 w-4" />
                           </div>
-                          <div>
+                          <div className="min-w-0">
                             <h3 className="font-medium text-gray-900">{prompt.name}</h3>
                             {prompt.description && (
-                              <p className="text-sm text-gray-500">{prompt.description}</p>
+                              <p className="text-sm text-gray-500 break-words">{prompt.description}</p>
                             )}
                           </div>
                         </div>
                         
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
                           <Toggle
                             enabled={prompt.is_active}
                             onChange={() => handleToggleActive(prompt)}

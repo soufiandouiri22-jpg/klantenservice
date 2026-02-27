@@ -6,7 +6,6 @@ import {
   LayoutDashboard,
   Users,
   Shield, 
-  Cpu,
   Mic,
   FileText
 } from 'lucide-react'
@@ -18,7 +17,6 @@ import { useAuthStore } from '@/lib/store'
 import { OverviewTab } from './components/OverviewTab'
 import { CustomersTab } from './components/CustomersTab'
 import { PoliciesTab } from './components/PoliciesTab'
-import { ModelRoutingTab } from './components/ModelRoutingTab'
 import { VoiceTab } from './components/VoiceTab'
 import { LogsTab } from './components/LogsTab'
 
@@ -26,7 +24,6 @@ const tabs = [
   { id: 'overview', name: 'Overzicht', icon: LayoutDashboard },
   { id: 'customers', name: 'Klanten', icon: Users },
   { id: 'policies', name: 'Policies', icon: Shield },
-  { id: 'model', name: 'Model & Routing', icon: Cpu },
   { id: 'voice', name: 'Realtime Voice', icon: Mic },
   { id: 'logs', name: 'Logs & Debug', icon: FileText },
 ]
@@ -65,8 +62,6 @@ export default function AdminPage() {
         return <CustomersTab />
       case 'policies':
         return <PoliciesTab />
-      case 'model':
-        return <ModelRoutingTab />
       case 'voice':
         return <VoiceTab />
       case 'logs':
