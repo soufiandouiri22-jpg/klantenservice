@@ -10,6 +10,7 @@ from app.api.v1.endpoints import (
     ai_workers,
     phone_numbers,
     calendars,
+    contact,
     crm,
     websites,
     training,
@@ -159,6 +160,13 @@ api_router.include_router(
     kvk.router,
     prefix="/kvk",
     tags=["KVK"]
+)
+
+# Contact Form (public, no auth)
+api_router.include_router(
+    contact.router,
+    prefix="/contact",
+    tags=["Contact"]
 )
 
 # ElevenLabs Server Tools (webhook endpoints for Conversational AI)

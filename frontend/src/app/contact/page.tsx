@@ -28,15 +28,21 @@ export default function ContactPage() {
     e.preventDefault()
     setIsSubmitting(true)
 
-    // Simulate form submission
-    await new Promise(resolve => setTimeout(resolve, 1000))
-
-    // TODO: Implement actual form submission
-    console.log('Form submitted:', formData)
-    
-    setIsSubmitting(false)
-    setIsSubmitted(true)
-    toast.success('Bericht verzonden! We nemen zo snel mogelijk contact met u op.')
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'
+      const res = await fetch(`${apiUrl}/contact/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      })
+      if (!res.ok) throw new Error('Verzenden mislukt')
+      setIsSubmitted(true)
+      toast.success('Bericht verzonden! We nemen zo snel mogelijk contact met u op.')
+    } catch {
+      toast.error('Er ging iets mis. Probeer het later opnieuw of mail naar info@klantenservice.ai.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (

@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Headphones, Mail, Phone } from 'lucide-react'
+import { Headphones, Linkedin, Facebook, Instagram } from 'lucide-react'
 
 export default function Footer() {
   return (
@@ -60,11 +60,14 @@ export default function Footer() {
             © {new Date().getFullYear()} klantenservice.ai. Alle rechten voorbehouden.
           </p>
           <div className="flex items-center gap-4">
-            <a href="mailto:info@klantenservice.ai" className="text-gray-400 hover:text-gray-600">
-              <Mail className="h-5 w-5" />
+            <a href="https://linkedin.com/company/klantenservice-ai" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-600">
+              <Linkedin className="h-5 w-5" />
             </a>
-            <a href="tel:+31201234567" className="text-gray-400 hover:text-gray-600">
-              <Phone className="h-5 w-5" />
+            <a href="https://facebook.com/klantenserviceai" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-600">
+              <Facebook className="h-5 w-5" />
+            </a>
+            <a href="https://instagram.com/klantenservice_ai" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-600">
+              <Instagram className="h-5 w-5" />
             </a>
           </div>
         </div>

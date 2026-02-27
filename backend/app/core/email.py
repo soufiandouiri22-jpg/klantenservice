@@ -334,3 +334,82 @@ def send_welcome_email(
     except Exception as e:
         print(f"Error sending welcome email: {e}")
         return False
+
+
+def send_contact_form_email(
+    sender_name: str,
+    sender_email: str,
+    company: str = "",
+    phone: str = "",
+    subject: str = "Algemene vraag",
+    message: str = "",
+) -> bool:
+    """
+    Send a contact form submission to the team inbox.
+
+    Returns True if successful, False otherwise.
+    """
+    if not settings.RESEND_API_KEY:
+        print(f"[DEV] Contact form from {sender_name} <{sender_email}>")
+        print(f"[DEV] Subject: {subject}")
+        print(f"[DEV] Message: {message}")
+        return True
+
+    try:
+        init_resend()
+
+        details = []
+        if company:
+            details.append(f"<strong>Bedrijf:</strong> {company}")
+        if phone:
+            details.append(f"<strong>Telefoon:</strong> {phone}")
+        details_html = "<br>".join(details)
+        if details_html:
+            details_html = f"<p style='color:#6b7280;font-size:14px;'>{details_html}</p>"
+
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="utf-8"></head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background-color: #2563eb; padding: 24px; border-radius: 12px 12px 0 0; text-align: center;">
+                <h1 style="color: white; margin: 0; font-size: 20px;">Nieuw contactformulier bericht</h1>
+            </div>
+            <div style="background-color: #f9fafb; padding: 24px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
+                <p style="font-size: 14px; color: #6b7280; margin-bottom: 4px;">Onderwerp</p>
+                <p style="font-size: 18px; font-weight: 600; margin-top: 0;">{subject}</p>
+
+                <p style="font-size: 14px; color: #6b7280; margin-bottom: 4px;">Van</p>
+                <p style="font-size: 16px; margin-top: 0;">{sender_name} &lt;{sender_email}&gt;</p>
+
+                {details_html}
+
+                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+
+                <p style="font-size: 14px; color: #6b7280; margin-bottom: 4px;">Bericht</p>
+                <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; white-space: pre-wrap; font-size: 15px;">
+{message}
+                </div>
+
+                <p style="font-size: 12px; color: #9ca3af; text-align: center; margin-top: 24px;">
+                    Beantwoord dit bericht door te reageren naar {sender_email}
+                </p>
+            </div>
+        </body>
+        </html>
+        """
+
+        params = {
+            "from": f"klantenservice.ai <{settings.RESEND_FROM_EMAIL}>",
+            "to": ["info@klantenservice.ai"],
+            "reply_to": sender_email,
+            "subject": f"[Contact] {subject} - {sender_name}",
+            "html": html_content,
+        }
+
+        resend.Emails.send(params)
+        return True
+
+    except Exception as e:
+        print(f"Error sending contact form email: {e}")
+        return False
