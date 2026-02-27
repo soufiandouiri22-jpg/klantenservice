@@ -372,12 +372,12 @@ function SettingsContent() {
     toast.success(`Bedrijfsgegevens bijgewerkt vanuit KVK (${result.kvk_nummer})`)
   }, [updateCompanyMutation])
 
-  const handleKvkValidation = useCallback(async (kvkNummer: string) => {
+  const handleKvkValidation = useCallback(async (kvkNummer: string): Promise<boolean> => {
     const cleaned = kvkNummer.replace(/\s/g, '')
     if (!cleaned || cleaned.length !== 8 || !/^\d+$/.test(cleaned)) {
       setKvkStatus(cleaned.length > 0 ? 'invalid' : 'idle')
       setKvkValidName(null)
-      return
+      return false
     }
     setKvkStatus('checking')
     try {
@@ -387,9 +387,11 @@ function SettingsContent() {
       if (!result.geldig) {
         toast.error(result.melding || 'KvK-nummer niet gevonden')
       }
+      return result.geldig
     } catch {
       setKvkStatus('idle')
       setKvkValidName(null)
+      return false
     }
   }, [])
 
@@ -656,12 +658,21 @@ function SettingsContent() {
                           defaultValue={companyData?.kvk_number}
                           placeholder="12345678"
                           maxLength={8}
-                          onBlur={(e) => {
+                          onBlur={async (e) => {
                             const v = e.target.value.trim()
                             if (v !== companyData?.kvk_number) {
-                              updateCompanyMutation.mutate({ kvk_number: v })
-                              if (v) handleKvkValidation(v)
-                              else { setKvkStatus('idle'); setKvkValidName(null) }
+                              if (!v) {
+                                updateCompanyMutation.mutate({ kvk_number: v })
+                                setKvkStatus('idle')
+                                setKvkValidName(null)
+                              } else {
+                                const isValid = await handleKvkValidation(v)
+                                if (isValid) {
+                                  updateCompanyMutation.mutate({ kvk_number: v })
+                                } else {
+                                  e.target.value = companyData?.kvk_number || ''
+                                }
+                              }
                             }
                           }}
                         />
