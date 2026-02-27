@@ -92,15 +92,13 @@ export function AnalyticsTab() {
         <div>
           <div className="flex items-center gap-3">
             <h2 className="text-lg font-semibold text-gray-900">Website Analytics</h2>
-            {(realtime?.visitors ?? 0) > 0 && (
-              <div className="flex items-center gap-1.5 bg-green-50 text-green-700 px-2.5 py-1 rounded-full">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
-                </span>
-                <span className="text-xs font-medium">{realtime.visitors} nu online</span>
-              </div>
-            )}
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full ${(realtime?.visitors ?? 0) > 0 ? 'bg-green-50 text-green-700' : 'bg-gray-50 text-gray-500'}`}>
+              <span className="relative flex h-2 w-2">
+                {(realtime?.visitors ?? 0) > 0 && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />}
+                <span className={`relative inline-flex rounded-full h-2 w-2 ${(realtime?.visitors ?? 0) > 0 ? 'bg-green-500' : 'bg-gray-400'}`} />
+              </span>
+              <span className="text-xs font-medium">{realtime?.visitors ?? 0} nu online</span>
+            </div>
           </div>
           <p className="text-sm text-gray-500">Bezoekersdata via Plausible Analytics</p>
         </div>
