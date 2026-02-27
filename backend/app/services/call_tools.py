@@ -6,8 +6,8 @@ All "truth" (prices, availability, business info) comes from these tools.
 The AI only speaks what the backend provides via these tool results.
 
 Tools:
-- check_availability: Get available calendar slots
-- book_appointment: Create an appointment
+- check_availability: Get available calendar slots (real calendar API)
+- book_appointment: Create an appointment (real calendar API + internal DB)
 - search_knowledge: RAG search in company knowledge base
 - get_prices: Search for price information (via RAG)
 - create_note: Create internal note for dashboard
@@ -20,7 +20,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Session
 
-from app.models.calendar_integration import CalendarIntegration
+from app.models.calendar_integration import CalendarIntegration, CalendarProvider
 from app.models.appointment import Appointment, AppointmentStatus
 from app.models.internal_note import InternalNote, NotePriority
 from app.models.training import ExampleAnswer
@@ -29,7 +29,7 @@ from app.services.website_indexer import VectorStore
 logger = logging.getLogger(__name__)
 
 
-def tool_check_availability(
+async def tool_check_availability(
     db: Session,
     company_id: str,
     start_date: datetime,
@@ -39,19 +39,8 @@ def tool_check_availability(
 ) -> Dict[str, Any]:
     """
     Get available time slots from the AI worker's linked calendar.
-    
-    Args:
-        db: Database session
-        company_id: Company UUID
-        start_date: Start of availability window
-        end_date: End of availability window (default: 7 days from start)
-        duration_minutes: Appointment duration in minutes
-        ai_worker_id: AI worker UUID (used to find worker-specific calendar)
-        
-    Returns:
-        Dict with ok, slots (list of datetime strings), calendar_name
+    Queries the real Google/Outlook calendar for events and applies availability rules.
     """
-    # Get the calendar linked to this AI worker (strict 1:1)
     query = db.query(CalendarIntegration).filter(
         CalendarIntegration.company_id == company_id,
         CalendarIntegration.is_active == True,
@@ -59,7 +48,7 @@ def tool_check_availability(
     if ai_worker_id:
         query = query.filter(CalendarIntegration.ai_worker_id == ai_worker_id)
     calendar = query.first()
-    
+
     if not calendar:
         return {
             "ok": False,
@@ -67,51 +56,53 @@ def tool_check_availability(
             "message": "Er is geen agenda gekoppeld. Vraag de klant om later terug te bellen.",
             "slots": []
         }
-    
-    # Determine end date
+
+    if not calendar.access_token_encrypted:
+        return {
+            "ok": False,
+            "reason": "niet_verbonden",
+            "message": "De agenda is nog niet verbonden. Vraag de klant om later terug te bellen.",
+            "slots": []
+        }
+
     end = end_date or (start_date + timedelta(days=7))
-    
-    # Get availability rules from calendar (or use defaults)
-    rules = calendar.availability_rules or {}
-    default_hours = rules.get("available_hours", {})
-    
-    # Generate available slots (mock implementation - in production, check actual calendar)
-    # TODO: Integrate with actual calendar APIs (Google, Microsoft, CalDAV)
-    slots = []
-    current = start_date.replace(hour=9, minute=0, second=0, microsecond=0)
-    
-    # If start_date is today and past 9:00, start from next available slot
-    if current < start_date:
-        current = start_date.replace(minute=0, second=0, microsecond=0)
-        # Round up to next 30-minute slot
-        if current.minute > 0 and current.minute < 30:
-            current = current.replace(minute=30)
-        elif current.minute > 30:
-            current = current.replace(minute=0) + timedelta(hours=1)
-    
-    while current < end and len(slots) < 20:
-        # Skip weekends
-        if current.weekday() < 5:
-            # Business hours: 9:00 - 17:00
-            if 9 <= current.hour < 17:
-                slots.append(current.strftime("%Y-%m-%d %H:%M"))
-        
-        current += timedelta(minutes=30)
-        
-        # Move to next day if past business hours
-        if current.hour >= 17:
-            current = current.replace(hour=9, minute=0) + timedelta(days=1)
-    
-    return {
-        "ok": True,
-        "slots": slots[:20],
-        "calendar_id": str(calendar.id),
-        "calendar_name": calendar.name,
-        "message": f"Er zijn {len(slots)} beschikbare momenten gevonden."
-    }
+
+    try:
+        if calendar.provider == CalendarProvider.MICROSOFT:
+            from app.services import outlook_calendar_service as svc
+        else:
+            from app.services import google_calendar_service as svc
+
+        slots = await svc.get_availability_for_range(
+            calendar=calendar,
+            db=db,
+            start_date=start_date,
+            end_date=end,
+            duration_minutes=duration_minutes,
+        )
+
+        formatted = [s["start"][:16].replace("T", " ") for s in slots[:20]]
+
+        return {
+            "ok": True,
+            "slots": formatted,
+            "calendar_id": str(calendar.id),
+            "calendar_name": calendar.name,
+            "message": f"Er zijn {len(formatted)} beschikbare momenten gevonden."
+                if formatted else "Er zijn geen beschikbare momenten in deze periode."
+        }
+
+    except Exception as e:
+        logger.error(f"Calendar availability error: {e}", exc_info=True)
+        return {
+            "ok": False,
+            "reason": "agenda_fout",
+            "message": "Er ging iets mis bij het ophalen van de beschikbaarheid. Vraag de klant om later terug te bellen.",
+            "slots": []
+        }
 
 
-def tool_book_appointment(
+async def tool_book_appointment(
     db: Session,
     company_id: str,
     calendar_integration_id: str,
@@ -124,47 +115,54 @@ def tool_book_appointment(
     call_log_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Create an appointment in the calendar.
-    
-    Args:
-        db: Database session
-        company_id: Company UUID
-        calendar_integration_id: Calendar UUID
-        starts_at: Appointment start time
-        ends_at: Appointment end time
-        customer_name: Customer's name
-        title: Appointment title
-        customer_phone: Customer phone (from call)
-        customer_email: Customer email (if provided)
-        call_log_id: Link to the call log
-        
-    Returns:
-        Dict with ok, appointment_id, starts_at, customer_name
+    Create an appointment in both the external calendar (Google/Outlook) and the internal DB.
     """
-    # Verify calendar exists and belongs to company
     calendar = db.query(CalendarIntegration).filter(
         CalendarIntegration.id == calendar_integration_id,
         CalendarIntegration.company_id == company_id,
     ).first()
-    
+
     if not calendar:
         return {
             "ok": False,
             "reason": "agenda_niet_gevonden",
             "message": "De agenda kon niet worden gevonden."
         }
-    
-    # Calculate duration
+
     duration = int((ends_at - starts_at).total_seconds() / 60)
-    
-    # Create appointment
+    description = f"Geboekt tijdens telefoongesprek met {customer_name}"
+    if customer_phone:
+        description += f"\nTelefoon: {customer_phone}"
+
+    external_event_id = None
+    try:
+        if calendar.access_token_encrypted:
+            if calendar.provider == CalendarProvider.MICROSOFT:
+                from app.services import outlook_calendar_service as svc
+            else:
+                from app.services import google_calendar_service as svc
+
+            event = await svc.book_appointment(
+                calendar=calendar,
+                db=db,
+                summary=title,
+                start=starts_at,
+                end=ends_at,
+                description=description,
+                attendee_email=customer_email or "",
+            )
+            external_event_id = event.get("id")
+    except Exception as e:
+        logger.error(f"Failed to create external calendar event: {e}", exc_info=True)
+
     appointment = Appointment(
         id=uuid4(),
         company_id=UUID(company_id),
         calendar_integration_id=UUID(calendar_integration_id),
         call_log_id=UUID(call_log_id) if call_log_id else None,
+        external_event_id=external_event_id,
         title=title,
-        description=f"Geboekt tijdens telefoongesprek met {customer_name}",
+        description=description,
         appointment_type=None,
         starts_at=starts_at,
         ends_at=ends_at,
@@ -174,12 +172,11 @@ def tool_book_appointment(
         customer_email=customer_email,
         status=AppointmentStatus.CONFIRMED,
     )
-    
+
     db.add(appointment)
     db.commit()
     db.refresh(appointment)
-    
-    # Create notification for new appointment
+
     try:
         from app.services.notification_service import create_notification
         from app.models.notification import NotificationType
@@ -192,19 +189,19 @@ def tool_book_appointment(
             url="/dashboard/appointments",
         )
     except Exception:
-        pass  # Don't fail the appointment creation if notification fails
-    
-    # Format datetime for speech
+        pass
+
     day_names = ["maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag", "zondag"]
     day_name = day_names[starts_at.weekday()]
-    
+
     return {
         "ok": True,
         "appointment_id": str(appointment.id),
         "starts_at": starts_at.isoformat(),
         "starts_at_readable": f"{day_name} {starts_at.day} {starts_at.strftime('%B')} om {starts_at.strftime('%H:%M')}",
         "customer_name": customer_name,
-        "message": f"Afspraak ingepland op {day_name} om {starts_at.strftime('%H:%M')} voor {customer_name}."
+        "message": f"Afspraak ingepland op {day_name} om {starts_at.strftime('%H:%M')} voor {customer_name}.",
+        "in_external_calendar": external_event_id is not None,
     }
 
 

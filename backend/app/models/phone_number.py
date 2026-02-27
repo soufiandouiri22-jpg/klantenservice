@@ -60,7 +60,7 @@ class PhoneNumber(Base):
     # After hours settings
     after_hours_message = Column(
         String(500),
-        default="Wij zijn momenteel gesloten. Onze openingstijden zijn maandag tot en met vrijdag van 9:00 tot 17:00 uur."
+        default="Wij zijn momenteel gesloten. Probeert u het op een later moment nog eens."
     )
     after_hours_voicemail = Column(Boolean, default=True)
     
@@ -80,20 +80,25 @@ class PhoneNumber(Base):
         return f"<PhoneNumber {self.number}>"
     
     def is_within_business_hours(self, check_time: datetime = None) -> bool:
-        """Check if current time is within business hours."""
+        """Check if current time (Amsterdam timezone) is within business hours."""
+        from zoneinfo import ZoneInfo
+        ams = ZoneInfo("Europe/Amsterdam")
+
         if check_time is None:
-            check_time = datetime.now()
-        
+            check_time = datetime.now(ams)
+        elif check_time.tzinfo is None:
+            check_time = check_time.replace(tzinfo=ams)
+
         day_name = check_time.strftime("%A").lower()
         day_hours = self.business_hours.get(day_name, {})
-        
+
         if not day_hours.get("enabled", False):
             return False
-        
+
         open_time = datetime.strptime(day_hours.get("open", "09:00"), "%H:%M").time()
         close_time = datetime.strptime(day_hours.get("close", "17:00"), "%H:%M").time()
         current_time = check_time.time()
-        
+
         return open_time <= current_time <= close_time
 
 

@@ -107,7 +107,7 @@ async def _handle_tool(request: Request, tool_name: str) -> JSONResponse:
             if k not in CONTEXT_FIELDS and k != "dynamic_variables"
         }
 
-        result = _run_tool(tool_name, arguments, context)
+        result = await _run_tool(tool_name, arguments, context)
 
         logger.info(f"[ElevenLabs Tool] {tool_name} ok={result.get('ok')}")
         return JSONResponse(content=result)

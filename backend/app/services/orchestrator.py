@@ -170,7 +170,7 @@ TOOLS_OPENAI = [
 ]
 
 
-def _run_tool(
+async def _run_tool(
     name: str,
     arguments: Dict[str, Any],
     context: Dict[str, Any]
@@ -191,7 +191,7 @@ def _run_tool(
             except:
                 start = datetime.now()
             ai_worker_id = context.get("ai_worker_id")
-            return tool_check_availability(
+            return await tool_check_availability(
                 db, company_id,
                 start_date=start,
                 duration_minutes=int(arguments.get("duration_minutes", 30)),
@@ -201,7 +201,6 @@ def _run_tool(
         if name == "book_appointment":
             from dateutil import parser as date_parser
             ai_worker_id = context.get("ai_worker_id")
-            # Need calendar_id - get from the AI worker's linked calendar
             cal_id = calendar_id
             if not cal_id:
                 from app.models.calendar_integration import CalendarIntegration
@@ -217,7 +216,7 @@ def _run_tool(
             if not cal_id:
                 return {"ok": False, "reason": "no_calendar", "message": "Geen agenda beschikbaar."}
             
-            return tool_book_appointment(
+            return await tool_book_appointment(
                 db, company_id,
                 calendar_integration_id=cal_id,
                 starts_at=date_parser.parse(arguments["starts_at"]),
@@ -287,6 +286,7 @@ def build_context_payload(
     Returns:
         Tuple of (facts, instructions) to inject into the voice agent
     """
+    import asyncio
     import time
     from uuid import UUID
     
@@ -388,7 +388,7 @@ Bepaal welke tools nodig zijn en geef daarna facts + instructions als JSON."""
                 
                 # Time the tool call
                 tool_start = time.time()
-                result = _run_tool(name, args, tool_context)
+                result = asyncio.run(_run_tool(name, args, tool_context))
                 tool_latency_ms = int((time.time() - tool_start) * 1000)
                 
                 result_str = json.dumps(result, ensure_ascii=False)
@@ -463,7 +463,7 @@ Bepaal welke tools nodig zijn en geef daarna facts + instructions als JSON."""
                             
                             logger.info(f"Orchestrator (big model) calling tool: {name} with {args}")
                             tool_start = time.time()
-                            result = _run_tool(name, args, tool_context)
+                            result = asyncio.run(_run_tool(name, args, tool_context))
                             tool_latency_ms = int((time.time() - tool_start) * 1000)
                             
                             result_str = json.dumps(result, ensure_ascii=False)
