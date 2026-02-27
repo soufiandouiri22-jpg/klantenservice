@@ -60,6 +60,10 @@ function SettingsContent() {
   const kvkDebounceRef = useRef<NodeJS.Timeout | null>(null)
   const companyNameRef = useRef<HTMLInputElement>(null)
 
+  // KVK validation state
+  const [kvkStatus, setKvkStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle')
+  const [kvkValidName, setKvkValidName] = useState<string | null>(null)
+
   // BTW validation state
   const [btwStatus, setBtwStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle')
 
@@ -368,6 +372,27 @@ function SettingsContent() {
     toast.success(`Bedrijfsgegevens bijgewerkt vanuit KVK (${result.kvk_nummer})`)
   }, [updateCompanyMutation])
 
+  const handleKvkValidation = useCallback(async (kvkNummer: string) => {
+    const cleaned = kvkNummer.replace(/\s/g, '')
+    if (!cleaned || cleaned.length !== 8 || !/^\d+$/.test(cleaned)) {
+      setKvkStatus(cleaned.length > 0 ? 'invalid' : 'idle')
+      setKvkValidName(null)
+      return
+    }
+    setKvkStatus('checking')
+    try {
+      const result = await kvkApi.validateKvk(cleaned)
+      setKvkStatus(result.geldig ? 'valid' : 'invalid')
+      setKvkValidName(result.geldig ? result.melding : null)
+      if (!result.geldig) {
+        toast.error(result.melding || 'KvK-nummer niet gevonden')
+      }
+    } catch {
+      setKvkStatus('idle')
+      setKvkValidName(null)
+    }
+  }, [])
+
   const handleBtwValidation = useCallback(async (btwNummer: string) => {
     if (!btwNummer || btwNummer.length < 4) {
       setBtwStatus('idle')
@@ -600,15 +625,37 @@ function SettingsContent() {
                       }}
                     />
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <Input
-                        label="KvK-nummer"
-                        defaultValue={companyData?.kvk_number}
-                        onBlur={(e) => {
-                          if (e.target.value !== companyData?.kvk_number) {
-                            updateCompanyMutation.mutate({ kvk_number: e.target.value })
-                          }
-                        }}
-                      />
+                      <div className="relative">
+                        <Input
+                          label="KvK-nummer"
+                          defaultValue={companyData?.kvk_number}
+                          placeholder="12345678"
+                          maxLength={8}
+                          onBlur={(e) => {
+                            const v = e.target.value.trim()
+                            if (v !== companyData?.kvk_number) {
+                              updateCompanyMutation.mutate({ kvk_number: v })
+                              if (v) handleKvkValidation(v)
+                              else { setKvkStatus('idle'); setKvkValidName(null) }
+                            }
+                          }}
+                        />
+                        {kvkStatus === 'checking' && (
+                          <Loader2 className="absolute right-3 top-9 h-4 w-4 animate-spin text-gray-400" />
+                        )}
+                        {kvkStatus === 'valid' && kvkValidName && (
+                          <div className="mt-1 flex items-center gap-1 text-xs text-green-600">
+                            <CheckCircle className="h-3.5 w-3.5" />
+                            {kvkValidName}
+                          </div>
+                        )}
+                        {kvkStatus === 'invalid' && (
+                          <div className="mt-1 flex items-center gap-1 text-xs text-red-600">
+                            <XCircle className="h-3.5 w-3.5" />
+                            KvK-nummer niet gevonden
+                          </div>
+                        )}
+                      </div>
                       <div className="relative">
                         <Input
                           label="BTW-nummer"

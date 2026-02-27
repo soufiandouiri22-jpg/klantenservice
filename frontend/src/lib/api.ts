@@ -954,6 +954,11 @@ export const kvkApi = {
     const response = await api.get('/kvk/valideer-btw', { params: { btw_nummer: btwNummer } })
     return response.data
   },
+
+  validateKvk: async (kvkNummer: string) => {
+    const response = await api.get('/kvk/valideer-kvk', { params: { kvk_nummer: kvkNummer } })
+    return response.data
+  },
 }
 
 // Search API

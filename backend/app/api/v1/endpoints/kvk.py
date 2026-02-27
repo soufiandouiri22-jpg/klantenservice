@@ -101,6 +101,57 @@ async def search_kvk(
         return KvkSearchResponse(resultaten=[], totaal=0)
 
 
+@router.get("/valideer-kvk")
+async def validate_kvk_number(
+    kvk_nummer: str = Query(..., min_length=8, max_length=8, description="KvK-nummer (8 cijfers)"),
+):
+    """
+    Validate a KVK number by looking it up in the Handelsregister.
+    Returns company name and address if found.
+    """
+    if not kvk_nummer.isdigit() or len(kvk_nummer) != 8:
+        return {"geldig": False, "melding": "KvK-nummer moet 8 cijfers zijn"}
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(
+                f"{settings.KVK_API_URL}/zoeken",
+                params={"kvkNummer": kvk_nummer},
+                headers={"apikey": settings.KVK_API_KEY},
+            )
+
+        if response.status_code in (404, 204):
+            return {"geldig": False, "melding": "KvK-nummer niet gevonden"}
+
+        if response.status_code != 200:
+            return {"geldig": False, "melding": "Kon KvK-nummer niet valideren"}
+
+        data = response.json()
+        resultaten = data.get("resultaten", [])
+
+        if not resultaten:
+            return {"geldig": False, "melding": "KvK-nummer niet gevonden"}
+
+        item = resultaten[0]
+        naam = item.get("naam", "")
+        adres_data = item.get("adres", {})
+        binnenlands = adres_data.get("binnenlandsAdres", {})
+        plaats = binnenlands.get("plaats", "")
+
+        return {
+            "geldig": True,
+            "naam": naam,
+            "plaats": plaats,
+            "melding": f"{naam}" + (f" · {plaats}" if plaats else ""),
+        }
+
+    except httpx.TimeoutException:
+        return {"geldig": False, "melding": "KVK service niet bereikbaar"}
+    except Exception as e:
+        logger.error(f"KVK validate error: {e}")
+        return {"geldig": False, "melding": "Kon KvK-nummer niet valideren"}
+
+
 @router.get("/valideer-btw")
 async def validate_btw_number(
     btw_nummer: str = Query(..., min_length=2, max_length=20, description="EU BTW-nummer"),
