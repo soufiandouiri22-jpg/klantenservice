@@ -9,12 +9,13 @@ from typing import List, Optional, Any
 from uuid import UUID
 import logging
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, case, or_
 
 from app.api.deps import get_db, get_current_user
-from app.core.config import get_settings
+from app.core.config import get_settings, settings
 from app.models.user import User
 from app.models.company import Company, BillingInterval
 from app.models.ai_worker import AIWorker, AIWorkerStatus
@@ -490,43 +491,132 @@ async def get_latency_metrics(
     )
 
 
+async def _fetch_elevenlabs_usage(start_unix_ms: int, end_unix_ms: int) -> dict:
+    """Fetch character usage from ElevenLabs API."""
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(
+                "https://api.elevenlabs.io/v1/usage/character-stats",
+                params={
+                    "start_unix": start_unix_ms,
+                    "end_unix": end_unix_ms,
+                },
+                headers={"xi-api-key": settings.ELEVENLABS_API_KEY},
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                all_chars = sum(
+                    sum(v) if isinstance(v, list) else 0
+                    for v in data.get("usage", {}).values()
+                )
+                return {"characters": all_chars}
+    except Exception as e:
+        logger.warning(f"[COSTS] ElevenLabs usage fetch failed: {e}")
+    return {"characters": 0}
+
+
+async def _fetch_twilio_usage(start_date: str, end_date: str) -> dict:
+    """Fetch usage records from Twilio API for a date range (YYYY-MM-DD)."""
+    result = {"cost_cents": 0, "calls": 0, "minutes": 0.0}
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(
+                f"https://api.twilio.com/2010-04-01/Accounts/{settings.TWILIO_ACCOUNT_SID}/Usage/Records.json",
+                params={
+                    "StartDate": start_date,
+                    "EndDate": end_date,
+                    "Category": "calls",
+                },
+                auth=(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN),
+            )
+            if resp.status_code == 200:
+                for record in resp.json().get("usage_records", []):
+                    price = float(record.get("price", "0") or "0")
+                    result["cost_cents"] += int(abs(price) * 100)
+                    result["calls"] += int(record.get("count", "0") or "0")
+                    result["minutes"] += float(record.get("usage", "0") or "0")
+
+            # Also fetch phone number costs
+            resp2 = await client.get(
+                f"https://api.twilio.com/2010-04-01/Accounts/{settings.TWILIO_ACCOUNT_SID}/Usage/Records.json",
+                params={
+                    "StartDate": start_date,
+                    "EndDate": end_date,
+                    "Category": "phonenumbers",
+                },
+                auth=(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN),
+            )
+            if resp2.status_code == 200:
+                for record in resp2.json().get("usage_records", []):
+                    price = float(record.get("price", "0") or "0")
+                    result["cost_cents"] += int(abs(price) * 100)
+
+            # Also fetch recordings costs
+            resp3 = await client.get(
+                f"https://api.twilio.com/2010-04-01/Accounts/{settings.TWILIO_ACCOUNT_SID}/Usage/Records.json",
+                params={
+                    "StartDate": start_date,
+                    "EndDate": end_date,
+                    "Category": "recordings",
+                },
+                auth=(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN),
+            )
+            if resp3.status_code == 200:
+                for record in resp3.json().get("usage_records", []):
+                    price = float(record.get("price", "0") or "0")
+                    result["cost_cents"] += int(abs(price) * 100)
+    except Exception as e:
+        logger.warning(f"[COSTS] Twilio usage fetch failed: {e}")
+    return result
+
+
+# ElevenLabs pricing: roughly $0.30 per 1,000 characters (Scale tier)
+ELEVENLABS_COST_PER_1K_CHARS_CENTS = 30
+
+
 @router.get("/metrics/costs", response_model=CostMetrics)
 async def get_cost_metrics(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_superadmin),
 ):
-    """
-    Get cost metrics for today and this month.
-    """
+    """Get real API cost metrics from ElevenLabs and Twilio."""
+    import asyncio
+    from calendar import monthrange
+
     now = datetime.utcnow()
-    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    
-    # Today's costs
-    today_usage = db.query(
-        func.sum(UsageLog.stt_cost_cents).label("stt"),
-        func.sum(UsageLog.llm_cost_cents).label("llm"),
-        func.sum(UsageLog.total_cost_cents).label("total"),
-        func.sum(UsageLog.llm_input_tokens + UsageLog.llm_output_tokens).label("tokens"),
-    ).filter(UsageLog.created_at >= today_start).first()
-    
-    # Month's costs
-    month_usage = db.query(
-        func.sum(UsageLog.stt_cost_cents).label("stt"),
-        func.sum(UsageLog.llm_cost_cents).label("llm"),
-        func.sum(UsageLog.total_cost_cents).label("total"),
-        func.sum(UsageLog.llm_input_tokens + UsageLog.llm_output_tokens).label("tokens"),
-    ).filter(UsageLog.created_at >= month_start).first()
-    
+    today_str = now.strftime("%Y-%m-%d")
+    month_start_str = now.replace(day=1).strftime("%Y-%m-%d")
+
+    today_start_ms = int(now.replace(hour=0, minute=0, second=0, microsecond=0).timestamp() * 1000)
+    month_start_ms = int(now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).timestamp() * 1000)
+    now_ms = int(now.timestamp() * 1000)
+
+    el_today, el_month, tw_today, tw_month = await asyncio.gather(
+        _fetch_elevenlabs_usage(today_start_ms, now_ms),
+        _fetch_elevenlabs_usage(month_start_ms, now_ms),
+        _fetch_twilio_usage(today_str, today_str),
+        _fetch_twilio_usage(month_start_str, today_str),
+    )
+
+    el_cost_today = int(el_today["characters"] / 1000 * ELEVENLABS_COST_PER_1K_CHARS_CENTS)
+    el_cost_month = int(el_month["characters"] / 1000 * ELEVENLABS_COST_PER_1K_CHARS_CENTS)
+
+    total_today = el_cost_today + tw_today["cost_cents"]
+    total_month = el_cost_month + tw_month["cost_cents"]
+
     return CostMetrics(
-        stt_cost_today_cents=today_usage.stt or 0,
-        llm_cost_today_cents=today_usage.llm or 0,
-        total_cost_today_cents=today_usage.total or 0,
-        stt_cost_month_cents=month_usage.stt or 0,
-        llm_cost_month_cents=month_usage.llm or 0,
-        total_cost_month_cents=month_usage.total or 0,
-        tokens_today=today_usage.tokens or 0,
-        tokens_month=month_usage.tokens or 0,
+        elevenlabs_characters_today=el_today["characters"],
+        elevenlabs_characters_month=el_month["characters"],
+        elevenlabs_cost_today_cents=el_cost_today,
+        elevenlabs_cost_month_cents=el_cost_month,
+        twilio_cost_today_cents=tw_today["cost_cents"],
+        twilio_cost_month_cents=tw_month["cost_cents"],
+        twilio_calls_today=tw_today["calls"],
+        twilio_calls_month=tw_month["calls"],
+        twilio_minutes_today=round(tw_today["minutes"], 1),
+        twilio_minutes_month=round(tw_month["minutes"], 1),
+        total_cost_today_cents=total_today,
+        total_cost_month_cents=total_month,
     )
 
 

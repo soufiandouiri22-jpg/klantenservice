@@ -94,18 +94,23 @@ class LatencyMetrics(BaseModel):
 
 
 class CostMetrics(BaseModel):
-    # Costs in cents
-    stt_cost_today_cents: int = 0
-    llm_cost_today_cents: int = 0
+    # ElevenLabs
+    elevenlabs_characters_today: int = 0
+    elevenlabs_characters_month: int = 0
+    elevenlabs_cost_today_cents: int = 0
+    elevenlabs_cost_month_cents: int = 0
+
+    # Twilio
+    twilio_cost_today_cents: int = 0
+    twilio_cost_month_cents: int = 0
+    twilio_calls_today: int = 0
+    twilio_calls_month: int = 0
+    twilio_minutes_today: float = 0
+    twilio_minutes_month: float = 0
+
+    # Totals
     total_cost_today_cents: int = 0
-    
-    stt_cost_month_cents: int = 0
-    llm_cost_month_cents: int = 0
     total_cost_month_cents: int = 0
-    
-    # Token counts
-    tokens_today: int = 0
-    tokens_month: int = 0
 
 
 class BusinessMetrics(BaseModel):

@@ -348,7 +348,7 @@ export function OverviewTab() {
       {/* Cost Metrics */}
       <Card>
         <CardHeader>
-          <CardTitle>Kosten</CardTitle>
+          <CardTitle>API-kosten</CardTitle>
         </CardHeader>
         <CardBody>
           {costsLoading ? (
@@ -358,13 +358,25 @@ export function OverviewTab() {
               <div>
                 <h4 className="text-sm font-medium text-gray-500 mb-4">Vandaag</h4>
                 <div className="space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">STT (Whisper)</span>
-                    <span className="font-medium">{formatCurrency(costs?.stt_cost_today_cents || 0)}</span>
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                      <img src="/app-icons/elevenlabs.svg" alt="ElevenLabs" className="h-4 w-4" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                      <span className="text-gray-600">ElevenLabs</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="font-medium">{formatCurrency(costs?.elevenlabs_cost_today_cents || 0)}</span>
+                      <p className="text-xs text-gray-400">{(costs?.elevenlabs_characters_today || 0).toLocaleString()} chars</p>
+                    </div>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">LLM (Orchestrator)</span>
-                    <span className="font-medium">{formatCurrency(costs?.llm_cost_today_cents || 0)}</span>
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-4 w-4 text-red-500" />
+                      <span className="text-gray-600">Twilio</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="font-medium">{formatCurrency(costs?.twilio_cost_today_cents || 0)}</span>
+                      <p className="text-xs text-gray-400">{costs?.twilio_calls_today || 0} calls · {costs?.twilio_minutes_today || 0} min</p>
+                    </div>
                   </div>
                   <div className="flex justify-between border-t pt-2">
                     <span className="text-gray-900 font-medium">Totaal</span>
@@ -372,21 +384,30 @@ export function OverviewTab() {
                       {formatCurrency(costs?.total_cost_today_cents || 0)}
                     </span>
                   </div>
-                  <p className="text-xs text-gray-400">
-                    {costs?.tokens_today?.toLocaleString() || 0} tokens
-                  </p>
                 </div>
               </div>
               <div>
                 <h4 className="text-sm font-medium text-gray-500 mb-4">Deze Maand</h4>
                 <div className="space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">STT (Whisper)</span>
-                    <span className="font-medium">{formatCurrency(costs?.stt_cost_month_cents || 0)}</span>
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                      <img src="/app-icons/elevenlabs.svg" alt="ElevenLabs" className="h-4 w-4" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                      <span className="text-gray-600">ElevenLabs</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="font-medium">{formatCurrency(costs?.elevenlabs_cost_month_cents || 0)}</span>
+                      <p className="text-xs text-gray-400">{(costs?.elevenlabs_characters_month || 0).toLocaleString()} chars</p>
+                    </div>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">LLM (Orchestrator)</span>
-                    <span className="font-medium">{formatCurrency(costs?.llm_cost_month_cents || 0)}</span>
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-4 w-4 text-red-500" />
+                      <span className="text-gray-600">Twilio</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="font-medium">{formatCurrency(costs?.twilio_cost_month_cents || 0)}</span>
+                      <p className="text-xs text-gray-400">{costs?.twilio_calls_month || 0} calls · {costs?.twilio_minutes_month || 0} min</p>
+                    </div>
                   </div>
                   <div className="flex justify-between border-t pt-2">
                     <span className="text-gray-900 font-medium">Totaal</span>
@@ -394,9 +415,6 @@ export function OverviewTab() {
                       {formatCurrency(costs?.total_cost_month_cents || 0)}
                     </span>
                   </div>
-                  <p className="text-xs text-gray-400">
-                    {costs?.tokens_month?.toLocaleString() || 0} tokens
-                  </p>
                 </div>
               </div>
             </div>
@@ -435,8 +453,8 @@ export function OverviewTab() {
               <div>
                 <p className="text-sm text-gray-500">Gem. kosten/call</p>
                 <p className="text-xl font-semibold">
-                  {overview?.calls_today > 0 
-                    ? formatCurrency((costs?.total_cost_today_cents || 0) / overview.calls_today)
+                  {(costs?.twilio_calls_month || 0) > 0
+                    ? formatCurrency(costs!.total_cost_month_cents / costs!.twilio_calls_month)
                     : '€0.00'
                   }
                 </p>

@@ -73,6 +73,7 @@ export default function RootLayout({
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         <meta name="theme-color" content="#2563eb" />
+        <script defer data-domain="klantenservice.ai" src="https://plausible.io/js/script.js" />
       </head>
       <body className="min-h-screen bg-gray-50 font-sans">
         <script
