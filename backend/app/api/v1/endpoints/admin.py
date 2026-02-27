@@ -4,6 +4,7 @@ klantenservice.ai - Admin API Endpoints
 Endpoints for platform administrators to manage system-wide settings.
 Includes: System Prompts, Global Config, Metrics, Customers, Logs
 """
+import asyncio
 from datetime import datetime, timedelta
 from typing import List, Optional, Any
 from uuid import UUID
@@ -580,8 +581,6 @@ async def get_cost_metrics(
     current_user: User = Depends(require_superadmin),
 ):
     """Get real API cost metrics from ElevenLabs and Twilio."""
-    import asyncio
-    from calendar import monthrange
 
     now = datetime.utcnow()
     today_str = now.strftime("%Y-%m-%d")
@@ -618,6 +617,84 @@ async def get_cost_metrics(
         total_cost_today_cents=total_today,
         total_cost_month_cents=total_month,
     )
+
+
+@router.get("/analytics")
+async def get_analytics(
+    period: str = "30d",
+    current_user: User = Depends(require_superadmin),
+):
+    """Fetch website analytics from Plausible Stats API."""
+    if not settings.PLAUSIBLE_API_KEY:
+        raise HTTPException(status_code=503, detail="Plausible API key niet geconfigureerd")
+
+    site_id = settings.PLAUSIBLE_SITE_ID
+    headers = {"Authorization": f"Bearer {settings.PLAUSIBLE_API_KEY}"}
+    base = "https://plausible.io/api/v1/stats"
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        aggregate_req = client.get(
+            f"{base}/aggregate",
+            params={
+                "site_id": site_id,
+                "period": period,
+                "metrics": "visitors,pageviews,bounce_rate,visit_duration,visits",
+            },
+            headers=headers,
+        )
+        timeseries_req = client.get(
+            f"{base}/timeseries",
+            params={
+                "site_id": site_id,
+                "period": period,
+                "metrics": "visitors,pageviews",
+            },
+            headers=headers,
+        )
+        pages_req = client.get(
+            f"{base}/breakdown",
+            params={
+                "site_id": site_id,
+                "period": period,
+                "property": "event:page",
+                "metrics": "visitors,pageviews",
+                "limit": 10,
+            },
+            headers=headers,
+        )
+        sources_req = client.get(
+            f"{base}/breakdown",
+            params={
+                "site_id": site_id,
+                "period": period,
+                "property": "visit:source",
+                "metrics": "visitors",
+                "limit": 10,
+            },
+            headers=headers,
+        )
+
+        agg_resp, ts_resp, pages_resp, sources_resp = await asyncio.gather(
+            aggregate_req, timeseries_req, pages_req, sources_req
+        )
+
+    result = {"aggregate": {}, "timeseries": [], "top_pages": [], "top_sources": []}
+
+    if agg_resp.status_code == 200:
+        result["aggregate"] = agg_resp.json().get("results", {})
+    else:
+        logger.warning(f"[ANALYTICS] Plausible aggregate failed: {agg_resp.status_code} {agg_resp.text}")
+
+    if ts_resp.status_code == 200:
+        result["timeseries"] = ts_resp.json().get("results", [])
+
+    if pages_resp.status_code == 200:
+        result["top_pages"] = pages_resp.json().get("results", [])
+
+    if sources_resp.status_code == 200:
+        result["top_sources"] = sources_resp.json().get("results", [])
+
+    return result
 
 
 @router.get("/metrics/business", response_model=BusinessMetrics)

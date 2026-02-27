@@ -7,7 +7,8 @@ import {
   Users,
   Shield, 
   Mic,
-  FileText
+  FileText,
+  BarChart3
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { Header } from '@/components/layout/Header'
@@ -15,6 +16,7 @@ import { useAuthStore } from '@/lib/store'
 
 // Tab components
 import { OverviewTab } from './components/OverviewTab'
+import { AnalyticsTab } from './components/AnalyticsTab'
 import { CustomersTab } from './components/CustomersTab'
 import { PoliciesTab } from './components/PoliciesTab'
 import { VoiceTab } from './components/VoiceTab'
@@ -22,6 +24,7 @@ import { LogsTab } from './components/LogsTab'
 
 const tabs = [
   { id: 'overview', name: 'Overzicht', icon: LayoutDashboard },
+  { id: 'analytics', name: 'Analytics', icon: BarChart3 },
   { id: 'customers', name: 'Klanten', icon: Users },
   { id: 'policies', name: 'Policies', icon: Shield },
   { id: 'voice', name: 'Realtime Voice', icon: Mic },
@@ -58,6 +61,8 @@ export default function AdminPage() {
     switch (activeTab) {
       case 'overview':
         return <OverviewTab />
+      case 'analytics':
+        return <AnalyticsTab />
       case 'customers':
         return <CustomersTab />
       case 'policies':

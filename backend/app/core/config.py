@@ -93,6 +93,10 @@ class Settings(BaseSettings):
     KVK_API_KEY: str = "l74f93124b88e640109dad5323a65f58bd"
     KVK_API_URL: str = "https://api.kvk.nl/api/v2"
     
+    # Plausible Analytics
+    PLAUSIBLE_API_KEY: str = ""
+    PLAUSIBLE_SITE_ID: str = "klantenservice.ai"
+    
     # Frontend URL (for invite links)
     FRONTEND_URL: str = "http://localhost:3000"
     
