@@ -7,8 +7,8 @@ Create Date: 2026-02-28
 from alembic import op
 import sqlalchemy as sa
 
-revision = "035"
-down_revision = "034"
+revision = "035_sms_confirmation"
+down_revision = "034_billing_interval"
 branch_labels = None
 depends_on = None
 
