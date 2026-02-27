@@ -675,6 +675,7 @@ function CalendarPageInner() {
                             )}
                           </>
                         )}
+                        <div className="flex-1" />
                         <Button
                           variant="ghost"
                           size="sm"
