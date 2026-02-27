@@ -368,16 +368,16 @@ export default function AppointmentsPage() {
                     key={apt.id}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="flex items-center justify-between p-4 hover:bg-gray-50 cursor-pointer"
+                    className="flex items-start justify-between gap-3 p-4 hover:bg-gray-50 cursor-pointer"
                     onClick={() => setSelectedAppointment(apt)}
                   >
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-start gap-4 min-w-0">
                       <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-gray-100">
                         <Calendar className="h-6 w-6 text-gray-600" />
                       </div>
-                      <div>
-                        <p className="font-medium text-gray-900">{apt.title}</p>
-                        <div className="flex items-center gap-2 text-sm text-gray-500">
+                      <div className="min-w-0">
+                        <p className="font-medium text-gray-900 truncate">{apt.title}</p>
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-gray-500">
                           <User className="h-3 w-3" />
                           <span>{apt.customer_name}</span>
                           <span>•</span>
@@ -387,9 +387,11 @@ export default function AppointmentsPage() {
                         </div>
                       </div>
                     </div>
-                    <Badge variant={getStatusBadge(apt.status)}>
-                      {getStatusLabel(apt.status)}
-                    </Badge>
+                    <div className="flex-shrink-0">
+                      <Badge variant={getStatusBadge(apt.status)}>
+                        {getStatusLabel(apt.status)}
+                      </Badge>
+                    </div>
                   </motion.div>
                 ))}
               </div>
