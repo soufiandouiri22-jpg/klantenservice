@@ -59,6 +59,10 @@ function SettingsContent() {
   const kvkSettingsRef = useRef<HTMLDivElement>(null)
   const kvkDebounceRef = useRef<NodeJS.Timeout | null>(null)
   const companyNameRef = useRef<HTMLInputElement>(null)
+  const kvkNumberRef = useRef<HTMLInputElement>(null)
+  const addressRef = useRef<HTMLInputElement>(null)
+  const postalCodeRef = useRef<HTMLInputElement>(null)
+  const cityRef = useRef<HTMLInputElement>(null)
 
   // KVK validation state
   const [kvkStatus, setKvkStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle')
@@ -367,8 +371,13 @@ function SettingsContent() {
     }
     updateCompanyMutation.mutate(update)
     setShowKvkDropdown(false)
-    // Update the input visually
     if (companyNameRef.current) companyNameRef.current.value = result.naam
+    if (kvkNumberRef.current) kvkNumberRef.current.value = result.kvk_nummer || ''
+    if (addressRef.current) addressRef.current.value = update.address || ''
+    if (postalCodeRef.current) postalCodeRef.current.value = update.postal_code || ''
+    if (cityRef.current) cityRef.current.value = update.city || ''
+    setKvkStatus('valid')
+    setKvkValidName(`${result.naam}${result.adres?.plaats ? ` · ${result.adres.plaats}` : ''}`)
     toast.success(`Bedrijfsgegevens bijgewerkt vanuit KVK (${result.kvk_nummer})`)
   }, [updateCompanyMutation])
 
@@ -654,6 +663,7 @@ function SettingsContent() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="relative">
                         <Input
+                          ref={kvkNumberRef}
                           label="KvK-nummer"
                           defaultValue={companyData?.kvk_number}
                           placeholder="12345678"
@@ -732,6 +742,7 @@ function SettingsContent() {
                   </CardHeader>
                   <CardBody className="space-y-4">
                     <Input
+                      ref={addressRef}
                       label="Adres"
                       defaultValue={companyData?.address}
                       onBlur={(e) => {
@@ -742,6 +753,7 @@ function SettingsContent() {
                     />
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <Input
+                        ref={postalCodeRef}
                         label="Postcode"
                         defaultValue={companyData?.postal_code}
                         onBlur={(e) => {
@@ -751,6 +763,7 @@ function SettingsContent() {
                         }}
                       />
                       <Input
+                        ref={cityRef}
                         label="Plaats"
                         defaultValue={companyData?.city}
                         onBlur={(e) => {
