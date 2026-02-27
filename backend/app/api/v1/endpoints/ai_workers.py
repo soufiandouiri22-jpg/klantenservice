@@ -22,6 +22,7 @@ from app.models.call_log import CallLog
 from app.models.phone_number import PhoneNumber
 from app.models.website_knowledge import WebsiteKnowledge
 from app.models.calendar_integration import CalendarIntegration
+from app.models.appointment import Appointment
 from app.schemas.ai_worker import AIWorkerCreate, AIWorkerUpdate, AIWorkerResponse, AIWorkerStats
 from app.api.deps import get_current_user, get_current_company, get_current_company_with_subscription, require_manager
 
@@ -328,9 +329,11 @@ async def get_ai_worker_stats(
             detail="AI-medewerker niet gevonden",
         )
     
-    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-    week_start = today_start - timedelta(days=today_start.weekday())
-    month_start = today_start.replace(day=1)
+    from zoneinfo import ZoneInfo
+    now_ams = datetime.now(ZoneInfo("Europe/Amsterdam"))
+    today_start = now_ams.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
+    week_start = today_start - timedelta(days=now_ams.weekday())
+    month_start = now_ams.replace(day=1, hour=0, minute=0, second=0, microsecond=0).astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
     
     # Calls today
     calls_today = db.query(CallLog).filter(
@@ -367,13 +370,27 @@ async def get_ai_worker_stats(
     
     sentiment_breakdown = {s: c for s, c in sentiment_counts}
     
+    appointments_today = db.query(Appointment).filter(
+        Appointment.calendar_integration.has(CalendarIntegration.ai_worker_id == worker_id),
+        Appointment.created_at >= today_start,
+    ).count()
+
+    busiest = db.query(
+        func.extract("hour", CallLog.started_at).label("h"),
+        func.count(CallLog.id).label("c"),
+    ).filter(
+        CallLog.ai_worker_id == worker_id,
+        CallLog.started_at >= month_start,
+    ).group_by("h").order_by(func.count(CallLog.id).desc()).first()
+    busiest_hour_val = int(busiest.h) if busiest else None
+
     return AIWorkerStats(
         calls_today=calls_today,
         calls_this_week=calls_week,
         calls_this_month=calls_month,
-        appointments_made_today=0,  # TODO: Implement
+        appointments_made_today=appointments_today,
         average_call_duration_seconds=int(avg_duration),
-        busiest_hour=None,  # TODO: Implement
+        busiest_hour=busiest_hour_val,
         sentiment_breakdown=sentiment_breakdown,
     )
 

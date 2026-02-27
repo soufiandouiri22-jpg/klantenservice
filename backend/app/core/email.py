@@ -187,6 +187,88 @@ def send_invite_email(
         return False
 
 
+def send_password_reset_email(
+    to_email: str,
+    first_name: str,
+    reset_link: str,
+) -> bool:
+    """
+    Send a password reset email with a link to reset the password.
+
+    Returns True if successful, False otherwise.
+    """
+    if not settings.RESEND_API_KEY:
+        print(f"[DEV] Would send password reset to {to_email}")
+        print(f"[DEV] Reset link: {reset_link}")
+        return True
+
+    try:
+        init_resend()
+
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Wachtwoord herstellen</title>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background-color: #2563eb; padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
+                <h1 style="color: white; margin: 0; font-size: 24px;">Wachtwoord herstellen</h1>
+            </div>
+
+            <div style="background-color: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
+                <p style="font-size: 16px; margin-bottom: 20px;">
+                    Hoi {first_name},
+                </p>
+
+                <p style="font-size: 16px; margin-bottom: 20px;">
+                    We hebben een verzoek ontvangen om uw wachtwoord te herstellen. Klik op de onderstaande knop om een nieuw wachtwoord in te stellen:
+                </p>
+
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="{reset_link}" style="background: #2563eb; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; display: inline-block;">
+                        Wachtwoord herstellen
+                    </a>
+                </div>
+
+                <p style="font-size: 14px; color: #6b7280; text-align: center;">
+                    Deze link is <strong>1 uur</strong> geldig.
+                </p>
+
+                <p style="font-size: 14px; color: #6b7280; margin-top: 20px;">
+                    Als de knop niet werkt, kopieer en plak deze link in je browser:
+                </p>
+                <p style="font-size: 12px; color: #9ca3af; word-break: break-all;">
+                    {reset_link}
+                </p>
+
+                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+
+                <p style="font-size: 12px; color: #9ca3af; text-align: center;">
+                    Als u dit verzoek niet heeft gedaan, kunt u deze email negeren. Uw wachtwoord wordt niet gewijzigd.
+                </p>
+            </div>
+        </body>
+        </html>
+        """
+
+        params = {
+            "from": f"klantenservice.ai <{settings.RESEND_FROM_EMAIL}>",
+            "to": [to_email],
+            "subject": "Wachtwoord herstellen - klantenservice.ai",
+            "html": html_content,
+        }
+
+        resend.Emails.send(params)
+        return True
+
+    except Exception as e:
+        print(f"Error sending password reset email: {e}")
+        return False
+
+
 def send_welcome_email(
     to_email: str,
     first_name: str,

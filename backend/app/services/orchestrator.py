@@ -188,8 +188,9 @@ async def _run_tool(
             start_str = arguments.get("start_date", "")
             try:
                 start = date_parser.parse(start_str)
-            except:
-                start = datetime.now()
+            except Exception:
+                from zoneinfo import ZoneInfo
+                start = datetime.now(ZoneInfo("Europe/Amsterdam")).replace(tzinfo=None)
             ai_worker_id = context.get("ai_worker_id")
             return await tool_check_availability(
                 db, company_id,

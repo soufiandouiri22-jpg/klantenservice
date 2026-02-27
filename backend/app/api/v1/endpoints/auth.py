@@ -43,7 +43,7 @@ from app.schemas.user import (
 )
 from app.schemas.company import CompanyCreate
 from app.api.deps import get_current_user
-from app.core.email import send_welcome_email, send_verification_code_email
+from app.core.email import send_welcome_email, send_verification_code_email, send_password_reset_email
 import random
 
 router = APIRouter()
@@ -598,14 +598,17 @@ async def forgot_password(
     
     # Always return success to prevent email enumeration
     if user:
-        # Generate reset token
         reset_token = str(uuid4())
         user.reset_token = reset_token
         user.reset_token_expires_at = datetime.utcnow() + timedelta(hours=1)
         db.commit()
-        
-        # TODO: Send email with reset link
-        # send_password_reset_email(user.email, reset_token)
+
+        reset_link = f"{settings.FRONTEND_URL}/login?reset_token={reset_token}"
+        send_password_reset_email(
+            to_email=user.email,
+            first_name=user.first_name or "gebruiker",
+            reset_link=reset_link,
+        )
     
     return {"message": "Als dit e-mailadres bij ons bekend is, ontvangt u een e-mail met instructies."}
 

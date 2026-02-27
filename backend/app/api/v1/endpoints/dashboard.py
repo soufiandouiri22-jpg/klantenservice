@@ -2,11 +2,14 @@
 klantenservice.ai - Dashboard Endpoints
 """
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from app.core.database import get_db
+
+AMS_TZ = ZoneInfo("Europe/Amsterdam")
 from app.models.user import User
 from app.models.company import Company
 from app.models.ai_worker import AIWorker, AIWorkerStatus
@@ -28,9 +31,10 @@ async def get_dashboard_stats(
     """
     Get dashboard statistics for the current company.
     """
-    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-    week_start = today_start - timedelta(days=today_start.weekday())
+    now_ams = datetime.now(AMS_TZ)
+    today_start = now_ams.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
     today_end = today_start + timedelta(days=1)
+    week_start = today_start - timedelta(days=now_ams.weekday())
     week_end = week_start + timedelta(days=7)
     
     # AI Workers stats
@@ -129,8 +133,8 @@ async def get_upcoming_appointments(
     """
     Get upcoming appointments for dashboard.
     """
-    now = datetime.utcnow()
-    
+    now = datetime.now(AMS_TZ).astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
+
     appointments = db.query(Appointment).filter(
         Appointment.company_id == company.id,
         Appointment.starts_at >= now,

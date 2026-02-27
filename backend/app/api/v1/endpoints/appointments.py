@@ -1,7 +1,9 @@
 """
 klantenservice.ai - Appointment Endpoints
 """
+import logging
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
@@ -11,7 +13,7 @@ from app.core.database import get_db
 from app.models.user import User
 from app.models.company import Company
 from app.models.appointment import Appointment, AppointmentStatus
-from app.models.calendar_integration import CalendarIntegration
+from app.models.calendar_integration import CalendarIntegration, CalendarProvider
 from app.schemas.appointment import (
     AppointmentCreate,
     AppointmentUpdate,
@@ -22,7 +24,48 @@ from app.schemas.appointment import (
 )
 from app.api.deps import get_current_user, get_current_company, require_manager
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+async def _sync_create_event(calendar: CalendarIntegration, db: Session, appointment: Appointment):
+    """Create an event in the external calendar and store the event ID."""
+    if not calendar.access_token_encrypted:
+        return
+    try:
+        if calendar.provider == CalendarProvider.MICROSOFT:
+            from app.services import outlook_calendar_service as svc
+        else:
+            from app.services import google_calendar_service as svc
+        event = await svc.book_appointment(
+            calendar=calendar,
+            db=db,
+            summary=appointment.title,
+            start=appointment.starts_at,
+            end=appointment.ends_at,
+            description=appointment.description or "",
+            attendee_email=appointment.customer_email or "",
+        )
+        appointment.external_event_id = event.get("id")
+        db.commit()
+    except Exception as e:
+        logger.warning(f"Failed to create external calendar event: {e}")
+
+
+async def _sync_delete_event(calendar: CalendarIntegration, db: Session, external_event_id: str):
+    """Delete an event from the external calendar."""
+    if not calendar.access_token_encrypted or not external_event_id:
+        return
+    try:
+        if calendar.provider == CalendarProvider.MICROSOFT:
+            from app.services import outlook_calendar_service as svc
+        else:
+            from app.services import google_calendar_service as svc
+        access_token = await svc.get_valid_access_token(calendar, db)
+        cal_id = calendar.external_calendar_id or "primary"
+        await svc.delete_event(access_token, cal_id, external_event_id)
+    except Exception as e:
+        logger.warning(f"Failed to delete external calendar event: {e}")
 
 
 @router.get("", response_model=AppointmentListResponse)
@@ -116,9 +159,9 @@ async def create_appointment(
     db.add(appointment)
     db.commit()
     db.refresh(appointment)
-    
-    # TODO: Sync with external calendar
-    
+
+    await _sync_create_event(calendar, db, appointment)
+
     return appointment
 
 
@@ -132,7 +175,7 @@ async def get_upcoming_appointments(
     """
     Get upcoming appointments for the next N days.
     """
-    now = datetime.utcnow()
+    now = datetime.now(ZoneInfo("Europe/Amsterdam")).astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
     end_date = now + timedelta(days=days)
     
     appointments = db.query(Appointment).filter(
@@ -154,7 +197,8 @@ async def get_today_appointments(
     """
     Get today's appointments.
     """
-    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    now_ams = datetime.now(ZoneInfo("Europe/Amsterdam"))
+    today_start = now_ams.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
     today_end = today_start + timedelta(days=1)
     
     appointments = db.query(Appointment).filter(
@@ -226,9 +270,15 @@ async def update_appointment(
     
     db.commit()
     db.refresh(appointment)
-    
-    # TODO: Sync with external calendar
-    
+
+    if appointment.calendar_integration_id and appointment.external_event_id:
+        calendar = db.query(CalendarIntegration).filter(
+            CalendarIntegration.id == appointment.calendar_integration_id
+        ).first()
+        if calendar:
+            await _sync_delete_event(calendar, db, appointment.external_event_id)
+            await _sync_create_event(calendar, db, appointment)
+
     return appointment
 
 
@@ -260,15 +310,22 @@ async def cancel_appointment(
             detail="Afspraak is al geannuleerd",
         )
     
+    old_event_id = appointment.external_event_id
+
     appointment.status = AppointmentStatus.CANCELLED
     appointment.cancelled_at = datetime.utcnow()
     appointment.cancelled_by = "business"
     appointment.cancellation_reason = data.reason
-    
+
     db.commit()
-    
-    # TODO: Sync with external calendar, send notification
-    
+
+    if appointment.calendar_integration_id and old_event_id:
+        calendar = db.query(CalendarIntegration).filter(
+            CalendarIntegration.id == appointment.calendar_integration_id
+        ).first()
+        if calendar:
+            await _sync_delete_event(calendar, db, old_event_id)
+
     return {"message": "Afspraak geannuleerd"}
 
 
@@ -300,16 +357,24 @@ async def reschedule_appointment(
             detail="Alleen bevestigde afspraken kunnen worden verzet",
         )
     
-    # Update times
+    old_event_id = appointment.external_event_id
+
     appointment.starts_at = data.new_starts_at
     appointment.ends_at = data.new_ends_at
     appointment.duration_minutes = int((data.new_ends_at - data.new_starts_at).total_seconds() / 60)
-    
+
     db.commit()
     db.refresh(appointment)
-    
-    # TODO: Sync with external calendar, send notification
-    
+
+    if appointment.calendar_integration_id:
+        calendar = db.query(CalendarIntegration).filter(
+            CalendarIntegration.id == appointment.calendar_integration_id
+        ).first()
+        if calendar:
+            if old_event_id:
+                await _sync_delete_event(calendar, db, old_event_id)
+            await _sync_create_event(calendar, db, appointment)
+
     return appointment
 
 
@@ -334,7 +399,15 @@ async def delete_appointment(
             detail="Afspraak niet gevonden",
         )
     
+    old_event_id = appointment.external_event_id
+    cal_id = appointment.calendar_integration_id
+
     db.delete(appointment)
     db.commit()
-    
-    # TODO: Sync with external calendar
+
+    if cal_id and old_event_id:
+        calendar = db.query(CalendarIntegration).filter(
+            CalendarIntegration.id == cal_id
+        ).first()
+        if calendar:
+            await _sync_delete_event(calendar, db, old_event_id)
