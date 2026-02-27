@@ -18,6 +18,7 @@ import { Spinner } from '@/components/ui/Spinner'
 import { adminApi } from '@/lib/api'
 
 const PERIODS = [
+  { value: 'day', label: 'Vandaag' },
   { value: '7d', label: '7 dagen' },
   { value: '30d', label: '30 dagen' },
   { value: '6mo', label: '6 maanden' },
@@ -62,7 +63,7 @@ function MiniBarChart({ data, dataKey }: { data: { date: string; visitors: numbe
 }
 
 export function AnalyticsTab() {
-  const [period, setPeriod] = useState('30d')
+  const [period, setPeriod] = useState('day')
 
   const { data, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['admin-analytics', period],
