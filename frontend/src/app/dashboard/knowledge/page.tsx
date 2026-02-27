@@ -261,6 +261,7 @@ export default function KnowledgePage() {
                       >
                         Herindexeren
                       </Button>
+                      <div className="flex-1" />
                       <Button
                         variant="ghost"
                         size="sm"
