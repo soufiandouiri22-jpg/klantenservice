@@ -288,10 +288,10 @@ export default function AppointmentsPage() {
                 {todayAppointments.map((apt: any) => (
                   <div
                     key={apt.id}
-                    className="flex items-start justify-between gap-3 p-4 hover:bg-gray-50 cursor-pointer"
+                    className="flex items-start sm:items-center justify-between gap-3 p-4 hover:bg-gray-50 cursor-pointer"
                     onClick={() => setSelectedAppointment(apt)}
                   >
-                    <div className="flex items-start gap-4 min-w-0">
+                    <div className="flex items-start sm:items-center gap-4 min-w-0">
                       <div className="flex flex-col items-center justify-center w-16 h-16 flex-shrink-0 rounded-lg bg-primary-50">
                         <span className="text-xl font-bold text-primary-600">
                           {new Date(apt.starts_at).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}
@@ -370,10 +370,10 @@ export default function AppointmentsPage() {
                     key={apt.id}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="flex items-start justify-between gap-3 p-4 hover:bg-gray-50 cursor-pointer"
+                    className="flex items-start sm:items-center justify-between gap-3 p-4 hover:bg-gray-50 cursor-pointer"
                     onClick={() => setSelectedAppointment(apt)}
                   >
-                    <div className="flex items-start gap-4 min-w-0">
+                    <div className="flex items-start sm:items-center gap-4 min-w-0">
                       <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-gray-100">
                         <Calendar className="h-6 w-6 text-gray-600" />
                       </div>
