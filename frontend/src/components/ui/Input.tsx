@@ -7,10 +7,11 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string
   error?: string
   helperText?: string
+  showRequired?: boolean
 }
 
 const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ className, label, error, helperText, id, ...props }, ref) => {
+  ({ className, label, error, helperText, showRequired, id, ...props }, ref) => {
     const inputId = id || label?.toLowerCase().replace(/\s/g, '-')
 
     return (
@@ -18,6 +19,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
         {label && (
           <label htmlFor={inputId} className="label">
             {label}
+            {showRequired && <span className="text-red-500 ml-0.5">*</span>}
           </label>
         )}
         <input

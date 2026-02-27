@@ -496,9 +496,15 @@ function SettingsContent() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <Input
                         label="Voornaam"
+                        showRequired
                         defaultValue={currentUser?.first_name}
                         onBlur={(e) => {
                           const v = e.target.value.trim()
+                          if (!v) {
+                            e.target.value = currentUser?.first_name || ''
+                            toast.error('Voornaam is verplicht')
+                            return
+                          }
                           if (v !== currentUser?.first_name) {
                             updateProfileMutation.mutate({ first_name: v })
                           }
@@ -506,9 +512,15 @@ function SettingsContent() {
                       />
                       <Input
                         label="Achternaam"
+                        showRequired
                         defaultValue={currentUser?.last_name}
                         onBlur={(e) => {
                           const v = e.target.value.trim()
+                          if (!v) {
+                            e.target.value = currentUser?.last_name || ''
+                            toast.error('Achternaam is verplicht')
+                            return
+                          }
                           if (v !== currentUser?.last_name) {
                             updateProfileMutation.mutate({ last_name: v })
                           }
@@ -559,11 +571,17 @@ function SettingsContent() {
                       <Input
                         ref={companyNameRef}
                         label="Bedrijfsnaam"
+                        showRequired
                         defaultValue={companyData?.name}
                         autoComplete="off"
                         onChange={(e) => handleKvkSearch(e.target.value)}
                         onBlur={(e) => {
                           const v = e.target.value.trim()
+                          if (!v) {
+                            e.target.value = companyData?.name || ''
+                            toast.error('Bedrijfsnaam is verplicht')
+                            return
+                          }
                           if (v !== companyData?.name) {
                             updateCompanyMutation.mutate({ name: v })
                           }
@@ -606,12 +624,19 @@ function SettingsContent() {
                     </div>
                     <Input
                       label="E-mailadres voor facturatie"
+                      showRequired
                       type="email"
                       defaultValue={companyData?.email}
                       helperText="Facturen en betalingsherinneringen worden naar dit adres gestuurd."
                       onBlur={(e) => {
-                        if (e.target.value !== companyData?.email) {
-                          updateCompanyMutation.mutate({ email: e.target.value })
+                        const v = e.target.value.trim()
+                        if (!v || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) {
+                          e.target.value = companyData?.email || ''
+                          toast.error(!v ? 'E-mailadres is verplicht' : 'Voer een geldig e-mailadres in')
+                          return
+                        }
+                        if (v !== companyData?.email) {
+                          updateCompanyMutation.mutate({ email: v })
                         }
                       }}
                     />

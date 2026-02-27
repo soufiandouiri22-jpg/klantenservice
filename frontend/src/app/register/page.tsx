@@ -313,6 +313,7 @@ function RegisterContent() {
                     <div className="relative" ref={kvkRef}>
                       <Input
                         label="Bedrijfsnaam"
+                        showRequired
                         placeholder="Zoek uw bedrijf..."
                         autoComplete="off"
                         error={errors.company_name?.message}
@@ -358,6 +359,7 @@ function RegisterContent() {
                     </div>
                     <Input
                       label="E-mailadres"
+                      showRequired
                       type="email"
                       placeholder="info@uwbedrijf.nl"
                       error={errors.company_email?.message}
@@ -377,6 +379,7 @@ function RegisterContent() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <Input
                         label="Voornaam"
+                        showRequired
                         placeholder="Jan"
                         autoComplete="one-time-code"
                         error={errors.first_name?.message}
@@ -384,6 +387,7 @@ function RegisterContent() {
                       />
                       <Input
                         label="Achternaam"
+                        showRequired
                         placeholder="Jansen"
                         autoComplete="one-time-code"
                         error={errors.last_name?.message}
@@ -392,6 +396,7 @@ function RegisterContent() {
                     </div>
                     <Input
                       label="Wachtwoord"
+                      showRequired
                       type="password"
                       placeholder="••••••••"
                       autoComplete="one-time-code"
@@ -401,6 +406,7 @@ function RegisterContent() {
                     />
                     <Input
                       label="Wachtwoord bevestigen"
+                      showRequired
                       type="password"
                       placeholder="••••••••"
                       autoComplete="one-time-code"
