@@ -124,7 +124,7 @@ export default function AppointmentsPage() {
   // Convert appointments to FullCalendar events
   const calendarEvents = (allAppointments || MOCK_APPOINTMENTS).map((apt: any) => ({
     id: apt.id,
-    title: apt.title,
+    title: `${apt.title} - ${apt.customer_name}`,
     start: apt.starts_at,
     end: apt.ends_at,
     backgroundColor: apt.status === 'confirmed' ? '#2563eb' : apt.status === 'cancelled' ? '#dc2626' : '#6b7280',
@@ -233,6 +233,16 @@ export default function AppointmentsPage() {
                 }}
                 noEventsContent="Geen afspraken in deze periode"
                 events={calendarEvents}
+                eventContent={(arg) => {
+                  const apt = arg.event.extendedProps
+                  const time = arg.timeText
+                  return (
+                    <div className="overflow-hidden px-1 py-0.5 text-xs leading-tight">
+                      <span className="font-semibold">{time}</span>{' '}
+                      <span>{apt.title} - {apt.customer_name}</span>
+                    </div>
+                  )
+                }}
                 eventClick={handleEventClick}
                 slotMinTime="07:00:00"
                 slotMaxTime="21:00:00"
