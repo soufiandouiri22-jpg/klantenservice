@@ -57,6 +57,13 @@ class PhoneNumber(Base):
     voicemail_greeting = Column(String(500), nullable=True)
     voicemail_email = Column(String(255), nullable=True)  # Send voicemail transcripts to
     
+    # SMS confirmation settings
+    sms_confirmation_enabled = Column(Boolean, default=False)
+    sms_confirmation_template = Column(
+        String(500),
+        default="Uw afspraak bij {bedrijfsnaam} is bevestigd op {datum} om {tijd}. Tot dan!"
+    )
+
     # After hours settings
     after_hours_message = Column(
         String(500),

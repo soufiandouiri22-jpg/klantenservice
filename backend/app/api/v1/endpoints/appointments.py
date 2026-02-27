@@ -162,6 +162,30 @@ async def create_appointment(
 
     await _sync_create_event(calendar, db, appointment)
 
+    if data.customer_phone:
+        try:
+            from app.models.phone_number import PhoneNumber
+            from app.services.sms_service import send_appointment_confirmation_sms
+
+            phone_cfg = db.query(PhoneNumber).filter(
+                PhoneNumber.company_id == company.id,
+                PhoneNumber.is_active == True,
+                PhoneNumber.sms_confirmation_enabled == True,
+            ).first()
+
+            if phone_cfg:
+                day_names = ["maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag", "zondag"]
+                day_name = day_names[data.starts_at.weekday()]
+                starts_at_readable = f"{day_name} {data.starts_at.day} {data.starts_at.strftime('%B')} om {data.starts_at.strftime('%H:%M')}"
+                send_appointment_confirmation_sms(
+                    to=data.customer_phone,
+                    company_name=company.name or "ons bedrijf",
+                    starts_at_readable=starts_at_readable,
+                    custom_template=phone_cfg.sms_confirmation_template,
+                )
+        except Exception as e:
+            logger.error(f"Failed to send confirmation SMS: {e}", exc_info=True)
+
     return appointment
 
 

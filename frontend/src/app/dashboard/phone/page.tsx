@@ -208,6 +208,8 @@ export default function PhonePage() {
       voicemail_enabled: phone.voicemail_enabled ?? true,
       voicemail_greeting: phone.voicemail_greeting || '',
       voicemail_email: phone.voicemail_email || '',
+      sms_confirmation_enabled: phone.sms_confirmation_enabled ?? false,
+      sms_confirmation_template: phone.sms_confirmation_template || 'Uw afspraak bij {bedrijfsnaam} is bevestigd op {datum} om {tijd}. Tot dan!',
       after_hours_message: phone.after_hours_message || '',
     })
   }
@@ -884,6 +886,47 @@ export default function PhonePage() {
                       />
                     </div>
                   </>
+                )}
+              </div>
+            </div>
+
+            {/* SMS Confirmation */}
+            <div>
+              <h4 className="font-medium text-gray-900 mb-3">SMS-bevestiging</h4>
+              <div className="bg-gray-50 rounded-lg p-4 space-y-4">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">Bevestigings-SMS versturen</p>
+                    <p className="text-xs text-gray-500 mt-0.5">Stuur automatisch een SMS na het inplannen van een afspraak</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSettingsForm({ ...settingsForm, sms_confirmation_enabled: !settingsForm.sms_confirmation_enabled })}
+                    className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      settingsForm.sms_confirmation_enabled ? 'bg-primary-600' : 'bg-gray-200'
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                        settingsForm.sms_confirmation_enabled ? 'translate-x-4' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+                {settingsForm.sms_confirmation_enabled && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">SMS-tekst</label>
+                    <textarea
+                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-500 resize-none"
+                      rows={2}
+                      value={settingsForm.sms_confirmation_template}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, sms_confirmation_template: e.target.value })}
+                      placeholder="Uw afspraak bij {bedrijfsnaam} is bevestigd op {datum} om {tijd}. Tot dan!"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">
+                      Gebruik {'{bedrijfsnaam}'}, {'{datum}'} en {'{tijd}'} als variabelen.
+                    </p>
+                  </div>
                 )}
               </div>
             </div>

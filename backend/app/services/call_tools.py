@@ -193,12 +193,37 @@ async def tool_book_appointment(
 
     day_names = ["maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag", "zondag"]
     day_name = day_names[starts_at.weekday()]
+    starts_at_readable = f"{day_name} {starts_at.day} {starts_at.strftime('%B')} om {starts_at.strftime('%H:%M')}"
+
+    if customer_phone:
+        try:
+            from app.models.phone_number import PhoneNumber
+            from app.models.company import Company
+            from app.services.sms_service import send_appointment_confirmation_sms
+
+            phone_cfg = db.query(PhoneNumber).filter(
+                PhoneNumber.company_id == company_id,
+                PhoneNumber.is_active == True,
+                PhoneNumber.sms_confirmation_enabled == True,
+            ).first()
+
+            if phone_cfg:
+                company_obj = db.query(Company).filter(Company.id == company_id).first()
+                company_name = company_obj.name if company_obj else "ons bedrijf"
+                send_appointment_confirmation_sms(
+                    to=customer_phone,
+                    company_name=company_name,
+                    starts_at_readable=starts_at_readable,
+                    custom_template=phone_cfg.sms_confirmation_template,
+                )
+        except Exception as e:
+            logger.error(f"Failed to send confirmation SMS: {e}", exc_info=True)
 
     return {
         "ok": True,
         "appointment_id": str(appointment.id),
         "starts_at": starts_at.isoformat(),
-        "starts_at_readable": f"{day_name} {starts_at.day} {starts_at.strftime('%B')} om {starts_at.strftime('%H:%M')}",
+        "starts_at_readable": starts_at_readable,
         "customer_name": customer_name,
         "message": f"Afspraak ingepland op {day_name} om {starts_at.strftime('%H:%M')} voor {customer_name}.",
         "in_external_calendar": external_event_id is not None,
