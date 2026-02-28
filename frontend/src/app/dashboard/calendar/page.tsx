@@ -355,7 +355,7 @@ function CalendarPageInner() {
   const queryClient = useQueryClient()
   const searchParams = useSearchParams()
   const { user } = useAuthStore()
-  const canEdit = user?.role !== 'viewer'
+  const canEdit = user?.role === 'owner' || user?.role === 'admin'
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
 
   useEffect(() => {

@@ -46,7 +46,7 @@ const days = [
 export default function PhonePage() {
   const queryClient = useQueryClient()
   const { company, user } = useAuthStore()
-  const canEdit = user?.role !== 'viewer'
+  const canEdit = user?.role === 'owner' || user?.role === 'admin'
   
   // Wizard state
   const [isWizardOpen, setIsWizardOpen] = useState(false)

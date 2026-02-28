@@ -22,7 +22,7 @@ import { useAuthStore } from '@/lib/store'
 export default function KnowledgePage() {
   const queryClient = useQueryClient()
   const { user } = useAuthStore()
-  const canEdit = user?.role !== 'viewer'
+  const canEdit = user?.role === 'owner' || user?.role === 'admin'
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [isTestModalOpen, setIsTestModalOpen] = useState(false)
   const [selectedWebsite, setSelectedWebsite] = useState<any>(null)
