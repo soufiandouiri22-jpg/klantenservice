@@ -32,6 +32,16 @@ function SettingsContent() {
   const searchParams = useSearchParams()
   const queryClient = useQueryClient()
   const { company, user } = useAuthStore()
+
+  const canAdmin = user?.role === 'owner' || user?.role === 'admin'
+  const canOwner = user?.role === 'owner'
+
+  const visibleTabs = tabs.filter((tab) => {
+    if (tab.id === 'company' || tab.id === 'privacy') return canAdmin
+    if (tab.id === 'users') return canAdmin
+    if (tab.id === 'subscription') return canOwner
+    return true
+  })
   
   // Get initial tab from URL params or default to 'profile' (Persoonsgegevens)
   const initialTab = searchParams.get('tab') || 'profile'
@@ -40,7 +50,7 @@ function SettingsContent() {
   // Update tab when URL params change
   useEffect(() => {
     const tabParam = searchParams.get('tab')
-    if (tabParam && tabs.some(t => t.id === tabParam)) {
+    if (tabParam && visibleTabs.some(t => t.id === tabParam)) {
       setActiveTab(tabParam)
     }
   }, [searchParams])
@@ -465,7 +475,7 @@ function SettingsContent() {
         <div className="md:hidden mb-6 -mx-4 relative">
           <div className="px-4 overflow-x-auto scrollbar-hide">
             <div className="flex gap-2 min-w-max pb-2">
-              {tabs.map((tab) => (
+              {visibleTabs.map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
@@ -488,7 +498,7 @@ function SettingsContent() {
           {/* Desktop: vertical tabs */}
           <div className="hidden md:block w-64 flex-shrink-0">
             <nav className="space-y-1">
-              {tabs.map((tab) => (
+              {visibleTabs.map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
@@ -1129,7 +1139,7 @@ function SettingsContent() {
                       <CardTitle>Gebruikers</CardTitle>
                       <CardDescription>Beheer wie toegang heeft tot het dashboard.</CardDescription>
                     </div>
-                    <Button size="sm" onClick={() => setIsAddUserModalOpen(true)}>Gebruiker toevoegen</Button>
+                    {canAdmin && <Button size="sm" onClick={() => setIsAddUserModalOpen(true)}>Gebruiker toevoegen</Button>}
                   </CardHeader>
                   <CardBody className="p-0">
                     <div className="divide-y divide-gray-100">
@@ -1171,7 +1181,7 @@ function SettingsContent() {
                                u.role === 'admin' ? 'Admin' : 
                                u.role === 'user' ? 'Gebruiker' : 'Kijker'}
                             </Badge>
-                            {!u.is_active && u.id !== user?.id && (
+                            {canAdmin && !u.is_active && u.id !== user?.id && (
                               <Button 
                                 variant="ghost" 
                                 size="sm"
@@ -1182,7 +1192,7 @@ function SettingsContent() {
                                 <Mail className="h-4 w-4" />
                               </Button>
                             )}
-                            {u.id !== user?.id && u.role !== 'owner' && (
+                            {canAdmin && u.id !== user?.id && u.role !== 'owner' && (
                               <Button 
                                 variant="ghost" 
                                 size="sm"

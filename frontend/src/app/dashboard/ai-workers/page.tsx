@@ -28,7 +28,8 @@ interface Voice {
 
 export default function AIWorkersPage() {
   const queryClient = useQueryClient()
-  const { company } = useAuthStore()
+  const { company, user } = useAuthStore()
+  const canEdit = user?.role !== 'viewer'
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [selectedWorker, setSelectedWorker] = useState<any>(null)
   const [newWorkerName, setNewWorkerName] = useState('')
@@ -211,13 +212,15 @@ export default function AIWorkersPage() {
         title="AI-medewerkers"
         description={`${workers?.length || 0} van ${company?.max_ai_workers || 1} medewerkers actief`}
         actions={
-          <Button
-            leftIcon={<Plus className="h-4 w-4" />}
-            onClick={() => setIsCreateModalOpen(true)}
-            disabled={!canAddWorker}
-          >
-            Nieuwe medewerker
-          </Button>
+          canEdit ? (
+            <Button
+              leftIcon={<Plus className="h-4 w-4" />}
+              onClick={() => setIsCreateModalOpen(true)}
+              disabled={!canAddWorker}
+            >
+              Nieuwe medewerker
+            </Button>
+          ) : undefined
         }
       />
 
@@ -228,9 +231,11 @@ export default function AIWorkersPage() {
             title="Geen AI-medewerkers"
             description="Maak uw eerste AI-medewerker aan om gesprekken te kunnen voeren."
             action={
-              <Button leftIcon={<Plus className="h-4 w-4" />} onClick={() => setIsCreateModalOpen(true)}>
-                Eerste medewerker aanmaken
-              </Button>
+              canEdit ? (
+                <Button leftIcon={<Plus className="h-4 w-4" />} onClick={() => setIsCreateModalOpen(true)}>
+                  Eerste medewerker aanmaken
+                </Button>
+              ) : undefined
             }
           />
         ) : (
@@ -298,23 +303,25 @@ export default function AIWorkersPage() {
                       </div>
                     </div>
 
-                    <div className="mt-4 flex items-center justify-between pt-4 border-t border-gray-100">
-                      <Toggle
-                        enabled={worker.is_active}
-                        onChange={() => toggleMutation.mutate(worker.id)}
-                        label={worker.is_active ? 'Actief' : 'Inactief'}
-                      />
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          leftIcon={<Settings className="h-4 w-4" />}
-                          onClick={() => setSelectedWorker(worker)}
-                        >
-                          Instellingen
-                        </Button>
+                    {canEdit && (
+                      <div className="mt-4 flex items-center justify-between pt-4 border-t border-gray-100">
+                        <Toggle
+                          enabled={worker.is_active}
+                          onChange={() => toggleMutation.mutate(worker.id)}
+                          label={worker.is_active ? 'Actief' : 'Inactief'}
+                        />
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            leftIcon={<Settings className="h-4 w-4" />}
+                            onClick={() => setSelectedWorker(worker)}
+                          >
+                            Instellingen
+                          </Button>
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </CardBody>
                 </Card>
               </motion.div>
@@ -519,18 +526,20 @@ export default function AIWorkersPage() {
             </div>
 
             <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-              <Button
-                variant="danger"
-                size="sm"
-                leftIcon={<Trash2 className="h-4 w-4" />}
-                onClick={() => {
-                  if (confirm('Weet u zeker dat u deze medewerker wilt verwijderen?')) {
-                    deleteMutation.mutate(selectedWorker.id)
-                  }
-                }}
-              >
-                Verwijderen
-              </Button>
+              {canEdit && (
+                <Button
+                  variant="danger"
+                  size="sm"
+                  leftIcon={<Trash2 className="h-4 w-4" />}
+                  onClick={() => {
+                    if (confirm('Weet u zeker dat u deze medewerker wilt verwijderen?')) {
+                      deleteMutation.mutate(selectedWorker.id)
+                    }
+                  }}
+                >
+                  Verwijderen
+                </Button>
+              )}
               <Button onClick={() => setSelectedWorker(null)}>
                 Sluiten
               </Button>

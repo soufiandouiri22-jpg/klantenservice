@@ -29,7 +29,7 @@ from app.schemas.calendar import (
     HoldSlotRequest,
     HoldSlotResponse,
 )
-from app.api.deps import get_current_user, get_current_company, require_admin
+from app.api.deps import get_current_user, get_current_company, require_admin, require_manager
 from app.services import google_calendar_service as gcal
 from app.services import outlook_calendar_service as outlook
 from app.services import zoom_meeting_service as zoom_svc
@@ -673,7 +673,7 @@ async def book_appointment(
     end: datetime = Query(..., description="Eind tijd (ISO 8601)"),
     description: str = Query("", description="Beschrijving"),
     attendee_email: str = Query("", description="E-mail van de klant"),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_manager),
     company: Company = Depends(get_current_company),
     db: Session = Depends(get_db),
 ):

@@ -17,9 +17,12 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { Select } from '@/components/ui/Select'
 import { websitesApi, aiWorkersApi } from '@/lib/api'
 import { formatRelativeTime, getStatusLabel } from '@/lib/utils'
+import { useAuthStore } from '@/lib/store'
 
 export default function KnowledgePage() {
   const queryClient = useQueryClient()
+  const { user } = useAuthStore()
+  const canEdit = user?.role !== 'viewer'
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [isTestModalOpen, setIsTestModalOpen] = useState(false)
   const [selectedWebsite, setSelectedWebsite] = useState<any>(null)
@@ -138,12 +141,14 @@ export default function KnowledgePage() {
         title="Website-kennis"
         description="Beheer de websites waarvan de AI leert."
         actions={
-          <Button
-            leftIcon={<Plus className="h-4 w-4" />}
-            onClick={() => setIsAddModalOpen(true)}
-          >
-            Website toevoegen
-          </Button>
+          canEdit ? (
+            <Button
+              leftIcon={<Plus className="h-4 w-4" />}
+              onClick={() => setIsAddModalOpen(true)}
+            >
+              Website toevoegen
+            </Button>
+          ) : undefined
         }
       />
 
@@ -174,9 +179,11 @@ export default function KnowledgePage() {
             title="Geen websites gekoppeld"
             description="Voeg uw website toe zodat de AI automatisch kan leren van uw content."
             action={
-              <Button leftIcon={<Plus className="h-4 w-4" />} onClick={() => setIsAddModalOpen(true)}>
-                Website toevoegen
-              </Button>
+              canEdit ? (
+                <Button leftIcon={<Plus className="h-4 w-4" />} onClick={() => setIsAddModalOpen(true)}>
+                  Website toevoegen
+                </Button>
+              ) : undefined
             }
           />
         ) : (
@@ -252,27 +259,31 @@ export default function KnowledgePage() {
                       >
                         Testvraag
                       </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        leftIcon={<RefreshCw className="h-4 w-4" />}
-                        onClick={() => reindexMutation.mutate(website.id)}
-                        disabled={website.status === 'indexing'}
-                      >
-                        Herindexeren
-                      </Button>
+                      {canEdit && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          leftIcon={<RefreshCw className="h-4 w-4" />}
+                          onClick={() => reindexMutation.mutate(website.id)}
+                          disabled={website.status === 'indexing'}
+                        >
+                          Herindexeren
+                        </Button>
+                      )}
                       <div className="flex-1" />
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          if (confirm('Weet u zeker dat u deze website wilt verwijderen?')) {
-                            deleteMutation.mutate(website.id)
-                          }
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4 text-red-500" />
-                      </Button>
+                      {canEdit && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            if (confirm('Weet u zeker dat u deze website wilt verwijderen?')) {
+                              deleteMutation.mutate(website.id)
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 text-red-500" />
+                        </Button>
+                      )}
                     </div>
                   </CardBody>
                 </Card>

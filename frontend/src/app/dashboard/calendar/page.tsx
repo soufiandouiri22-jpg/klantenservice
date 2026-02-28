@@ -18,6 +18,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { Select } from '@/components/ui/Select'
 import { calendarsApi, aiWorkersApi } from '@/lib/api'
 import { formatRelativeTime } from '@/lib/utils'
+import { useAuthStore } from '@/lib/store'
 
 const providers = [
   {
@@ -56,11 +57,13 @@ function SettingsForm({
   onSave,
   onCancel,
   isSaving,
+  canEdit = true,
 }: {
   calendar: any
   onSave: (data: any) => void
   onCancel: () => void
   isSaving: boolean
+  canEdit?: boolean
 }) {
   const durationRef = useRef<HTMLInputElement>(null)
   const bufferRef = useRef<HTMLInputElement>(null)
@@ -334,14 +337,16 @@ function SettingsForm({
         </div>
       </div>
 
-      <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
-        <Button variant="outline" onClick={onCancel}>
-          Annuleren
-        </Button>
-        <Button onClick={handleSave} isLoading={isSaving}>
-          Opslaan
-        </Button>
-      </div>
+      {canEdit && (
+        <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+          <Button variant="outline" onClick={onCancel}>
+            Annuleren
+          </Button>
+          <Button onClick={handleSave} isLoading={isSaving}>
+            Opslaan
+          </Button>
+        </div>
+      )}
     </div>
   )
 }
@@ -349,6 +354,8 @@ function SettingsForm({
 function CalendarPageInner() {
   const queryClient = useQueryClient()
   const searchParams = useSearchParams()
+  const { user } = useAuthStore()
+  const canEdit = user?.role !== 'viewer'
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
 
   useEffect(() => {
@@ -509,14 +516,14 @@ function CalendarPageInner() {
         title="Agenda"
         description="Beheer uw agenda-integraties voor het inplannen van afspraken."
         hideSearch
-        actions={
+        actions={canEdit ? (
           <Button
             leftIcon={<Plus className="h-4 w-4" />}
             onClick={() => setIsAddModalOpen(true)}
           >
             Agenda koppelen
           </Button>
-        }
+        ) : undefined}
       />
 
       <div className="p-4 sm:p-6 space-y-6">
@@ -545,11 +552,11 @@ function CalendarPageInner() {
             icon={Calendar}
             title="Geen agenda's gekoppeld"
             description="Koppel een agenda zodat de AI afspraken kan maken."
-            action={
+            action={canEdit ? (
               <Button leftIcon={<Plus className="h-4 w-4" />} onClick={() => setIsAddModalOpen(true)}>
                 Agenda koppelen
               </Button>
-            }
+            ) : undefined}
           />
         ) : (
           <div className="space-y-4">
@@ -649,22 +656,26 @@ function CalendarPageInner() {
                             </Button>
                           ) : (
                             <>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                leftIcon={<RefreshCw className="h-4 w-4" />}
-                                onClick={() => syncMutation.mutate(calendar.id)}
-                              >
-                                Synchroniseren
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                leftIcon={<Settings className="h-4 w-4" />}
-                                onClick={() => setSelectedCalendar(calendar)}
-                              >
-                                Instellingen
-                              </Button>
+                              {canEdit && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  leftIcon={<RefreshCw className="h-4 w-4" />}
+                                  onClick={() => syncMutation.mutate(calendar.id)}
+                                >
+                                  Synchroniseren
+                                </Button>
+                              )}
+                              {canEdit && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  leftIcon={<Settings className="h-4 w-4" />}
+                                  onClick={() => setSelectedCalendar(calendar)}
+                                >
+                                  Instellingen
+                                </Button>
+                              )}
                               {!calendar.is_primary && (
                                 <Button
                                   variant="ghost"
@@ -677,17 +688,19 @@ function CalendarPageInner() {
                             </>
                           )}
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            if (confirm('Weet u zeker dat u deze agenda wilt ontkoppelen?')) {
-                              deleteMutation.mutate(calendar.id)
-                            }
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4 text-red-500" />
-                        </Button>
+                        {canEdit && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              if (confirm('Weet u zeker dat u deze agenda wilt ontkoppelen?')) {
+                                deleteMutation.mutate(calendar.id)
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </Button>
+                        )}
                       </div>
                     </CardBody>
                   </Card>
@@ -821,6 +834,7 @@ function CalendarPageInner() {
         {selectedCalendar && (
           <SettingsForm
             calendar={selectedCalendar}
+            canEdit={canEdit}
             onSave={(data: any) => {
               updateMutation.mutate(
                 { id: selectedCalendar.id, data },

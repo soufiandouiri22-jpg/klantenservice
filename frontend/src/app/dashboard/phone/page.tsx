@@ -45,7 +45,8 @@ const days = [
 
 export default function PhonePage() {
   const queryClient = useQueryClient()
-  const { company } = useAuthStore()
+  const { company, user } = useAuthStore()
+  const canEdit = user?.role !== 'viewer'
   
   // Wizard state
   const [isWizardOpen, setIsWizardOpen] = useState(false)
@@ -282,7 +283,7 @@ export default function PhonePage() {
         title="Telefonie"
         description={`${phoneNumbers?.length || 0} van ${maxPhoneNumbers} nummers gekoppeld`}
         actions={
-          phoneNumbers?.length > 0 ? (
+          canEdit && phoneNumbers?.length > 0 ? (
             <Button onClick={openWizard} disabled={!canAddPhone}>
               Nog een nummer koppelen
             </Button>
@@ -297,9 +298,11 @@ export default function PhonePage() {
             title="Koppel uw telefoonnummer"
             description="Laat de AI uw zakelijke telefoontjes beantwoorden. Klanten bellen uw bestaande nummer en worden automatisch geholpen."
             action={
-              <Button size="lg" onClick={openWizard}>
-                Mijn nummer koppelen
-              </Button>
+              canEdit ? (
+                <Button size="lg" onClick={openWizard}>
+                  Mijn nummer koppelen
+                </Button>
+              ) : undefined
             }
           />
         ) : (
@@ -392,16 +395,18 @@ export default function PhonePage() {
                       )}
                     </div>
 
-                    <div className="mt-4 flex items-center gap-3 pt-4 border-t border-gray-100">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        leftIcon={<Settings className="h-4 w-4" />}
-                        onClick={() => openSettings(phone)}
-                      >
-                        Instellingen
-                      </Button>
-                    </div>
+                    {canEdit && (
+                      <div className="mt-4 flex items-center gap-3 pt-4 border-t border-gray-100">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          leftIcon={<Settings className="h-4 w-4" />}
+                          onClick={() => openSettings(phone)}
+                        >
+                          Instellingen
+                        </Button>
+                      </div>
+                    )}
                   </CardBody>
                 </Card>
               </motion.div>
@@ -977,28 +982,32 @@ export default function PhonePage() {
             )}
 
             <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-              <Button
-                variant="danger"
-                size="sm"
-                leftIcon={<Trash2 className="h-4 w-4" />}
-                onClick={() => {
-                  if (confirm('Weet u zeker dat u dit nummer wilt loskoppelen?')) {
-                    deleteMutation.mutate(selectedPhone.id)
-                  }
-                }}
-              >
-                Loskoppelen
-              </Button>
+              {canEdit && (
+                <Button
+                  variant="danger"
+                  size="sm"
+                  leftIcon={<Trash2 className="h-4 w-4" />}
+                  onClick={() => {
+                    if (confirm('Weet u zeker dat u dit nummer wilt loskoppelen?')) {
+                      deleteMutation.mutate(selectedPhone.id)
+                    }
+                  }}
+                >
+                  Loskoppelen
+                </Button>
+              )}
               <div className="flex gap-3">
                 <Button variant="outline" onClick={closeSettings}>
                   Annuleren
                 </Button>
-                <Button 
-                  onClick={handleSaveSettings}
-                  isLoading={updateMutation.isPending}
-                >
-                  Opslaan
-                </Button>
+                {canEdit && (
+                  <Button 
+                    onClick={handleSaveSettings}
+                    isLoading={updateMutation.isPending}
+                  >
+                    Opslaan
+                  </Button>
+                )}
               </div>
             </div>
           </div>

@@ -21,6 +21,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { Select } from '@/components/ui/Select'
 import { appointmentsApi } from '@/lib/api'
 import { formatDateTime, formatDate, getStatusLabel } from '@/lib/utils'
+import { useAuthStore } from '@/lib/store'
 
 // Mock data for calendar view (when backend is not running)
 const MOCK_APPOINTMENTS = [
@@ -64,6 +65,8 @@ const MOCK_APPOINTMENTS = [
 
 export default function AppointmentsPage() {
   const queryClient = useQueryClient()
+  const { user } = useAuthStore()
+  const canEdit = user?.role !== 'viewer'
   const [page, setPage] = useState(1)
   const [selectedAppointment, setSelectedAppointment] = useState<any>(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -497,18 +500,20 @@ export default function AppointmentsPage() {
                 <Button variant="outline" onClick={() => setSelectedAppointment(null)}>
                   Sluiten
                 </Button>
-                <Button
-                  variant="danger"
-                  leftIcon={<X className="h-4 w-4" />}
-                  onClick={() => {
-                    if (confirm('Weet u zeker dat u deze afspraak wilt annuleren?')) {
-                      cancelMutation.mutate({ id: selectedAppointment.id })
-                    }
-                  }}
-                  isLoading={cancelMutation.isPending}
-                >
-                  Annuleren
-                </Button>
+                {canEdit && (
+                  <Button
+                    variant="danger"
+                    leftIcon={<X className="h-4 w-4" />}
+                    onClick={() => {
+                      if (confirm('Weet u zeker dat u deze afspraak wilt annuleren?')) {
+                        cancelMutation.mutate({ id: selectedAppointment.id })
+                      }
+                    }}
+                    isLoading={cancelMutation.isPending}
+                  >
+                    Annuleren
+                  </Button>
+                )}
               </div>
             )}
           </div>

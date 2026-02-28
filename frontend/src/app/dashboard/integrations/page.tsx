@@ -25,6 +25,7 @@ import { PageLoader } from '@/components/ui/Spinner'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { crmApi } from '@/lib/api'
 import { formatRelativeTime } from '@/lib/utils'
+import { useAuthStore } from '@/lib/store'
 
 const providers = [
   {
@@ -64,6 +65,8 @@ export default function IntegrationsPage() {
 function IntegrationsPageInner() {
   const queryClient = useQueryClient()
   const searchParams = useSearchParams()
+  const { user } = useAuthStore()
+  const canEdit = user?.role !== 'viewer'
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [selectedIntegration, setSelectedIntegration] = useState<any>(null)
 
@@ -142,14 +145,14 @@ function IntegrationsPageInner() {
         title="Integraties"
         description="Koppel externe systemen zodat de AI uw klanten herkent en gespreksverslagen terugschrijft."
         hideSearch
-        actions={
+        actions={canEdit ? (
           <Button
             leftIcon={<Plus className="h-4 w-4" />}
             onClick={() => setIsAddModalOpen(true)}
           >
             Integratie toevoegen
           </Button>
-        }
+        ) : undefined}
       />
 
       <div className="p-4 sm:p-6 space-y-6">
@@ -179,14 +182,14 @@ function IntegrationsPageInner() {
             icon={Plug}
             title="Geen integraties gekoppeld"
             description="Koppel een CRM-systeem zodat de AI uw klanten herkent."
-            action={
+            action={canEdit ? (
               <Button
                 leftIcon={<Plus className="h-4 w-4" />}
                 onClick={() => setIsAddModalOpen(true)}
               >
                 Integratie toevoegen
               </Button>
-            }
+            ) : undefined}
           />
         ) : (
           <div className="space-y-4">
@@ -313,33 +316,37 @@ function IntegrationsPageInner() {
                           </Button>
                         ) : (
                           <>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              leftIcon={<RefreshCw className="h-4 w-4" />}
-                              onClick={() => testMutation.mutate(integration.id)}
-                              isLoading={testMutation.isPending}
-                            >
-                              Test verbinding
-                            </Button>
+                            {canEdit && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                leftIcon={<RefreshCw className="h-4 w-4" />}
+                                onClick={() => testMutation.mutate(integration.id)}
+                                isLoading={testMutation.isPending}
+                              >
+                                Test verbinding
+                              </Button>
+                            )}
                           </>
                         )}
                         <div className="flex-1" />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            if (
-                              confirm(
-                                'Weet u zeker dat u deze integratie wilt verwijderen?'
-                              )
-                            ) {
-                              deleteMutation.mutate(integration.id)
-                            }
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4 text-red-500" />
-                        </Button>
+                        {canEdit && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              if (
+                                confirm(
+                                  'Weet u zeker dat u deze integratie wilt verwijderen?'
+                                )
+                              ) {
+                                deleteMutation.mutate(integration.id)
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </Button>
+                        )}
                       </div>
                     </CardBody>
                   </Card>

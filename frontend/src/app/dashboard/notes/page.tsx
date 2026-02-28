@@ -16,9 +16,12 @@ import { PageLoader } from '@/components/ui/Spinner'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { notesApi } from '@/lib/api'
 import { formatRelativeTime, getPriorityLabel, getPriorityColor } from '@/lib/utils'
+import { useAuthStore } from '@/lib/store'
 
 export default function NotesPage() {
   const queryClient = useQueryClient()
+  const { user } = useAuthStore()
+  const canEdit = user?.role !== 'viewer'
   const [page, setPage] = useState(1)
   const [selectedNote, setSelectedNote] = useState<any>(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -349,23 +352,25 @@ export default function NotesPage() {
 
             {/* Actions */}
             <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-              <Button
-                variant="ghost"
-                size="sm"
-                leftIcon={<Trash2 className="h-4 w-4" />}
-                onClick={() => {
-                  if (confirm('Weet u zeker dat u deze notitie wilt verwijderen?')) {
-                    deleteMutation.mutate(selectedNote.id)
-                  }
-                }}
-              >
-                <span className="hidden sm:inline">Verwijderen</span>
-              </Button>
+              {canEdit && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  leftIcon={<Trash2 className="h-4 w-4" />}
+                  onClick={() => {
+                    if (confirm('Weet u zeker dat u deze notitie wilt verwijderen?')) {
+                      deleteMutation.mutate(selectedNote.id)
+                    }
+                  }}
+                >
+                  <span className="hidden sm:inline">Verwijderen</span>
+                </Button>
+              )}
               <div className="flex items-center gap-2 sm:gap-3">
                 <Button variant="outline" onClick={() => setSelectedNote(null)}>
                   Sluiten
                 </Button>
-                {selectedNote.is_resolved ? (
+                {canEdit && (selectedNote.is_resolved ? (
                   <Button
                     leftIcon={<RotateCcw className="h-4 w-4" />}
                     onClick={() => reopenMutation.mutate(selectedNote.id)}
@@ -381,7 +386,7 @@ export default function NotesPage() {
                   >
                     Markeer als opgelost
                   </Button>
-                )}
+                ))}
               </div>
             </div>
           </div>

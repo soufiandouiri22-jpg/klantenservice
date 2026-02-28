@@ -16,9 +16,12 @@ import { Badge } from '@/components/ui/Badge'
 import { PageLoader } from '@/components/ui/Spinner'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { trainingApi } from '@/lib/api'
+import { useAuthStore } from '@/lib/store'
 
 export default function TrainingPage() {
   const queryClient = useQueryClient()
+  const { user } = useAuthStore()
+  const canEdit = user?.role !== 'viewer'
   const [isAddAnswerModalOpen, setIsAddAnswerModalOpen] = useState(false)
   const [editingAnswer, setEditingAnswer] = useState<any>(null)
   const [newQuestion, setNewQuestion] = useState('')
@@ -141,12 +144,14 @@ export default function TrainingPage() {
         description="Configureer het gedrag en de kennis van uw AI-medewerkers."
         hideSearch
         actions={
-          <Button
-            leftIcon={<Plus className="h-4 w-4" />}
-            onClick={() => setIsAddAnswerModalOpen(true)}
-          >
-            Vraag toevoegen
-          </Button>
+          canEdit ? (
+            <Button
+              leftIcon={<Plus className="h-4 w-4" />}
+              onClick={() => setIsAddAnswerModalOpen(true)}
+            >
+              Vraag toevoegen
+            </Button>
+          ) : undefined
         }
       />
 
@@ -164,7 +169,7 @@ export default function TrainingPage() {
               <div key={rule.id} className="flex items-start justify-between py-3 border-b border-gray-100 last:border-0">
                 <Toggle
                   enabled={rule.is_enabled}
-                  onChange={(enabled) => updateRuleMutation.mutate({ id: rule.id, isEnabled: enabled })}
+                  onChange={canEdit ? (enabled) => updateRuleMutation.mutate({ id: rule.id, isEnabled: enabled }) : () => {}}
                   label={rule.rule_name}
                   description={rule.rule_description}
                 />
@@ -203,25 +208,27 @@ export default function TrainingPage() {
                         <p className="font-medium text-gray-900">{q.question}</p>
                         <p className="text-sm text-gray-500">{q.occurrences}x gevraagd</p>
                       </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => dismissQuestionMutation.mutate(q.id)}
-                          disabled={dismissQuestionMutation.isPending}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          onClick={() => {
-                            setNewQuestion(q.question)
-                            setIsAddAnswerModalOpen(true)
-                          }}
-                        >
-                          Antwoord toevoegen
-                        </Button>
-                      </div>
+                      {canEdit && (
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => dismissQuestionMutation.mutate(q.id)}
+                            disabled={dismissQuestionMutation.isPending}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              setNewQuestion(q.question)
+                              setIsAddAnswerModalOpen(true)
+                            }}
+                          >
+                            Antwoord toevoegen
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -245,12 +252,14 @@ export default function TrainingPage() {
                 title="Geen voorbeeldantwoorden"
                 description="Voeg vraag-antwoord paren toe zodat de AI weet hoe te reageren op specifieke vragen."
                 action={
-                  <Button
-                    leftIcon={<Plus className="h-4 w-4" />}
-                    onClick={() => setIsAddAnswerModalOpen(true)}
-                  >
-                    Eerste vraag toevoegen
-                  </Button>
+                  canEdit ? (
+                    <Button
+                      leftIcon={<Plus className="h-4 w-4" />}
+                      onClick={() => setIsAddAnswerModalOpen(true)}
+                    >
+                      Eerste vraag toevoegen
+                    </Button>
+                  ) : undefined
                 }
               />
             ) : (
@@ -276,26 +285,28 @@ export default function TrainingPage() {
                                 </p>
                               )}
                             </div>
-                            <div className="flex items-center gap-1 ml-4">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setEditingAnswer(answer)}
-                              >
-                                <Edit2 className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  if (confirm('Weet u zeker dat u dit antwoord wilt verwijderen?')) {
-                                    deleteAnswerMutation.mutate(answer.id)
-                                  }
-                                }}
-                              >
-                                <Trash2 className="h-4 w-4 text-red-500" />
-                              </Button>
-                            </div>
+                            {canEdit && (
+                              <div className="flex items-center gap-1 ml-4">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setEditingAnswer(answer)}
+                                >
+                                  <Edit2 className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    if (confirm('Weet u zeker dat u dit antwoord wilt verwijderen?')) {
+                                      deleteAnswerMutation.mutate(answer.id)
+                                    }
+                                  }}
+                                >
+                                  <Trash2 className="h-4 w-4 text-red-500" />
+                                </Button>
+                              </div>
+                            )}
                           </div>
                         </motion.div>
                       ))}
