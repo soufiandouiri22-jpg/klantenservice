@@ -15,9 +15,6 @@ import {
   X,
   CreditCard,
   ArrowRight,
-  Clock,
-  CalendarCheck,
-  TrendingUp,
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { Header } from '@/components/layout/Header'
@@ -370,44 +367,33 @@ export default function DashboardPage() {
                 <CardTitle>Prestaties deze maand</CardTitle>
               </CardHeader>
               <CardBody className="space-y-5">
-                {/* Key metrics grid */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="rounded-lg bg-blue-50 p-4">
-                    <div className="flex items-center gap-2 mb-1">
-                      <TrendingUp className="h-4 w-4 text-blue-600" />
-                      <span className="text-xs text-blue-600 font-medium">Gesprekken</span>
-                    </div>
-                    <p className="text-2xl font-bold text-gray-900">{stats?.calls_this_month || 0}</p>
+                <div>
+                  <div className="flex items-baseline gap-1.5 mb-1">
+                    <span className="text-4xl font-bold text-gray-900">
+                      {stats?.calls_this_month || 0}
+                    </span>
+                    <span className="text-gray-500">gesprekken</span>
                   </div>
-                  <div className={`rounded-lg p-4 ${
-                    answeredPct >= 90 ? 'bg-green-50' : answeredPct >= 70 ? 'bg-amber-50' : 'bg-red-50'
-                  }`}>
-                    <div className="flex items-center gap-2 mb-1">
-                      <Phone className={`h-4 w-4 ${
-                        answeredPct >= 90 ? 'text-green-600' : answeredPct >= 70 ? 'text-amber-600' : 'text-red-600'
-                      }`} />
-                      <span className={`text-xs font-medium ${
-                        answeredPct >= 90 ? 'text-green-600' : answeredPct >= 70 ? 'text-amber-600' : 'text-red-600'
-                      }`}>Beantwoord</span>
-                    </div>
-                    <p className="text-2xl font-bold text-gray-900">{answeredPct}%</p>
-                    <p className="text-xs text-gray-500">{stats?.calls_missed_month || 0} gemist</p>
+                  <p className="text-sm text-gray-400">deze maand</p>
+                </div>
+
+                <div className="border-t pt-4 space-y-3">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Beantwoord</span>
+                    <span className="font-medium text-gray-900">
+                      {answeredPct}%
+                      <span className="text-gray-400 font-normal ml-1">({stats?.calls_missed_month || 0} gemist)</span>
+                    </span>
                   </div>
-                  <div className="rounded-lg bg-purple-50 p-4">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Clock className="h-4 w-4 text-purple-600" />
-                      <span className="text-xs text-purple-600 font-medium">Gem. duur</span>
-                    </div>
-                    <p className="text-2xl font-bold text-gray-900">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Gem. gespreksduur</span>
+                    <span className="font-medium text-gray-900">
                       {avgDurMin > 0 ? `${avgDurMin}m ${avgDurSec}s` : `${avgDurSec}s`}
-                    </p>
+                    </span>
                   </div>
-                  <div className="rounded-lg bg-amber-50 p-4">
-                    <div className="flex items-center gap-2 mb-1">
-                      <CalendarCheck className="h-4 w-4 text-amber-600" />
-                      <span className="text-xs text-amber-600 font-medium">AI-afspraken</span>
-                    </div>
-                    <p className="text-2xl font-bold text-gray-900">{stats?.appointments_made_by_ai_month || 0}</p>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">AI-afspraken</span>
+                    <span className="font-medium text-gray-900">{stats?.appointments_made_by_ai_month || 0}</span>
                   </div>
                 </div>
 
