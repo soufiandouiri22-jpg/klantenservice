@@ -31,9 +31,8 @@ from app.models.training import TrainingRule
 router = APIRouter()
 
 
-async def _start_recording(call_sid: str, delay: float = 3.0):
-    """Start call recording via Twilio REST API after a short delay."""
-    await asyncio.sleep(delay)
+async def _start_recording(call_sid: str):
+    """Start call recording via Twilio REST API."""
     recording_callback = (
         "https://api.klantenservice.ai/api/v1/webhooks/twilio/recording"
         if settings.APP_ENV == "production"
