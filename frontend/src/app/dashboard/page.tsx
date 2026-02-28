@@ -402,10 +402,10 @@ export default function DashboardPage() {
                       {avgDurMin > 0 ? `${avgDurMin}m ${avgDurSec}s` : `${avgDurSec}s`}
                     </p>
                   </div>
-                  <div className="rounded-lg bg-emerald-50 p-4">
+                  <div className="rounded-lg bg-amber-50 p-4">
                     <div className="flex items-center gap-2 mb-1">
-                      <CalendarCheck className="h-4 w-4 text-emerald-600" />
-                      <span className="text-xs text-emerald-600 font-medium">AI-afspraken</span>
+                      <CalendarCheck className="h-4 w-4 text-amber-600" />
+                      <span className="text-xs text-amber-600 font-medium">AI-afspraken</span>
                     </div>
                     <p className="text-2xl font-bold text-gray-900">{stats?.appointments_made_by_ai_month || 0}</p>
                   </div>
