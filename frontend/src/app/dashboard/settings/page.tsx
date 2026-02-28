@@ -100,6 +100,11 @@ function SettingsContent() {
     queryFn: companyApi.getSubscription,
   })
 
+  const { data: usage } = useQuery({
+    queryKey: ['usage'],
+    queryFn: paymentsApi.getUsage,
+  })
+
   const { data: users, isLoading: usersLoading } = useQuery({
     queryKey: ['users'],
     queryFn: usersApi.list,
@@ -887,6 +892,51 @@ function SettingsContent() {
                     )}
                   </CardBody>
                 </Card>
+
+                {/* Usage */}
+                {usage && (subscription?.status === 'active' || subscription?.status === 'trialing') && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Belminuten deze maand</CardTitle>
+                    </CardHeader>
+                    <CardBody>
+                      <div className="space-y-3">
+                        <div className="flex items-end justify-between">
+                          <div>
+                            <span className="text-3xl font-bold text-gray-900">
+                              {Math.round(usage.minutes_used)}
+                            </span>
+                            <span className="text-gray-500 ml-1">
+                              {usage.is_unlimited ? 'minuten gebruikt' : `/ ${usage.minutes_limit} minuten`}
+                            </span>
+                          </div>
+                          {!usage.is_unlimited && (
+                            <span className={`text-sm font-medium ${
+                              usage.percentage >= 90 ? 'text-red-600' : usage.percentage >= 75 ? 'text-amber-600' : 'text-gray-500'
+                            }`}>
+                              {usage.percentage}%
+                            </span>
+                          )}
+                        </div>
+                        {!usage.is_unlimited && (
+                          <div className="w-full bg-gray-100 rounded-full h-3">
+                            <div
+                              className={`h-3 rounded-full transition-all ${
+                                usage.percentage >= 90 ? 'bg-red-500' : usage.percentage >= 75 ? 'bg-amber-500' : 'bg-primary-500'
+                              }`}
+                              style={{ width: `${Math.min(usage.percentage, 100)}%` }}
+                            />
+                          </div>
+                        )}
+                        {!usage.is_unlimited && usage.percentage >= 90 && (
+                          <p className="text-sm text-red-600">
+                            U nadert uw limiet. Na het bereiken worden inkomende gesprekken geweigerd.
+                          </p>
+                        )}
+                      </div>
+                    </CardBody>
+                  </Card>
+                )}
 
                 {/* Plans */}
                 <Card>

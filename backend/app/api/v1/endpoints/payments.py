@@ -30,11 +30,18 @@ PLAN_PRICES = {
     "enterprise_yearly": settings.STRIPE_PRICE_ENTERPRISE_YEARLY,
 }
 
-# Plan limits (AI workers and phone numbers per plan)
+# Plan limits (AI workers per plan)
 PLAN_LIMITS = {
     "starter": 1,
     "business": 3,
     "enterprise": 10,
+}
+
+# Belminuten per plan per maand
+PLAN_MINUTES = {
+    "starter": 500,
+    "business": 2000,
+    "enterprise": None,  # Onbeperkt
 }
 
 
@@ -206,6 +213,46 @@ async def get_subscription_status(
             logger.warning(f"Could not fetch Stripe subscription: {e}")
     
     return result
+
+
+@router.get("/usage")
+async def get_usage(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get call minutes usage for the current billing period.
+    Based on actual call_logs.duration_seconds, not Twilio usage.
+    """
+    from datetime import datetime
+    from sqlalchemy import func
+    from app.models.call_log import CallLog
+
+    company = current_user.company
+    if not company:
+        raise HTTPException(status_code=400, detail="User has no company")
+
+    now = datetime.utcnow()
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    total_seconds = db.query(func.coalesce(func.sum(CallLog.duration_seconds), 0)).filter(
+        CallLog.company_id == company.id,
+        CallLog.started_at >= month_start,
+        CallLog.duration_seconds > 0,
+    ).scalar()
+
+    minutes_used = round(total_seconds / 60, 1)
+    plan = company.subscription_plan.value
+    minutes_limit = PLAN_MINUTES.get(plan)
+
+    return {
+        "minutes_used": minutes_used,
+        "minutes_limit": minutes_limit,
+        "plan": plan,
+        "is_unlimited": minutes_limit is None,
+        "percentage": round((minutes_used / minutes_limit) * 100, 1) if minutes_limit else 0,
+        "period_start": month_start.isoformat(),
+    }
 
 
 @router.post("/webhook")

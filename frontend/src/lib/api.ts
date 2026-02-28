@@ -951,6 +951,11 @@ export const paymentsApi = {
     const response = await api.get('/payments/subscription')
     return response.data
   },
+
+  getUsage: async () => {
+    const response = await api.get('/payments/usage')
+    return response.data
+  },
 }
 
 // KVK API

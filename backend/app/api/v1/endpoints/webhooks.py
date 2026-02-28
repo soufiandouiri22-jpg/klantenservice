@@ -139,7 +139,31 @@ async def twilio_voice_webhook(
         )
         twiml = _tts_twiml("Dit nummer is momenteel niet bereikbaar. Probeert u het later nog eens.")
         return Response(content=twiml, media_type="text/xml")
-    
+
+    # Check call minutes limit
+    if company:
+        from app.api.v1.endpoints.payments import PLAN_MINUTES
+        from sqlalchemy import func as sqlfunc
+
+        plan = company.subscription_plan.value
+        limit = PLAN_MINUTES.get(plan)
+        if limit is not None:
+            now = datetime.utcnow()
+            month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            total_seconds = db.query(sqlfunc.coalesce(sqlfunc.sum(CallLog.duration_seconds), 0)).filter(
+                CallLog.company_id == company.id,
+                CallLog.started_at >= month_start,
+                CallLog.duration_seconds > 0,
+            ).scalar()
+            minutes_used = total_seconds / 60
+            if minutes_used >= limit:
+                logger.warning(
+                    f"Call rejected: minutes limit reached ({minutes_used:.0f}/{limit}) "
+                    f"for {company.name} (call_sid={call_sid})"
+                )
+                twiml = _tts_twiml("Het belbudget voor deze maand is bereikt. Probeert u het later nog eens.")
+                return Response(content=twiml, media_type="text/xml")
+
     # Check if within business hours
     if not phone.is_within_business_hours():
         # Use the AI worker's voice for the after-hours message if available
