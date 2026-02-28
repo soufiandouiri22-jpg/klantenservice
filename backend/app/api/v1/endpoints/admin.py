@@ -517,55 +517,83 @@ async def _fetch_elevenlabs_usage(start_unix_ms: int, end_unix_ms: int) -> dict:
 
 
 async def _fetch_twilio_usage(start_date: str, end_date: str) -> dict:
-    """Fetch usage records from Twilio API for a date range (YYYY-MM-DD)."""
-    result = {"cost_cents": 0, "calls": 0, "minutes": 0.0}
+    """Fetch usage records from Twilio API for a date range with breakdown."""
+    result = {
+        "cost_cents": 0,
+        "calls_cost_cents": 0,
+        "calls_inbound": 0,
+        "calls_inbound_minutes": 0.0,
+        "numbers_cost_cents": 0,
+        "numbers_count": 0,
+        "recordings_cost_cents": 0,
+        "media_streams_cost_cents": 0,
+        "tts_cost_cents": 0,
+    }
+    base = f"https://api.twilio.com/2010-04-01/Accounts/{settings.TWILIO_ACCOUNT_SID}/Usage/Records.json"
+    auth = (settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
+
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(
-                f"https://api.twilio.com/2010-04-01/Accounts/{settings.TWILIO_ACCOUNT_SID}/Usage/Records.json",
-                params={
-                    "StartDate": start_date,
-                    "EndDate": end_date,
-                    "Category": "calls",
-                },
-                auth=(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN),
-            )
-            if resp.status_code == 200:
-                for record in resp.json().get("usage_records", []):
-                    price = float(record.get("price", "0") or "0")
-                    result["cost_cents"] += int(abs(price) * 100)
-                    result["calls"] += int(record.get("count", "0") or "0")
-                    result["minutes"] += float(record.get("usage", "0") or "0")
+            # Inbound calls only (no double counting)
+            resp_calls = await client.get(base, params={
+                "StartDate": start_date, "EndDate": end_date,
+                "Category": "calls-inbound",
+            }, auth=auth)
+            if resp_calls.status_code == 200:
+                for r in resp_calls.json().get("usage_records", []):
+                    price = abs(float(r.get("price", "0") or "0"))
+                    result["calls_cost_cents"] += int(price * 100)
+                    result["calls_inbound"] += int(r.get("count", "0") or "0")
+                    result["calls_inbound_minutes"] += float(r.get("usage", "0") or "0")
 
-            # Also fetch phone number costs
-            resp2 = await client.get(
-                f"https://api.twilio.com/2010-04-01/Accounts/{settings.TWILIO_ACCOUNT_SID}/Usage/Records.json",
-                params={
-                    "StartDate": start_date,
-                    "EndDate": end_date,
-                    "Category": "phonenumbers",
-                },
-                auth=(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN),
-            )
-            if resp2.status_code == 200:
-                for record in resp2.json().get("usage_records", []):
-                    price = float(record.get("price", "0") or "0")
-                    result["cost_cents"] += int(abs(price) * 100)
+            # Phone numbers
+            resp_nums = await client.get(base, params={
+                "StartDate": start_date, "EndDate": end_date,
+                "Category": "phonenumbers",
+            }, auth=auth)
+            if resp_nums.status_code == 200:
+                for r in resp_nums.json().get("usage_records", []):
+                    price = abs(float(r.get("price", "0") or "0"))
+                    result["numbers_cost_cents"] += int(price * 100)
+                    result["numbers_count"] += int(r.get("count", "0") or "0")
 
-            # Also fetch recordings costs
-            resp3 = await client.get(
-                f"https://api.twilio.com/2010-04-01/Accounts/{settings.TWILIO_ACCOUNT_SID}/Usage/Records.json",
-                params={
-                    "StartDate": start_date,
-                    "EndDate": end_date,
-                    "Category": "recordings",
-                },
-                auth=(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN),
+            # Recordings
+            resp_rec = await client.get(base, params={
+                "StartDate": start_date, "EndDate": end_date,
+                "Category": "recordings",
+            }, auth=auth)
+            if resp_rec.status_code == 200:
+                for r in resp_rec.json().get("usage_records", []):
+                    price = abs(float(r.get("price", "0") or "0"))
+                    result["recordings_cost_cents"] += int(price * 100)
+
+            # Media Streams
+            resp_ms = await client.get(base, params={
+                "StartDate": start_date, "EndDate": end_date,
+                "Category": "media-stream-minutes",
+            }, auth=auth)
+            if resp_ms.status_code == 200:
+                for r in resp_ms.json().get("usage_records", []):
+                    price = abs(float(r.get("price", "0") or "0"))
+                    result["media_streams_cost_cents"] += int(price * 100)
+
+            # TTS (Amazon Polly)
+            resp_tts = await client.get(base, params={
+                "StartDate": start_date, "EndDate": end_date,
+                "Category": "tts-amazon-polly",
+            }, auth=auth)
+            if resp_tts.status_code == 200:
+                for r in resp_tts.json().get("usage_records", []):
+                    price = abs(float(r.get("price", "0") or "0"))
+                    result["tts_cost_cents"] += int(price * 100)
+
+            result["cost_cents"] = (
+                result["calls_cost_cents"]
+                + result["numbers_cost_cents"]
+                + result["recordings_cost_cents"]
+                + result["media_streams_cost_cents"]
+                + result["tts_cost_cents"]
             )
-            if resp3.status_code == 200:
-                for record in resp3.json().get("usage_records", []):
-                    price = float(record.get("price", "0") or "0")
-                    result["cost_cents"] += int(abs(price) * 100)
     except Exception as e:
         logger.warning(f"[COSTS] Twilio usage fetch failed: {e}")
     return result
@@ -610,10 +638,16 @@ async def get_cost_metrics(
         elevenlabs_cost_month_cents=el_cost_month,
         twilio_cost_today_cents=tw_today["cost_cents"],
         twilio_cost_month_cents=tw_month["cost_cents"],
-        twilio_calls_today=tw_today["calls"],
-        twilio_calls_month=tw_month["calls"],
-        twilio_minutes_today=round(tw_today["minutes"], 1),
-        twilio_minutes_month=round(tw_month["minutes"], 1),
+        twilio_calls_today=tw_today["calls_inbound"],
+        twilio_calls_month=tw_month["calls_inbound"],
+        twilio_minutes_today=round(tw_today["calls_inbound_minutes"], 1),
+        twilio_minutes_month=round(tw_month["calls_inbound_minutes"], 1),
+        twilio_calls_cost_month_cents=tw_month["calls_cost_cents"],
+        twilio_numbers_cost_month_cents=tw_month["numbers_cost_cents"],
+        twilio_numbers_count_month=tw_month["numbers_count"],
+        twilio_recordings_cost_month_cents=tw_month["recordings_cost_cents"],
+        twilio_media_streams_cost_month_cents=tw_month["media_streams_cost_cents"],
+        twilio_tts_cost_month_cents=tw_month["tts_cost_cents"],
         total_cost_today_cents=total_today,
         total_cost_month_cents=total_month,
     )

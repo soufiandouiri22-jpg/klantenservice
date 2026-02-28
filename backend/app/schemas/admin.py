@@ -100,13 +100,21 @@ class CostMetrics(BaseModel):
     elevenlabs_cost_today_cents: int = 0
     elevenlabs_cost_month_cents: int = 0
 
-    # Twilio
+    # Twilio (totals)
     twilio_cost_today_cents: int = 0
     twilio_cost_month_cents: int = 0
     twilio_calls_today: int = 0
     twilio_calls_month: int = 0
     twilio_minutes_today: float = 0
     twilio_minutes_month: float = 0
+
+    # Twilio breakdown (monthly)
+    twilio_calls_cost_month_cents: int = 0
+    twilio_numbers_cost_month_cents: int = 0
+    twilio_numbers_count_month: int = 0
+    twilio_recordings_cost_month_cents: int = 0
+    twilio_media_streams_cost_month_cents: int = 0
+    twilio_tts_cost_month_cents: int = 0
 
     # Totals
     total_cost_today_cents: int = 0

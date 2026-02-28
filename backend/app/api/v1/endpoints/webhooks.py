@@ -23,7 +23,7 @@ from app.core.voices import DEFAULT_VOICE_ID
 
 logger = logging.getLogger(__name__)
 from app.models.company import Company
-from app.models.call_log import CallLog, CallStatus
+from app.models.call_log import CallLog, CallStatus, CallTranscript
 from app.models.ai_worker import AIWorker, AIWorkerStatus
 from app.models.website_knowledge import WebsiteKnowledge, IndexStatus
 from app.models.training import TrainingRule
@@ -446,6 +446,26 @@ async def twilio_status_webhook(
                 )
         
         db.commit()
+
+        # Post-call sentiment analysis (non-blocking)
+        if call_status == "completed":
+            try:
+                from app.services.sentiment_service import analyze_sentiment
+                transcripts = db.query(CallTranscript).filter(
+                    CallTranscript.call_log_id == call_log.id
+                ).order_by(CallTranscript.timestamp).all()
+                if transcripts:
+                    transcript_text = "\n".join(
+                        f"{'Klant' if t.speaker == 'caller' else 'AI'}: {t.message}"
+                        for t in transcripts
+                    )
+                    sentiment = await analyze_sentiment(transcript_text)
+                    if sentiment:
+                        call_log.sentiment = sentiment
+                        db.commit()
+                        logger.info(f"[SENTIMENT] call_sid={call_sid} → {sentiment}")
+            except Exception as sent_err:
+                logger.warning(f"Sentiment analysis failed (non-blocking): {sent_err}")
 
         # Write call summary back to CRM if configured
         if call_status == "completed" and call_log.summary:

@@ -13,7 +13,7 @@ AMS_TZ = ZoneInfo("Europe/Amsterdam")
 from app.models.user import User
 from app.models.company import Company
 from app.models.ai_worker import AIWorker, AIWorkerStatus
-from app.models.call_log import CallLog, CallStatus
+from app.models.call_log import CallLog, CallStatus, CallOutcome
 from app.models.appointment import Appointment, AppointmentStatus
 from app.models.internal_note import InternalNote
 from app.schemas.company import CompanyStats
@@ -36,31 +36,66 @@ async def get_dashboard_stats(
     today_end = today_start + timedelta(days=1)
     week_start = today_start - timedelta(days=now_ams.weekday())
     week_end = week_start + timedelta(days=7)
-    
+    month_start = now_ams.replace(day=1, hour=0, minute=0, second=0, microsecond=0).astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
+
     # AI Workers stats
     total_workers = db.query(AIWorker).filter(
         AIWorker.company_id == company.id
     ).count()
-    
+
     active_workers = db.query(AIWorker).filter(
         AIWorker.company_id == company.id,
         AIWorker.is_active == True,
         AIWorker.status == AIWorkerStatus.AVAILABLE
     ).count()
-    
+
     # Active calls
     active_calls = db.query(CallLog).filter(
         CallLog.company_id == company.id,
         CallLog.status.in_([CallStatus.RINGING, CallStatus.IN_PROGRESS])
     ).count()
-    
+
     # Calls today
     calls_today = db.query(CallLog).filter(
         CallLog.company_id == company.id,
         CallLog.started_at >= today_start,
         CallLog.started_at < today_end
     ).count()
-    
+
+    # Monthly call base query
+    month_calls_q = db.query(CallLog).filter(
+        CallLog.company_id == company.id,
+        CallLog.started_at >= month_start,
+    )
+
+    calls_this_month = month_calls_q.count()
+
+    calls_answered_month = month_calls_q.filter(
+        CallLog.status == CallStatus.COMPLETED
+    ).count()
+
+    calls_missed_month = month_calls_q.filter(
+        CallLog.status.in_([CallStatus.MISSED, CallStatus.ABANDONED, CallStatus.FAILED])
+    ).count()
+
+    avg_duration = month_calls_q.filter(
+        CallLog.duration_seconds > 0
+    ).with_entities(func.avg(CallLog.duration_seconds)).scalar() or 0
+
+    # Appointments made by AI this month
+    appointments_made_by_ai_month = month_calls_q.filter(
+        CallLog.outcome == CallOutcome.APPOINTMENT_MADE
+    ).count()
+
+    # Sentiment breakdown (all time for this company, only calls with sentiment)
+    sentiment_counts = db.query(
+        CallLog.sentiment, func.count(CallLog.id)
+    ).filter(
+        CallLog.company_id == company.id,
+        CallLog.sentiment.isnot(None),
+    ).group_by(CallLog.sentiment).all()
+    sentiment_map = {s: c for s, c in sentiment_counts}
+
     # Appointments today
     appointments_today = db.query(Appointment).filter(
         Appointment.company_id == company.id,
@@ -68,7 +103,7 @@ async def get_dashboard_stats(
         Appointment.starts_at < today_end,
         Appointment.status == AppointmentStatus.CONFIRMED
     ).count()
-    
+
     # Appointments this week
     appointments_week = db.query(Appointment).filter(
         Appointment.company_id == company.id,
@@ -76,21 +111,29 @@ async def get_dashboard_stats(
         Appointment.starts_at < week_end,
         Appointment.status == AppointmentStatus.CONFIRMED
     ).count()
-    
+
     # Unresolved notes
     unresolved_notes = db.query(InternalNote).filter(
         InternalNote.company_id == company.id,
         InternalNote.is_resolved == False
     ).count()
-    
+
     return CompanyStats(
         active_ai_workers=active_workers,
         total_ai_workers=total_workers,
         active_calls=active_calls,
         calls_today=calls_today,
+        calls_this_month=calls_this_month,
+        calls_answered_month=calls_answered_month,
+        calls_missed_month=calls_missed_month,
+        avg_duration_seconds=int(avg_duration),
         appointments_today=appointments_today,
         appointments_this_week=appointments_week,
+        appointments_made_by_ai_month=appointments_made_by_ai_month,
         unresolved_notes=unresolved_notes,
+        sentiment_positive=sentiment_map.get("positive", 0),
+        sentiment_neutral=sentiment_map.get("neutral", 0),
+        sentiment_negative=sentiment_map.get("negative", 0),
     )
 
 

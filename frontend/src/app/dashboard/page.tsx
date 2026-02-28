@@ -15,6 +15,11 @@ import {
   X,
   CreditCard,
   ArrowRight,
+  Clock,
+  PhoneOff,
+  SmilePlus,
+  CalendarCheck,
+  TrendingUp,
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { Header } from '@/components/layout/Header'
@@ -22,7 +27,7 @@ import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { PageLoader } from '@/components/ui/Spinner'
 import { Button } from '@/components/ui/Button'
-import { dashboardApi, aiWorkersApi, phoneNumbersApi, websitesApi, companyApi } from '@/lib/api'
+import { dashboardApi, aiWorkersApi, phoneNumbersApi, websitesApi, companyApi, paymentsApi } from '@/lib/api'
 import { formatRelativeTime, formatDuration, getStatusColor, getStatusLabel } from '@/lib/utils'
 import Link from 'next/link'
 
@@ -91,6 +96,12 @@ export default function DashboardPage() {
     queryFn: companyApi.getSubscription,
   })
 
+  // Call minutes usage
+  const { data: usage } = useQuery({
+    queryKey: ['usage'],
+    queryFn: paymentsApi.getUsage,
+  })
+
   // Calculate onboarding progress
   const hasAIWorker = (aiWorkers?.length || 0) > 0
   const hasPhoneNumber = (phoneNumbers?.length || 0) > 0
@@ -145,6 +156,21 @@ export default function DashboardPage() {
       color: 'text-red-600 bg-red-100',
     },
   ]
+
+  // Sentiment calculations
+  const sentimentTotal = (stats?.sentiment_positive || 0) + (stats?.sentiment_neutral || 0) + (stats?.sentiment_negative || 0)
+  const satisfactionPct = sentimentTotal > 0
+    ? Math.round((stats!.sentiment_positive / sentimentTotal) * 100)
+    : null
+
+  // Answered %
+  const answeredPct = (stats?.calls_this_month || 0) > 0
+    ? Math.round(((stats!.calls_answered_month) / stats!.calls_this_month) * 100)
+    : 100
+
+  // Average duration formatted
+  const avgDurMin = Math.floor((stats?.avg_duration_seconds || 0) / 60)
+  const avgDurSec = (stats?.avg_duration_seconds || 0) % 60
 
   return (
     <DashboardLayout>
@@ -335,6 +361,197 @@ export default function DashboardPage() {
               </Card>
             </motion.div>
           ))}
+        </div>
+
+        {/* Monthly Performance Metrics */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* Calls this month */}
+          <motion.div variants={item}>
+            <Card className="hover:shadow-soft-lg transition-shadow">
+              <CardBody className="flex items-center gap-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-lg text-blue-600 bg-blue-100">
+                  <TrendingUp className="h-6 w-6" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Gesprekken deze maand</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats?.calls_this_month || 0}</p>
+                </div>
+              </CardBody>
+            </Card>
+          </motion.div>
+
+          {/* Answered % */}
+          <motion.div variants={item}>
+            <Card className="hover:shadow-soft-lg transition-shadow">
+              <CardBody className="flex items-center gap-4">
+                <div className={`flex h-12 w-12 items-center justify-center rounded-lg ${
+                  answeredPct >= 90 ? 'text-green-600 bg-green-100' :
+                  answeredPct >= 70 ? 'text-amber-600 bg-amber-100' :
+                  'text-red-600 bg-red-100'
+                }`}>
+                  <PhoneOff className="h-6 w-6" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Beantwoord</p>
+                  <p className="text-2xl font-bold text-gray-900">{answeredPct}%</p>
+                  <p className="text-xs text-gray-400">{stats?.calls_missed_month || 0} gemist</p>
+                </div>
+              </CardBody>
+            </Card>
+          </motion.div>
+
+          {/* Average duration */}
+          <motion.div variants={item}>
+            <Card className="hover:shadow-soft-lg transition-shadow">
+              <CardBody className="flex items-center gap-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-lg text-purple-600 bg-purple-100">
+                  <Clock className="h-6 w-6" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Gem. gespreksduur</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {avgDurMin > 0 ? `${avgDurMin}m ${avgDurSec}s` : `${avgDurSec}s`}
+                  </p>
+                </div>
+              </CardBody>
+            </Card>
+          </motion.div>
+
+          {/* Appointments made by AI */}
+          <motion.div variants={item}>
+            <Card className="hover:shadow-soft-lg transition-shadow">
+              <CardBody className="flex items-center gap-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-lg text-emerald-600 bg-emerald-100">
+                  <CalendarCheck className="h-6 w-6" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Afspraken door AI</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats?.appointments_made_by_ai_month || 0}</p>
+                  <p className="text-xs text-gray-400">deze maand</p>
+                </div>
+              </CardBody>
+            </Card>
+          </motion.div>
+        </div>
+
+        {/* Satisfaction & Usage Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Tevredenheid */}
+          <motion.div variants={item}>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <SmilePlus className="h-5 w-5 text-amber-500" />
+                  Klanttevredenheid
+                </CardTitle>
+              </CardHeader>
+              <CardBody>
+                {sentimentTotal === 0 ? (
+                  <p className="text-sm text-gray-500 text-center py-4">
+                    Nog geen sentimentdata beschikbaar
+                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="flex items-end gap-3">
+                      <span className={`text-4xl font-bold ${
+                        satisfactionPct! >= 80 ? 'text-green-600' :
+                        satisfactionPct! >= 50 ? 'text-amber-600' :
+                        'text-red-600'
+                      }`}>
+                        {satisfactionPct}%
+                      </span>
+                      <span className="text-gray-500 mb-1">tevreden</span>
+                    </div>
+                    <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden flex">
+                      <div
+                        className="h-full bg-green-500 transition-all"
+                        style={{ width: `${(stats!.sentiment_positive / sentimentTotal) * 100}%` }}
+                      />
+                      <div
+                        className="h-full bg-gray-300 transition-all"
+                        style={{ width: `${(stats!.sentiment_neutral / sentimentTotal) * 100}%` }}
+                      />
+                      <div
+                        className="h-full bg-red-400 transition-all"
+                        style={{ width: `${(stats!.sentiment_negative / sentimentTotal) * 100}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-xs text-gray-500">
+                      <span className="flex items-center gap-1">
+                        <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
+                        Positief ({stats!.sentiment_positive})
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="inline-block w-2 h-2 rounded-full bg-gray-300" />
+                        Neutraal ({stats!.sentiment_neutral})
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="inline-block w-2 h-2 rounded-full bg-red-400" />
+                        Negatief ({stats!.sentiment_negative})
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </CardBody>
+            </Card>
+          </motion.div>
+
+          {/* Belminuten */}
+          <motion.div variants={item}>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Phone className="h-5 w-5 text-primary-500" />
+                  Belminuten deze maand
+                </CardTitle>
+              </CardHeader>
+              <CardBody>
+                {!usage ? (
+                  <p className="text-sm text-gray-500 text-center py-4">
+                    Geen verbruiksdata beschikbaar
+                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="flex items-end justify-between">
+                      <div className="flex items-end gap-1">
+                        <span className="text-4xl font-bold text-gray-900">
+                          {Math.round(usage.minutes_used)}
+                        </span>
+                        <span className="text-gray-500 mb-1">
+                          {usage.is_unlimited ? 'minuten' : `/ ${usage.minutes_limit} min`}
+                        </span>
+                      </div>
+                      {!usage.is_unlimited && (
+                        <span className={`text-sm font-medium ${
+                          usage.percentage >= 90 ? 'text-red-600' : usage.percentage >= 75 ? 'text-amber-600' : 'text-gray-500'
+                        }`}>
+                          {usage.percentage}%
+                        </span>
+                      )}
+                    </div>
+                    {!usage.is_unlimited && (
+                      <div className="w-full bg-gray-100 rounded-full h-3">
+                        <div
+                          className={`h-3 rounded-full transition-all ${
+                            usage.percentage >= 90 ? 'bg-red-500' : usage.percentage >= 75 ? 'bg-amber-500' : 'bg-primary-500'
+                          }`}
+                          style={{ width: `${Math.min(usage.percentage, 100)}%` }}
+                        />
+                      </div>
+                    )}
+                    {!usage.is_unlimited && usage.percentage >= 90 && (
+                      <p className="text-sm text-red-600">
+                        U nadert uw limiet. Na het bereiken worden gesprekken geweigerd.
+                      </p>
+                    )}
+                    <p className="text-xs text-gray-400">
+                      {usage.plan === 'starter' ? 'Starter' : usage.plan === 'business' ? 'Business' : 'Enterprise'} abonnement
+                    </p>
+                  </div>
+                )}
+              </CardBody>
+            </Card>
+          </motion.div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

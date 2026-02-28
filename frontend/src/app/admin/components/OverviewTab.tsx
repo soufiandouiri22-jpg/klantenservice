@@ -400,15 +400,37 @@ export function OverviewTab() {
                     </div>
                   </div>
                   <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-2">
-                      <Phone className="h-4 w-4 text-red-500" />
-                      <span className="text-gray-600">Twilio</span>
-                    </div>
+                    <span className="text-gray-600">Belkosten</span>
                     <div className="text-right">
-                      <span className="font-medium">{formatCurrency(costs?.twilio_cost_month_cents || 0)}</span>
+                      <span className="font-medium">{formatCurrency(costs?.twilio_calls_cost_month_cents || 0)}</span>
                       <p className="text-xs text-gray-400">{costs?.twilio_calls_month || 0} calls · {costs?.twilio_minutes_month || 0} min</p>
                     </div>
                   </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600">Telefoonnummers</span>
+                    <div className="text-right">
+                      <span className="font-medium">{formatCurrency(costs?.twilio_numbers_cost_month_cents || 0)}</span>
+                      <p className="text-xs text-gray-400">{costs?.twilio_numbers_count_month || 0} nummers</p>
+                    </div>
+                  </div>
+                  {(costs?.twilio_media_streams_cost_month_cents || 0) > 0 && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">Media Streams</span>
+                      <span className="font-medium">{formatCurrency(costs?.twilio_media_streams_cost_month_cents || 0)}</span>
+                    </div>
+                  )}
+                  {(costs?.twilio_recordings_cost_month_cents || 0) > 0 && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">Opnames</span>
+                      <span className="font-medium">{formatCurrency(costs?.twilio_recordings_cost_month_cents || 0)}</span>
+                    </div>
+                  )}
+                  {(costs?.twilio_tts_cost_month_cents || 0) > 0 && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">TTS (Polly)</span>
+                      <span className="font-medium">{formatCurrency(costs?.twilio_tts_cost_month_cents || 0)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between border-t pt-2">
                     <span className="text-gray-900 font-medium">Totaal</span>
                     <span className="font-semibold text-primary-600">
@@ -454,7 +476,7 @@ export function OverviewTab() {
                 <p className="text-sm text-gray-500">Gem. kosten/call</p>
                 <p className="text-xl font-semibold">
                   {(costs?.twilio_calls_month || 0) > 0
-                    ? formatCurrency(costs!.total_cost_month_cents / costs!.twilio_calls_month)
+                    ? formatCurrency((costs!.twilio_calls_cost_month_cents + costs!.twilio_media_streams_cost_month_cents + (costs!.elevenlabs_cost_month_cents || 0)) / costs!.twilio_calls_month)
                     : '€0.00'
                   }
                 </p>

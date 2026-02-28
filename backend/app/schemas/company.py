@@ -68,6 +68,14 @@ class CompanyStats(BaseModel):
     total_ai_workers: int
     active_calls: int
     calls_today: int
+    calls_this_month: int
+    calls_answered_month: int
+    calls_missed_month: int
+    avg_duration_seconds: int
     appointments_today: int
     appointments_this_week: int
+    appointments_made_by_ai_month: int
     unresolved_notes: int
+    sentiment_positive: int
+    sentiment_neutral: int
+    sentiment_negative: int
