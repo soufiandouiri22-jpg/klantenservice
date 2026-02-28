@@ -16,8 +16,6 @@ import {
   CreditCard,
   ArrowRight,
   Clock,
-  PhoneOff,
-  SmilePlus,
   CalendarCheck,
   TrendingUp,
 } from 'lucide-react'
@@ -344,18 +342,18 @@ export default function DashboardPage() {
           </motion.div>
         )}
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {statCards.map((stat, index) => (
+        {/* Stats Grid — Today */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {statCards.map((stat) => (
             <motion.div key={stat.label} variants={item}>
               <Card className="hover:shadow-soft-lg transition-shadow">
-                <CardBody className="flex items-center gap-4">
-                  <div className={`flex h-12 w-12 items-center justify-center rounded-lg ${stat.color}`}>
-                    <stat.icon className="h-6 w-6" />
+                <CardBody className="flex items-center gap-3 p-4">
+                  <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg ${stat.color}`}>
+                    <stat.icon className="h-5 w-5" />
                   </div>
-                  <div>
-                    <p className="text-sm text-gray-500">{stat.label}</p>
-                    <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+                  <div className="min-w-0">
+                    <p className="text-xs text-gray-500 truncate">{stat.label}</p>
+                    <p className="text-xl font-bold text-gray-900">{stat.value}</p>
                   </div>
                 </CardBody>
               </Card>
@@ -363,106 +361,70 @@ export default function DashboardPage() {
           ))}
         </div>
 
-        {/* Monthly Performance Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {/* Calls this month */}
+        {/* Monthly Overview — Two rich cards */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Left: Prestaties deze maand */}
           <motion.div variants={item}>
-            <Card className="hover:shadow-soft-lg transition-shadow">
-              <CardBody className="flex items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-lg text-blue-600 bg-blue-100">
-                  <TrendingUp className="h-6 w-6" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Gesprekken deze maand</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats?.calls_this_month || 0}</p>
-                </div>
-              </CardBody>
-            </Card>
-          </motion.div>
-
-          {/* Answered % */}
-          <motion.div variants={item}>
-            <Card className="hover:shadow-soft-lg transition-shadow">
-              <CardBody className="flex items-center gap-4">
-                <div className={`flex h-12 w-12 items-center justify-center rounded-lg ${
-                  answeredPct >= 90 ? 'text-green-600 bg-green-100' :
-                  answeredPct >= 70 ? 'text-amber-600 bg-amber-100' :
-                  'text-red-600 bg-red-100'
-                }`}>
-                  <PhoneOff className="h-6 w-6" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Beantwoord</p>
-                  <p className="text-2xl font-bold text-gray-900">{answeredPct}%</p>
-                  <p className="text-xs text-gray-400">{stats?.calls_missed_month || 0} gemist</p>
-                </div>
-              </CardBody>
-            </Card>
-          </motion.div>
-
-          {/* Average duration */}
-          <motion.div variants={item}>
-            <Card className="hover:shadow-soft-lg transition-shadow">
-              <CardBody className="flex items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-lg text-purple-600 bg-purple-100">
-                  <Clock className="h-6 w-6" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Gem. gespreksduur</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {avgDurMin > 0 ? `${avgDurMin}m ${avgDurSec}s` : `${avgDurSec}s`}
-                  </p>
-                </div>
-              </CardBody>
-            </Card>
-          </motion.div>
-
-          {/* Appointments made by AI */}
-          <motion.div variants={item}>
-            <Card className="hover:shadow-soft-lg transition-shadow">
-              <CardBody className="flex items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-lg text-emerald-600 bg-emerald-100">
-                  <CalendarCheck className="h-6 w-6" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Afspraken door AI</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats?.appointments_made_by_ai_month || 0}</p>
-                  <p className="text-xs text-gray-400">deze maand</p>
-                </div>
-              </CardBody>
-            </Card>
-          </motion.div>
-        </div>
-
-        {/* Satisfaction & Usage Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Tevredenheid */}
-          <motion.div variants={item}>
-            <Card>
+            <Card className="h-full">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <SmilePlus className="h-5 w-5 text-amber-500" />
-                  Klanttevredenheid
-                </CardTitle>
+                <CardTitle>Prestaties deze maand</CardTitle>
               </CardHeader>
-              <CardBody>
-                {sentimentTotal === 0 ? (
-                  <p className="text-sm text-gray-500 text-center py-4">
-                    Nog geen sentimentdata beschikbaar
-                  </p>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="flex items-end gap-3">
-                      <span className={`text-4xl font-bold ${
+              <CardBody className="space-y-5">
+                {/* Key metrics grid */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="rounded-lg bg-blue-50 p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <TrendingUp className="h-4 w-4 text-blue-600" />
+                      <span className="text-xs text-blue-600 font-medium">Gesprekken</span>
+                    </div>
+                    <p className="text-2xl font-bold text-gray-900">{stats?.calls_this_month || 0}</p>
+                  </div>
+                  <div className={`rounded-lg p-4 ${
+                    answeredPct >= 90 ? 'bg-green-50' : answeredPct >= 70 ? 'bg-amber-50' : 'bg-red-50'
+                  }`}>
+                    <div className="flex items-center gap-2 mb-1">
+                      <Phone className={`h-4 w-4 ${
+                        answeredPct >= 90 ? 'text-green-600' : answeredPct >= 70 ? 'text-amber-600' : 'text-red-600'
+                      }`} />
+                      <span className={`text-xs font-medium ${
+                        answeredPct >= 90 ? 'text-green-600' : answeredPct >= 70 ? 'text-amber-600' : 'text-red-600'
+                      }`}>Beantwoord</span>
+                    </div>
+                    <p className="text-2xl font-bold text-gray-900">{answeredPct}%</p>
+                    <p className="text-xs text-gray-500">{stats?.calls_missed_month || 0} gemist</p>
+                  </div>
+                  <div className="rounded-lg bg-purple-50 p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Clock className="h-4 w-4 text-purple-600" />
+                      <span className="text-xs text-purple-600 font-medium">Gem. duur</span>
+                    </div>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {avgDurMin > 0 ? `${avgDurMin}m ${avgDurSec}s` : `${avgDurSec}s`}
+                    </p>
+                  </div>
+                  <div className="rounded-lg bg-emerald-50 p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <CalendarCheck className="h-4 w-4 text-emerald-600" />
+                      <span className="text-xs text-emerald-600 font-medium">AI-afspraken</span>
+                    </div>
+                    <p className="text-2xl font-bold text-gray-900">{stats?.appointments_made_by_ai_month || 0}</p>
+                  </div>
+                </div>
+
+                {/* Sentiment */}
+                {sentimentTotal > 0 ? (
+                  <div className="border-t pt-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-sm font-medium text-gray-700">Klanttevredenheid</span>
+                      <span className={`text-lg font-bold ${
                         satisfactionPct! >= 80 ? 'text-green-600' :
                         satisfactionPct! >= 50 ? 'text-amber-600' :
                         'text-red-600'
                       }`}>
-                        {satisfactionPct}%
+                        {satisfactionPct}% tevreden
                       </span>
-                      <span className="text-gray-500 mb-1">tevreden</span>
                     </div>
-                    <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden flex">
+                    <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden flex">
                       <div
                         className="h-full bg-green-500 transition-all"
                         style={{ width: `${(stats!.sentiment_positive / sentimentTotal) * 100}%` }}
@@ -476,7 +438,7 @@ export default function DashboardPage() {
                         style={{ width: `${(stats!.sentiment_negative / sentimentTotal) * 100}%` }}
                       />
                     </div>
-                    <div className="flex justify-between text-xs text-gray-500">
+                    <div className="flex justify-between text-xs text-gray-500 mt-2">
                       <span className="flex items-center gap-1">
                         <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
                         Positief ({stats!.sentiment_positive})
@@ -491,19 +453,22 @@ export default function DashboardPage() {
                       </span>
                     </div>
                   </div>
+                ) : (
+                  <div className="border-t pt-4">
+                    <p className="text-sm text-gray-400 text-center">
+                      Klanttevredenheid wordt bijgehouden na nieuwe gesprekken
+                    </p>
+                  </div>
                 )}
               </CardBody>
             </Card>
           </motion.div>
 
-          {/* Belminuten */}
+          {/* Right: Belminuten */}
           <motion.div variants={item}>
-            <Card>
+            <Card className="h-full">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Phone className="h-5 w-5 text-primary-500" />
-                  Belminuten deze maand
-                </CardTitle>
+                <CardTitle>Belminuten</CardTitle>
               </CardHeader>
               <CardBody>
                 {!usage ? (
@@ -511,42 +476,77 @@ export default function DashboardPage() {
                     Geen verbruiksdata beschikbaar
                   </p>
                 ) : (
-                  <div className="space-y-4">
-                    <div className="flex items-end justify-between">
-                      <div className="flex items-end gap-1">
-                        <span className="text-4xl font-bold text-gray-900">
-                          {Math.round(usage.minutes_used)}
+                  <div className="space-y-5">
+                    <div>
+                      <div className="flex items-end justify-between mb-3">
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="text-4xl font-bold text-gray-900">
+                            {Math.round(usage.minutes_used)}
+                          </span>
+                          <span className="text-gray-500">
+                            {usage.is_unlimited ? 'minuten gebruikt' : `/ ${usage.minutes_limit} min`}
+                          </span>
+                        </div>
+                        {!usage.is_unlimited && (
+                          <span className={`text-sm font-semibold ${
+                            usage.percentage >= 90 ? 'text-red-600' : usage.percentage >= 75 ? 'text-amber-600' : 'text-primary-600'
+                          }`}>
+                            {usage.percentage}%
+                          </span>
+                        )}
+                      </div>
+                      {!usage.is_unlimited && (
+                        <div className="w-full bg-gray-100 rounded-full h-3">
+                          <div
+                            className={`h-3 rounded-full transition-all ${
+                              usage.percentage >= 90 ? 'bg-red-500' : usage.percentage >= 75 ? 'bg-amber-500' : 'bg-primary-500'
+                            }`}
+                            style={{ width: `${Math.min(usage.percentage, 100)}%` }}
+                          />
+                        </div>
+                      )}
+                      {!usage.is_unlimited && usage.percentage >= 90 && (
+                        <p className="text-sm text-red-600 mt-2">
+                          U nadert uw limiet. Na het bereiken worden gesprekken geweigerd.
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="border-t pt-4 space-y-3">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Abonnement</span>
+                        <span className="font-medium text-gray-900">
+                          {usage.plan === 'starter' ? 'Starter' : usage.plan === 'business' ? 'Business' : 'Enterprise'}
                         </span>
-                        <span className="text-gray-500 mb-1">
-                          {usage.is_unlimited ? 'minuten' : `/ ${usage.minutes_limit} min`}
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Gesprekken deze maand</span>
+                        <span className="font-medium text-gray-900">{stats?.calls_this_month || 0}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Gem. per gesprek</span>
+                        <span className="font-medium text-gray-900">
+                          {(stats?.calls_this_month || 0) > 0
+                            ? `${Math.round(usage.minutes_used / stats!.calls_this_month * 10) / 10} min`
+                            : '–'}
                         </span>
                       </div>
                       {!usage.is_unlimited && (
-                        <span className={`text-sm font-medium ${
-                          usage.percentage >= 90 ? 'text-red-600' : usage.percentage >= 75 ? 'text-amber-600' : 'text-gray-500'
-                        }`}>
-                          {usage.percentage}%
-                        </span>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-500">Resterend</span>
+                          <span className="font-medium text-gray-900">
+                            {Math.max(0, usage.minutes_limit - Math.round(usage.minutes_used))} min
+                          </span>
+                        </div>
                       )}
                     </div>
-                    {!usage.is_unlimited && (
-                      <div className="w-full bg-gray-100 rounded-full h-3">
-                        <div
-                          className={`h-3 rounded-full transition-all ${
-                            usage.percentage >= 90 ? 'bg-red-500' : usage.percentage >= 75 ? 'bg-amber-500' : 'bg-primary-500'
-                          }`}
-                          style={{ width: `${Math.min(usage.percentage, 100)}%` }}
-                        />
-                      </div>
-                    )}
-                    {!usage.is_unlimited && usage.percentage >= 90 && (
-                      <p className="text-sm text-red-600">
-                        U nadert uw limiet. Na het bereiken worden gesprekken geweigerd.
-                      </p>
-                    )}
-                    <p className="text-xs text-gray-400">
-                      {usage.plan === 'starter' ? 'Starter' : usage.plan === 'business' ? 'Business' : 'Enterprise'} abonnement
-                    </p>
+
+                    <Link
+                      href="/dashboard/settings?tab=subscription"
+                      className="block text-center text-sm text-primary-600 hover:text-primary-700 pt-2 border-t"
+                    >
+                      Abonnement beheren
+                    </Link>
                   </div>
                 )}
               </CardBody>
