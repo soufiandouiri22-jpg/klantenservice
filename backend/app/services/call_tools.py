@@ -404,6 +404,21 @@ def tool_create_note(
     db.refresh(note)
     
     logger.info(f"Created note {note.id} for company {company_id}")
+
+    if action_required:
+        try:
+            from app.services.notification_service import create_notification
+            from app.models.notification import NotificationType
+            create_notification(
+                db=db,
+                company_id=company_id,
+                type=NotificationType.NOTE_ACTION,
+                title=f"Actie vereist: {title}",
+                message=content[:120] if content else None,
+                url="/dashboard/notes",
+            )
+        except Exception:
+            logger.warning("Failed to create note-action notification", exc_info=True)
     
     return {
         "ok": True,
@@ -486,6 +501,20 @@ def tool_flag_unknown(
         db.commit()
         
         logger.info(f"Created new detected question: {question[:50]}...")
+
+        try:
+            from app.services.notification_service import create_notification
+            from app.models.notification import NotificationType
+            create_notification(
+                db=db,
+                company_id=company_id,
+                type=NotificationType.DETECTED_QUESTION,
+                title="Nieuwe onbeantwoorde vraag",
+                message=question[:120],
+                url="/dashboard/training",
+            )
+        except Exception:
+            logger.warning("Failed to create detected-question notification", exc_info=True)
         
         return {
             "ok": True,

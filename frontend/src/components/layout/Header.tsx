@@ -96,6 +96,8 @@ export function Header({ title, description, actions, showActionsOnMobile = fals
     queryKey: ['notifications'],
     queryFn: () => notificationsApi.list(),
     refetchInterval: 30_000,
+    retry: 1,
+    retryDelay: 10_000,
   })
 
   const markReadMutation = useMutation({

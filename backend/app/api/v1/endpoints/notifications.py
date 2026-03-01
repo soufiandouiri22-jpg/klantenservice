@@ -14,6 +14,7 @@ from app.models.user import User
 from app.models.company import Company
 from app.models.notification import Notification
 from app.api.deps import get_current_user, get_current_company
+from app.services.notification_service import cleanup_old_notifications
 
 router = APIRouter()
 
@@ -47,6 +48,8 @@ async def list_notifications(
     Get recent notifications for the current company.
     Returns up to `limit` notifications ordered by newest first.
     """
+    cleanup_old_notifications(db, company_id=str(company.id))
+
     notifications = db.query(Notification).filter(
         Notification.company_id == company.id,
     ).order_by(desc(Notification.created_at)).limit(limit).all()

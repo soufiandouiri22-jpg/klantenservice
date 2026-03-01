@@ -446,6 +446,23 @@ async def twilio_status_webhook(
         
         db.commit()
 
+        # Notification: missed / failed call
+        if call_status in ("no-answer", "busy", "failed"):
+            try:
+                from app.services.notification_service import create_notification
+                from app.models.notification import NotificationType
+                caller = call_log.caller_number or "Onbekend nummer"
+                create_notification(
+                    db=db,
+                    company_id=str(call_log.company_id),
+                    type=NotificationType.CALL_ERROR,
+                    title=f"Gemist gesprek van {caller}",
+                    message=f"Status: {call_status}",
+                    url="/dashboard/calls",
+                )
+            except Exception:
+                logger.warning("Failed to create missed-call notification", exc_info=True)
+
         # Post-call sentiment analysis (non-blocking)
         if call_status == "completed":
             try:
@@ -463,6 +480,22 @@ async def twilio_status_webhook(
                         call_log.sentiment = sentiment
                         db.commit()
                         logger.info(f"[SENTIMENT] call_sid={call_sid} → {sentiment}")
+
+                        if sentiment == "negative":
+                            try:
+                                from app.services.notification_service import create_notification
+                                from app.models.notification import NotificationType
+                                caller = call_log.caller_number or "Onbekend nummer"
+                                create_notification(
+                                    db=db,
+                                    company_id=str(call_log.company_id),
+                                    type=NotificationType.CALL_ERROR,
+                                    title="Ontevreden klant",
+                                    message=f"Gesprek met {caller} is als negatief beoordeeld.",
+                                    url=f"/dashboard/calls",
+                                )
+                            except Exception:
+                                logger.warning("Failed to create negative-sentiment notification", exc_info=True)
             except Exception as sent_err:
                 logger.warning(f"Sentiment analysis failed (non-blocking): {sent_err}")
 
