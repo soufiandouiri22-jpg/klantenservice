@@ -65,6 +65,7 @@ function SettingsForm({
   isSaving: boolean
   canEdit?: boolean
 }) {
+  const queryClient = useQueryClient()
   const durationRef = useRef<HTMLInputElement>(null)
   const bufferRef = useRef<HTMLInputElement>(null)
   const noticeRef = useRef<HTMLInputElement>(null)
@@ -117,6 +118,7 @@ function SettingsForm({
     try {
       await calendarsApi.disconnectZoom(calendar.id)
       toast.success('Zoom ontkoppeld')
+      queryClient.invalidateQueries({ queryKey: ['calendars'] })
       onCancel()
     } catch {
       toast.error('Fout bij ontkoppelen Zoom')
@@ -139,6 +141,7 @@ function SettingsForm({
     try {
       await calendarsApi.disconnectTeams(calendar.id)
       toast.success('Microsoft Teams ontkoppeld')
+      queryClient.invalidateQueries({ queryKey: ['calendars'] })
       onCancel()
     } catch {
       toast.error('Fout bij ontkoppelen Microsoft Teams')
@@ -161,6 +164,7 @@ function SettingsForm({
     try {
       await calendarsApi.disconnectGmeet(calendar.id)
       toast.success('Google Meet ontkoppeld')
+      queryClient.invalidateQueries({ queryKey: ['calendars'] })
       onCancel()
     } catch {
       toast.error('Fout bij ontkoppelen Google Meet')
@@ -252,7 +256,7 @@ function SettingsForm({
                     onClick={() => onSave({ meeting_link_provider: 'google_meet' })}
                   >
                     <Video className="h-4 w-4 mr-1" />
-                    Activeren
+                    Koppel Meet
                   </Button>
                 )
               )
