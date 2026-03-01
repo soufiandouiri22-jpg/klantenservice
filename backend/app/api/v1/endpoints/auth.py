@@ -196,6 +196,19 @@ async def register(
         first_name=user.first_name,
         code=verification_code,
     )
+
+    # Add to Mailchimp if marketing consent given
+    if marketing_consent:
+        try:
+            from app.services.mailchimp_service import add_subscriber
+            await add_subscriber(
+                email=user.email,
+                first_name=user.first_name,
+                last_name=user.last_name,
+                company_name=company.name,
+            )
+        except Exception:
+            pass  # Non-blocking
     
     # Return email only (no tokens - user must verify first)
     return RegisterResponse(

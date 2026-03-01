@@ -97,6 +97,10 @@ class Settings(BaseSettings):
     PLAUSIBLE_API_KEY: str = ""
     PLAUSIBLE_SITE_ID: str = "klantenservice.ai"
     
+    # Mailchimp
+    MAILCHIMP_API_KEY: str = ""
+    MAILCHIMP_AUDIENCE_ID: str = ""
+    
     # Frontend URL (for invite links)
     FRONTEND_URL: str = "http://localhost:3000"
     
