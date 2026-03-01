@@ -53,7 +53,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <>
       {/* Logo */}
-      <div className="flex h-16 items-center justify-between border-b border-gray-100 px-4">
+      <div className="flex h-16 flex-shrink-0 items-center justify-between border-b border-gray-100 px-4">
         <Link href="/dashboard" className="flex items-center gap-2" onClick={onNavigate}>
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-600">
             <Headphones className="h-5 w-5 text-white" />
@@ -73,7 +73,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
       {/* Company name */}
       {showLabel && company && (
-        <div className="border-b border-gray-100 px-4 py-3">
+        <div className="flex-shrink-0 border-b border-gray-100 px-4 py-3">
           <p className="text-xs font-medium text-gray-500">Bedrijf</p>
           <p className="truncate text-sm font-medium text-gray-900">{company.name}</p>
         </div>
@@ -108,7 +108,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       </nav>
 
       {/* Bottom navigation */}
-      <div className="border-t border-gray-100 p-4">
+      <div className="flex-shrink-0 border-t border-gray-100 p-4">
         <ul className="space-y-1">
           {bottomNavigation.map((item) => {
             const isActive = pathname === item.href
