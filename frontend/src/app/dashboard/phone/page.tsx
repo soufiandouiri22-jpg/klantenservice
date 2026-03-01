@@ -109,6 +109,7 @@ export default function PhonePage() {
     mutationFn: phoneNumbersApi.delete,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['phone-numbers'] })
+      queryClient.invalidateQueries({ queryKey: ['ai-workers'] })
       toast.success('Telefoon losgekoppeld')
       closeSettings()
     },

@@ -78,6 +78,7 @@ export default function KnowledgePage() {
     mutationFn: websitesApi.delete,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['websites'] })
+      queryClient.invalidateQueries({ queryKey: ['ai-workers'] })
       toast.success('Website verwijderd')
     },
   })
