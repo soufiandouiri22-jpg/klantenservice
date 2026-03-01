@@ -467,6 +467,7 @@ function CalendarPageInner() {
     mutationFn: calendarsApi.delete,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['calendars'] })
+      queryClient.invalidateQueries({ queryKey: ['ai-workers'] })
       toast.success('Agenda ontkoppeld')
       setSelectedCalendar(null)
     },
