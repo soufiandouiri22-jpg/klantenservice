@@ -5,7 +5,7 @@ Endpoints for platform administrators to manage system-wide settings.
 Includes: System Prompts, Global Config, Metrics, Customers, Logs
 """
 import asyncio
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import List, Optional, Any
 from uuid import UUID
 import logging
@@ -666,12 +666,28 @@ async def get_analytics(
     headers = {"Authorization": f"Bearer {settings.PLAUSIBLE_API_KEY}"}
     base = "https://plausible.io/api/v1/stats"
 
+    today = date.today()
+    period_map = {
+        "7d": today - timedelta(days=6),
+        "30d": today - timedelta(days=29),
+        "6mo": today - timedelta(days=180),
+        "12mo": today - timedelta(days=365),
+    }
+
+    if period in period_map:
+        plausible_params = {
+            "site_id": site_id,
+            "period": "custom",
+            "date": f"{period_map[period].isoformat()},{today.isoformat()}",
+        }
+    else:
+        plausible_params = {"site_id": site_id, "period": period}
+
     async with httpx.AsyncClient(timeout=15.0) as client:
         aggregate_req = client.get(
             f"{base}/aggregate",
             params={
-                "site_id": site_id,
-                "period": period,
+                **plausible_params,
                 "metrics": "visitors,pageviews,bounce_rate,visit_duration,visits",
             },
             headers=headers,
@@ -679,8 +695,7 @@ async def get_analytics(
         timeseries_req = client.get(
             f"{base}/timeseries",
             params={
-                "site_id": site_id,
-                "period": period,
+                **plausible_params,
                 "metrics": "visitors,pageviews",
             },
             headers=headers,
@@ -688,8 +703,7 @@ async def get_analytics(
         pages_req = client.get(
             f"{base}/breakdown",
             params={
-                "site_id": site_id,
-                "period": period,
+                **plausible_params,
                 "property": "event:page",
                 "metrics": "visitors,pageviews",
                 "limit": 10,
@@ -699,8 +713,7 @@ async def get_analytics(
         sources_req = client.get(
             f"{base}/breakdown",
             params={
-                "site_id": site_id,
-                "period": period,
+                **plausible_params,
                 "property": "visit:source",
                 "metrics": "visitors",
                 "limit": 10,
