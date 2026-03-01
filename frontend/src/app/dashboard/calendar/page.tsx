@@ -232,7 +232,7 @@ function SettingsForm({
                 <p className="text-xs text-gray-500">
                   {isGoogleCalendar
                     ? (calendar.last_sync_at
-                      ? (calendar.meeting_link_provider === 'google_meet' ? 'Actief via Google Calendar' : 'Beschikbaar via Google Calendar')
+                      ? (calendar.meeting_link_provider === 'google_meet' ? 'Gekoppeld via Google Calendar' : 'Niet gekoppeld')
                       : 'Koppel eerst Google Calendar')
                     : (calendar.gmeet_connected ? 'Google-account gekoppeld' : 'Niet gekoppeld')}
                 </p>
