@@ -227,17 +227,34 @@ function SettingsForm({
                 <p className="text-sm font-medium text-gray-900">Google Meet</p>
                 <p className="text-xs text-gray-500">
                   {isGoogleCalendar
-                    ? (calendar.last_sync_at ? 'Gekoppeld via Google Calendar' : 'Koppel eerst Google Calendar')
+                    ? (calendar.last_sync_at
+                      ? (calendar.meeting_link_provider === 'google_meet' ? 'Actief via Google Calendar' : 'Beschikbaar via Google Calendar')
+                      : 'Koppel eerst Google Calendar')
                     : (calendar.gmeet_connected ? 'Google-account gekoppeld' : 'Niet gekoppeld')}
                 </p>
               </div>
             </div>
             {isGoogleCalendar ? (
               calendar.last_sync_at && (
-                <Badge variant="success">
-                  <Check className="h-3 w-3 mr-1" />
-                  Gereed
-                </Badge>
+                calendar.meeting_link_provider === 'google_meet' ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onSave({ meeting_link_provider: 'none' })}
+                  >
+                    <Unlink className="h-4 w-4 text-red-500 mr-1" />
+                    Ontkoppelen
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onSave({ meeting_link_provider: 'google_meet' })}
+                  >
+                    <Video className="h-4 w-4 mr-1" />
+                    Activeren
+                  </Button>
+                )
               )
             ) : calendar.gmeet_connected ? (
               <Button
