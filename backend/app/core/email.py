@@ -401,7 +401,7 @@ def send_contact_form_email(
 
         params = {
             "from": f"klantenservice.ai <{settings.RESEND_FROM_EMAIL}>",
-            "to": ["no-reply@klantenservice.ai"],
+            "to": ["support@klantenservice.ai"],
             "reply_to": sender_email,
             "subject": f"[Contact] {subject} - {sender_name}",
             "html": html_content,

@@ -837,17 +837,20 @@ export const adminApi = {
     const response = await api.get('/admin/metrics/overview')
     return response.data
   },
-  
+
   getLatencyMetrics: async (hours: number = 24) => {
     const response = await api.get('/admin/metrics/latency', { params: { hours } })
     return response.data
   },
-  
-  getCostMetrics: async () => {
-    const response = await api.get('/admin/metrics/costs')
+
+  getCostMetrics: async (startDate?: string, endDate?: string) => {
+    const params: Record<string, string> = {}
+    if (startDate) params.start_date = startDate
+    if (endDate) params.end_date = endDate
+    const response = await api.get('/admin/metrics/costs', { params })
     return response.data
   },
-  
+
   getBusinessMetrics: async () => {
     const response = await api.get('/admin/metrics/business')
     return response.data

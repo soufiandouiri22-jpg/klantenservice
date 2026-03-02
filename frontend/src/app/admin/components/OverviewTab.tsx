@@ -61,26 +61,26 @@ function MetricCard({ title, value, subtitle, icon, status = 'neutral' }: Metric
 export function OverviewTab() {
   const { data: overview, isLoading: overviewLoading, refetch: refetchOverview } = useQuery({
     queryKey: ['admin-metrics-overview'],
-    queryFn: adminApi.getMetricsOverview,
-    refetchInterval: 10000, // Refresh every 10 seconds
+    queryFn: () => adminApi.getMetricsOverview(),
+    refetchInterval: 10000,
   })
 
   const { data: latency, isLoading: latencyLoading, refetch: refetchLatency } = useQuery({
     queryKey: ['admin-metrics-latency'],
     queryFn: () => adminApi.getLatencyMetrics(24),
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: 30000,
   })
 
   const { data: costs, isLoading: costsLoading, refetch: refetchCosts } = useQuery({
     queryKey: ['admin-metrics-costs'],
-    queryFn: adminApi.getCostMetrics,
-    refetchInterval: 60000, // Refresh every minute
+    queryFn: () => adminApi.getCostMetrics(),
+    refetchInterval: 60000,
   })
 
   const { data: business, isLoading: businessLoading, refetch: refetchBusiness } = useQuery({
     queryKey: ['admin-metrics-business'],
-    queryFn: adminApi.getBusinessMetrics,
-    refetchInterval: 60000, // Refresh every minute
+    queryFn: () => adminApi.getBusinessMetrics(),
+    refetchInterval: 60000,
   })
 
   const refreshAll = () => {

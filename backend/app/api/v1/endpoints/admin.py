@@ -605,42 +605,62 @@ ELEVENLABS_COST_PER_1K_CHARS_CENTS = 30
 
 @router.get("/metrics/costs", response_model=CostMetrics)
 async def get_cost_metrics(
+    start_date: str | None = None,
+    end_date: str | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_superadmin),
 ):
-    """Get real API cost metrics from ElevenLabs and Twilio."""
+    """Get real API cost metrics from ElevenLabs and Twilio.
+    
+    Accepts optional start_date / end_date (YYYY-MM-DD).
+    Defaults: today for the "today" column, first-of-month for the "month" column.
+    When both are supplied the "today" fields reflect the custom range and
+    "month" fields are unchanged (still calendar month).
+    """
 
     now = datetime.utcnow()
     today_str = now.strftime("%Y-%m-%d")
     month_start_str = now.replace(day=1).strftime("%Y-%m-%d")
 
-    today_start_ms = int(now.replace(hour=0, minute=0, second=0, microsecond=0).timestamp() * 1000)
+    if start_date and end_date:
+        range_start_str = start_date
+        range_end_str = end_date
+        range_start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+        range_end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+    else:
+        range_start_dt = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        range_end_dt = now
+        range_start_str = today_str
+        range_end_str = today_str
+
+    range_start_ms = int(range_start_dt.timestamp() * 1000)
+    range_end_ms = int(range_end_dt.timestamp() * 1000)
     month_start_ms = int(now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).timestamp() * 1000)
     now_ms = int(now.timestamp() * 1000)
 
-    el_today, el_month, tw_today, tw_month = await asyncio.gather(
-        _fetch_elevenlabs_usage(today_start_ms, now_ms),
+    el_range, el_month, tw_range, tw_month = await asyncio.gather(
+        _fetch_elevenlabs_usage(range_start_ms, range_end_ms),
         _fetch_elevenlabs_usage(month_start_ms, now_ms),
-        _fetch_twilio_usage(today_str, today_str),
+        _fetch_twilio_usage(range_start_str, range_end_str),
         _fetch_twilio_usage(month_start_str, today_str),
     )
 
-    el_cost_today = int(el_today["characters"] / 1000 * ELEVENLABS_COST_PER_1K_CHARS_CENTS)
+    el_cost_range = int(el_range["characters"] / 1000 * ELEVENLABS_COST_PER_1K_CHARS_CENTS)
     el_cost_month = int(el_month["characters"] / 1000 * ELEVENLABS_COST_PER_1K_CHARS_CENTS)
 
-    total_today = el_cost_today + tw_today["cost_cents"]
+    total_range = el_cost_range + tw_range["cost_cents"]
     total_month = el_cost_month + tw_month["cost_cents"]
 
     return CostMetrics(
-        elevenlabs_characters_today=el_today["characters"],
+        elevenlabs_characters_today=el_range["characters"],
         elevenlabs_characters_month=el_month["characters"],
-        elevenlabs_cost_today_cents=el_cost_today,
+        elevenlabs_cost_today_cents=el_cost_range,
         elevenlabs_cost_month_cents=el_cost_month,
-        twilio_cost_today_cents=tw_today["cost_cents"],
+        twilio_cost_today_cents=tw_range["cost_cents"],
         twilio_cost_month_cents=tw_month["cost_cents"],
-        twilio_calls_today=tw_today["calls_inbound"],
+        twilio_calls_today=tw_range["calls_inbound"],
         twilio_calls_month=tw_month["calls_inbound"],
-        twilio_minutes_today=round(tw_today["calls_inbound_minutes"], 1),
+        twilio_minutes_today=round(tw_range["calls_inbound_minutes"], 1),
         twilio_minutes_month=round(tw_month["calls_inbound_minutes"], 1),
         twilio_calls_cost_month_cents=tw_month["calls_cost_cents"],
         twilio_numbers_cost_month_cents=tw_month["numbers_cost_cents"],
@@ -648,7 +668,7 @@ async def get_cost_metrics(
         twilio_recordings_cost_month_cents=tw_month["recordings_cost_cents"],
         twilio_media_streams_cost_month_cents=tw_month["media_streams_cost_cents"],
         twilio_tts_cost_month_cents=tw_month["tts_cost_cents"],
-        total_cost_today_cents=total_today,
+        total_cost_today_cents=total_range,
         total_cost_month_cents=total_month,
     )
 
@@ -839,7 +859,7 @@ async def get_business_metrics(
         else:
             mrr_cents += MONTHLY_PRICES.get(plan_key, 0)
     
-    # New customers this month (single query)
+    # New customers in period (single query)
     new_customers_this_month = db.query(func.count(Company.id)).filter(
         Company.created_at >= month_start
     ).scalar() or 0
