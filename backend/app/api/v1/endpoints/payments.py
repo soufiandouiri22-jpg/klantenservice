@@ -138,6 +138,7 @@ async def create_checkout_session(
                 }
             },
             allow_promotion_codes=True,
+            automatic_tax={"enabled": True},
             tax_id_collection={"enabled": True},
         )
         
