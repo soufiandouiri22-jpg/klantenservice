@@ -8,8 +8,7 @@ import {
   Shield, 
   Mic,
   FileText,
-  BarChart3,
-  Wallet
+  BarChart3
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { Header } from '@/components/layout/Header'
@@ -22,11 +21,9 @@ import { CustomersTab } from './components/CustomersTab'
 import { PoliciesTab } from './components/PoliciesTab'
 import { VoiceTab } from './components/VoiceTab'
 import { LogsTab } from './components/LogsTab'
-import { FinanceTab } from './components/FinanceTab'
 
 const tabs = [
   { id: 'overview', name: 'Overzicht', icon: LayoutDashboard },
-  { id: 'finance', name: 'Finance', icon: Wallet },
   { id: 'analytics', name: 'Analytics', icon: BarChart3 },
   { id: 'customers', name: 'Klanten', icon: Users },
   { id: 'policies', name: 'Policies', icon: Shield },
@@ -64,8 +61,6 @@ export default function AdminPage() {
     switch (activeTab) {
       case 'overview':
         return <OverviewTab />
-      case 'finance':
-        return <FinanceTab />
       case 'analytics':
         return <AnalyticsTab />
       case 'customers':
