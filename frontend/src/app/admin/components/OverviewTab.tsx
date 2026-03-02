@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { 
   Phone, 
@@ -16,26 +16,16 @@ import {
   UserCheck,
   UserX,
   CreditCard,
-  Calendar,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react'
 import {
   format,
-  subDays,
   startOfMonth,
   endOfMonth,
   subMonths,
-  startOfDay,
-  endOfDay,
-  eachDayOfInterval,
-  isSameMonth,
-  isSameDay,
-  isAfter,
-  isBefore,
   addMonths,
-  startOfWeek,
-  endOfWeek,
+  isSameMonth,
 } from 'date-fns'
 import { nl } from 'date-fns/locale'
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card'
@@ -44,187 +34,28 @@ import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
 import { adminApi } from '@/lib/api'
 
-type Preset = { label: string; getRange: () => [Date, Date] }
-
-const COST_PRESETS: Preset[] = [
-  { label: 'Vandaag', getRange: () => [startOfDay(new Date()), endOfDay(new Date())] },
-  { label: '7 dagen', getRange: () => [startOfDay(subDays(new Date(), 6)), endOfDay(new Date())] },
-  { label: '30 dagen', getRange: () => [startOfDay(subDays(new Date(), 29)), endOfDay(new Date())] },
-  { label: 'Deze maand', getRange: () => [startOfMonth(new Date()), endOfDay(new Date())] },
-  { label: 'Vorige maand', getRange: () => [startOfMonth(subMonths(new Date(), 1)), endOfMonth(subMonths(new Date(), 1))] },
-  { label: '3 maanden', getRange: () => [startOfDay(subDays(new Date(), 89)), endOfDay(new Date())] },
-]
-
-function MiniCalendar({
-  month, rangeStart, rangeEnd, hoverDate, onSelect, onHover, onMonthChange, showNav,
-}: {
-  month: Date; rangeStart: Date | null; rangeEnd: Date | null; hoverDate: Date | null
-  onSelect: (d: Date) => void; onHover: (d: Date | null) => void
-  onMonthChange: (d: Date) => void; showNav: 'left' | 'right'
-}) {
-  const weekStart = startOfWeek(startOfMonth(month), { locale: nl })
-  const weekEnd = endOfWeek(endOfMonth(month), { locale: nl })
-  const days = eachDayOfInterval({ start: weekStart, end: weekEnd })
-
-  const isInRange = (day: Date) => {
-    if (!rangeStart) return false
-    const end = rangeEnd || hoverDate
-    if (!end) return false
-    const [a, b] = isAfter(end, rangeStart) ? [rangeStart, end] : [end, rangeStart]
-    return (isAfter(day, a) || isSameDay(day, a)) && (isBefore(day, b) || isSameDay(day, b))
-  }
-
+function MonthPicker({ month, onChange }: { month: Date; onChange: (m: Date) => void }) {
+  const isCurrentMonth = isSameMonth(month, new Date())
   return (
-    <div className="w-[260px]">
-      <div className="flex items-center justify-between mb-2">
-        {showNav === 'left' ? (
-          <button onClick={() => onMonthChange(subMonths(month, 1))} className="p-1 hover:bg-gray-100 rounded">
-            <ChevronLeft className="h-4 w-4 text-gray-600" />
-          </button>
-        ) : <div className="w-6" />}
-        <span className="text-sm font-medium text-gray-900">{format(month, 'MMMM yyyy', { locale: nl })}</span>
-        {showNav === 'right' ? (
-          <button onClick={() => onMonthChange(addMonths(month, 1))} className="p-1 hover:bg-gray-100 rounded">
-            <ChevronRight className="h-4 w-4 text-gray-600" />
-          </button>
-        ) : <div className="w-6" />}
-      </div>
-      <div className="grid grid-cols-7 gap-0">
-        {['Ma','Di','Wo','Do','Vr','Za','Zo'].map(d => (
-          <div key={d} className="text-center text-xs font-medium text-gray-400 py-1">{d}</div>
-        ))}
-        {days.map((day, i) => {
-          const inMonth = isSameMonth(day, month)
-          const inRange = isInRange(day)
-          const start = rangeStart && isSameDay(day, rangeStart)
-          const end = (rangeEnd || hoverDate) && isSameDay(day, rangeEnd || hoverDate!)
-          const today = isSameDay(day, new Date())
-          return (
-            <button
-              key={i}
-              onClick={() => inMonth && onSelect(day)}
-              onMouseEnter={() => inMonth && onHover(day)}
-              onMouseLeave={() => onHover(null)}
-              disabled={!inMonth}
-              className={`
-                h-8 text-xs transition-colors
-                ${!inMonth ? 'text-gray-300 cursor-default' : 'cursor-pointer hover:bg-gray-50'}
-                ${inRange && inMonth ? 'bg-primary-50' : ''}
-                ${start ? 'bg-primary-500 text-white rounded-l-full hover:bg-primary-600' : ''}
-                ${end && !start ? 'bg-primary-500 text-white rounded-r-full hover:bg-primary-600' : ''}
-                ${today && !start && !end ? 'font-bold text-primary-600' : ''}
-                ${!start && !end && inMonth ? 'text-gray-700' : ''}
-              `}
-            >
-              {format(day, 'd')}
-            </button>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
-function CostDatePicker({
-  startDate, endDate, activePreset, onPreset, onCustomRange,
-}: {
-  startDate: Date; endDate: Date; activePreset: string
-  onPreset: (p: Preset) => void; onCustomRange: (s: Date, e: Date) => void
-}) {
-  const [open, setOpen] = useState(false)
-  const [selecting, setSelecting] = useState<'start' | 'end' | null>(null)
-  const [tempStart, setTempStart] = useState<Date | null>(null)
-  const [hoverDate, setHoverDate] = useState<Date | null>(null)
-  const [leftMonth, setLeftMonth] = useState(startOfMonth(subMonths(new Date(), 1)))
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false); setSelecting(null); setTempStart(null)
-      }
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [])
-
-  const rightMonth = addMonths(leftMonth, 1)
-  const displayStart = tempStart || startDate
-  const displayEnd = selecting === 'end' ? null : endDate
-
-  const handleSelect = (day: Date) => {
-    if (!selecting || selecting === 'start') {
-      setTempStart(day); setSelecting('end')
-    } else {
-      const [a, b] = isAfter(day, tempStart!) ? [tempStart!, day] : [day, tempStart!]
-      onCustomRange(startOfDay(a), endOfDay(b))
-      setOpen(false); setSelecting(null); setTempStart(null)
-    }
-  }
-
-  return (
-    <div className="flex items-center gap-2 flex-wrap">
-      <div className="flex bg-gray-100 rounded-lg p-0.5 gap-0.5">
-        {COST_PRESETS.map((p) => (
-          <button
-            key={p.label}
-            onClick={() => onPreset(p)}
-            className={`px-2.5 py-1 text-xs rounded-md transition-colors ${
-              activePreset === p.label
-                ? 'bg-white text-gray-900 shadow-sm font-medium'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            {p.label}
-          </button>
-        ))}
-      </div>
-      <div className="relative" ref={ref}>
-        <button
-          onClick={() => { setOpen(!open); if (!open) setSelecting('start') }}
-          className={`flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-lg border transition-colors ${
-            open ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-300 text-gray-600 hover:border-gray-400'
-          }`}
-        >
-          <Calendar className="h-3.5 w-3.5" />
-          {format(startDate, 'd MMM', { locale: nl })} – {format(endDate, 'd MMM yyyy', { locale: nl })}
-        </button>
-        {open && (
-          <div className="absolute right-0 top-full mt-2 bg-white rounded-xl shadow-xl border border-gray-200 p-4 z-50">
-            <div className="flex gap-4">
-              <div className="border-r border-gray-100 pr-4 space-y-1">
-                <p className="text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Snel kiezen</p>
-                {COST_PRESETS.map((p) => (
-                  <button
-                    key={p.label}
-                    onClick={() => {
-                      onPreset(p)
-                      setLeftMonth(startOfMonth(subMonths(new Date(), 1)))
-                      setOpen(false); setSelecting(null); setTempStart(null)
-                    }}
-                    className="block w-full text-left text-sm px-3 py-1.5 rounded-md hover:bg-gray-100 text-gray-700"
-                  >
-                    {p.label}
-                  </button>
-                ))}
-              </div>
-              <MiniCalendar
-                month={leftMonth} rangeStart={displayStart} rangeEnd={displayEnd}
-                hoverDate={hoverDate} onSelect={handleSelect} onHover={setHoverDate}
-                onMonthChange={setLeftMonth} showNav="left"
-              />
-              <MiniCalendar
-                month={rightMonth} rangeStart={displayStart} rangeEnd={displayEnd}
-                hoverDate={hoverDate} onSelect={handleSelect} onHover={setHoverDate}
-                onMonthChange={(m) => setLeftMonth(subMonths(m, 1))} showNav="right"
-              />
-            </div>
-            {selecting === 'end' && (
-              <p className="text-xs text-gray-400 mt-3 text-center">Klik op een einddatum</p>
-            )}
-          </div>
-        )}
-      </div>
+    <div className="flex items-center gap-1">
+      <button
+        onClick={() => onChange(subMonths(month, 1))}
+        className="p-1.5 rounded-md hover:bg-gray-100 transition-colors"
+      >
+        <ChevronLeft className="h-4 w-4 text-gray-500" />
+      </button>
+      <span className="text-sm font-medium text-gray-700 min-w-[140px] text-center capitalize">
+        {format(month, 'MMMM yyyy', { locale: nl })}
+      </span>
+      <button
+        onClick={() => onChange(addMonths(month, 1))}
+        disabled={isCurrentMonth}
+        className={`p-1.5 rounded-md transition-colors ${
+          isCurrentMonth ? 'text-gray-300 cursor-not-allowed' : 'hover:bg-gray-100 text-gray-500'
+        }`}
+      >
+        <ChevronRight className="h-4 w-4" />
+      </button>
     </div>
   )
 }
@@ -266,12 +97,13 @@ function MetricCard({ title, value, subtitle, icon, status = 'neutral' }: Metric
 }
 
 export function OverviewTab() {
-  const [costStart, setCostStart] = useState(() => startOfDay(new Date()))
-  const [costEnd, setCostEnd] = useState(() => endOfDay(new Date()))
-  const [costPreset, setCostPreset] = useState('Vandaag')
+  const [costMonth, setCostMonth] = useState(() => new Date())
 
-  const costStartStr = format(costStart, 'yyyy-MM-dd')
-  const costEndStr = format(costEnd, 'yyyy-MM-dd')
+  const costStartStr = format(startOfMonth(costMonth), 'yyyy-MM-dd')
+  const costEndStr = format(
+    isSameMonth(costMonth, new Date()) ? new Date() : endOfMonth(costMonth),
+    'yyyy-MM-dd'
+  )
 
   const { data: overview, isLoading: overviewLoading, refetch: refetchOverview } = useQuery({
     queryKey: ['admin-metrics-overview'],
@@ -306,14 +138,6 @@ export function OverviewTab() {
 
   const formatCurrency = (cents: number) => {
     return `€${(cents / 100).toFixed(2)}`
-  }
-
-  const handleCostPreset = (p: Preset) => {
-    const [s, e] = p.getRange()
-    setCostStart(s); setCostEnd(e); setCostPreset(p.label)
-  }
-  const handleCostCustom = (s: Date, e: Date) => {
-    setCostStart(s); setCostEnd(e); setCostPreset('')
   }
 
   const totalCosts = (costs?.total_cost_today_cents || 0)
@@ -576,18 +400,12 @@ export function OverviewTab() {
       {/* API Costs — Dynamic */}
       <Card>
         <CardHeader>
-          <div className="flex flex-col gap-3 w-full">
+          <div className="flex items-center justify-between w-full">
             <CardTitle className="flex items-center gap-2">
               <DollarSign className="h-5 w-5 text-gray-500" />
               API-kosten
             </CardTitle>
-            <CostDatePicker
-              startDate={costStart}
-              endDate={costEnd}
-              activePreset={costPreset}
-              onPreset={handleCostPreset}
-              onCustomRange={handleCostCustom}
-            />
+            <MonthPicker month={costMonth} onChange={setCostMonth} />
           </div>
         </CardHeader>
         <CardBody>
@@ -599,8 +417,8 @@ export function OverviewTab() {
               <div className="flex-shrink-0 lg:w-56 flex flex-col items-center justify-center">
                 <p className="text-sm text-gray-500 mb-1">Totaal</p>
                 <p className="text-4xl font-bold text-gray-900">{formatCurrency(totalCosts)}</p>
-                <p className="text-xs text-gray-400 mt-1">
-                  {costPreset || `${format(costStart, 'd MMM', { locale: nl })} – ${format(costEnd, 'd MMM', { locale: nl })}`}
+                <p className="text-xs text-gray-400 mt-1 capitalize">
+                  {format(costMonth, 'MMMM yyyy', { locale: nl })}
                 </p>
                 {totalCosts > 0 && (
                   <div className="w-full mt-4 h-3 rounded-full overflow-hidden flex bg-gray-100">
