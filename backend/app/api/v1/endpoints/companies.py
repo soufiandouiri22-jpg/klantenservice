@@ -1,6 +1,7 @@
 """
 klantenservice.ai - Company Endpoints
 """
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from uuid import UUID
@@ -10,6 +11,8 @@ from app.models.user import User
 from app.models.company import Company
 from app.schemas.company import CompanyUpdate, CompanyResponse
 from app.api.deps import get_current_user, get_current_company, require_owner, require_admin
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -39,6 +42,13 @@ async def update_current_company(
     
     for field, value in update_data.items():
         setattr(company, field, value)
+    
+    # Sync BTW-nummer to Stripe when updated
+    if "btw_number" in update_data and company.stripe_customer_id:
+        from app.api.v1.endpoints.payments import _sync_tax_id_to_stripe
+        btw = update_data["btw_number"]
+        if btw:
+            _sync_tax_id_to_stripe(company.stripe_customer_id, btw)
     
     db.commit()
     db.refresh(company)

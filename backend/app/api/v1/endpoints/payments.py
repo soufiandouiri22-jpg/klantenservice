@@ -102,6 +102,10 @@ async def create_checkout_session(
             db.commit()
             customer_id = customer.id
         
+        # Sync BTW-nummer to Stripe if available
+        if company.btw_number:
+            _sync_tax_id_to_stripe(customer_id, company.btw_number)
+        
         # Default URLs
         success_url = request.success_url or f"{settings.FRONTEND_URL}/dashboard/settings?payment=success"
         cancel_url = request.cancel_url or f"{settings.FRONTEND_URL}/dashboard/settings?payment=cancelled"
@@ -114,7 +118,7 @@ async def create_checkout_session(
         
         checkout_session = stripe.checkout.Session.create(
             customer=customer_id,
-            payment_method_types=["card", "ideal"],  # Card and iDEAL for NL
+            payment_method_types=["card", "ideal"],
             line_items=[{
                 "price": price_id,
                 "quantity": 1,
@@ -134,6 +138,7 @@ async def create_checkout_session(
                 }
             },
             allow_promotion_codes=True,
+            tax_id_collection={"enabled": True},
         )
         
         return {
@@ -308,6 +313,9 @@ async def stripe_webhook(
     
     elif event_type == "invoice.payment_failed":
         await handle_payment_failed(data, db)
+    
+    elif event_type == "customer.tax_id.created":
+        await handle_tax_id_created(data, db)
     
     return {"status": "success"}
 
@@ -523,3 +531,38 @@ async def handle_payment_failed(invoice: dict, db: Session):
         company.subscription_status = "past_due"
         db.commit()
         logger.warning(f"Payment failed for company {company.name}")
+
+
+def _sync_tax_id_to_stripe(customer_id: str, btw_number: str):
+    """Add a tax ID to the Stripe Customer if not already present."""
+    try:
+        existing = stripe.Customer.list_tax_ids(customer_id, limit=10)
+        for tid in existing.get("data", []):
+            if tid.get("value") == btw_number:
+                return
+        stripe.Customer.create_tax_id(customer_id, type="eu_vat", value=btw_number)
+        logger.info(f"Synced tax ID {btw_number} to Stripe customer {customer_id}")
+    except stripe.error.StripeError as e:
+        logger.warning(f"Failed to sync tax ID to Stripe: {e}")
+
+
+async def handle_tax_id_created(tax_id_data: dict, db: Session):
+    """Sync BTW-nummer from Stripe back to the database."""
+    customer_id = tax_id_data.get("customer")
+    value = tax_id_data.get("value")
+    tax_type = tax_id_data.get("type")
+
+    if not customer_id or not value:
+        return
+
+    if tax_type != "eu_vat":
+        return
+
+    company = db.query(Company).filter(
+        Company.stripe_customer_id == customer_id
+    ).first()
+
+    if company and company.btw_number != value:
+        company.btw_number = value
+        db.commit()
+        logger.info(f"Synced tax ID {value} from Stripe to company {company.name}")
