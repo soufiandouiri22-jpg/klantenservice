@@ -145,7 +145,7 @@ async def create_checkout_session(
             allow_promotion_codes=True,
             automatic_tax={"enabled": True},
             tax_id_collection={"enabled": True},
-            customer_update={"address": "auto"},
+            customer_update={"address": "auto", "name": "auto"},
         )
         
         return {
