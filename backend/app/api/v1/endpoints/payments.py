@@ -90,14 +90,19 @@ async def create_checkout_session(
         if company.stripe_customer_id:
             customer_id = company.stripe_customer_id
         else:
-            customer = stripe.Customer.create(
-                email=company.email,
-                name=company.name,
-                metadata={
+            customer_kwargs: dict = {
+                "email": company.email,
+                "name": company.name,
+                "metadata": {
                     "company_id": str(company.id),
-                    "company_slug": company.slug
-                }
-            )
+                    "company_slug": company.slug,
+                },
+            }
+            stripe_address = _build_stripe_address(company)
+            if stripe_address:
+                customer_kwargs["address"] = stripe_address
+
+            customer = stripe.Customer.create(**customer_kwargs)
             company.stripe_customer_id = customer.id
             db.commit()
             customer_id = customer.id
@@ -140,6 +145,7 @@ async def create_checkout_session(
             allow_promotion_codes=True,
             automatic_tax={"enabled": True},
             tax_id_collection={"enabled": True},
+            customer_update={"address": "auto"},
         )
         
         return {
@@ -371,6 +377,19 @@ async def handle_checkout_completed(session: dict, db: Session):
     
     from datetime import datetime
     company.subscription_started_at = datetime.utcnow()
+
+    # Sync address from Stripe customer back to company (entered during checkout)
+    try:
+        stripe_customer = stripe.Customer.retrieve(session.get("customer"))
+        stripe_addr = stripe_customer.get("address") or {}
+        if stripe_addr.get("line1") and not company.address:
+            company.address = stripe_addr["line1"]
+        if stripe_addr.get("city") and not company.city:
+            company.city = stripe_addr["city"]
+        if stripe_addr.get("postal_code") and not company.postal_code:
+            company.postal_code = stripe_addr["postal_code"]
+    except stripe.error.StripeError as e:
+        logger.warning(f"Could not sync address from Stripe: {e}")
     
     db.commit()
     
@@ -532,6 +551,32 @@ async def handle_payment_failed(invoice: dict, db: Session):
         company.subscription_status = "past_due"
         db.commit()
         logger.warning(f"Payment failed for company {company.name}")
+
+
+def _build_stripe_address(company) -> dict | None:
+    """Build a Stripe address dict from company fields. Returns None if no data."""
+    if not company.address and not company.city and not company.postal_code:
+        return None
+    addr: dict = {"country": "NL"}
+    if company.address:
+        addr["line1"] = company.address
+    if company.city:
+        addr["city"] = company.city
+    if company.postal_code:
+        addr["postal_code"] = company.postal_code
+    return addr
+
+
+def _sync_address_to_stripe(customer_id: str, company):
+    """Push the company address to Stripe customer."""
+    stripe_address = _build_stripe_address(company)
+    if not stripe_address:
+        return
+    try:
+        stripe.Customer.modify(customer_id, address=stripe_address)
+        logger.info(f"Synced address to Stripe customer {customer_id}")
+    except stripe.error.StripeError as e:
+        logger.warning(f"Failed to sync address to Stripe: {e}")
 
 
 def _sync_tax_id_to_stripe(customer_id: str, btw_number: str):

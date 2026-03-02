@@ -49,6 +49,12 @@ async def update_current_company(
         btw = update_data["btw_number"]
         if btw:
             _sync_tax_id_to_stripe(company.stripe_customer_id, btw)
+
+    # Sync address to Stripe when updated
+    address_fields = {"address", "city", "postal_code"}
+    if address_fields & update_data.keys() and company.stripe_customer_id:
+        from app.api.v1.endpoints.payments import _sync_address_to_stripe
+        _sync_address_to_stripe(company.stripe_customer_id, company)
     
     db.commit()
     db.refresh(company)
