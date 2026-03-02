@@ -642,7 +642,7 @@ export function OverviewTab() {
                         <p className="text-xs text-gray-400">{costs?.twilio_calls_today || 0} calls · {costs?.twilio_minutes_today || 0} min</p>
                       </div>
                     </div>
-                    <span className="text-lg font-semibold text-gray-900">{formatCurrency(costs?.twilio_calls_cost_month_cents || 0)}</span>
+                    <span className="text-lg font-semibold text-gray-900">{formatCurrency(costs?.twilio_calls_cost_range_cents || 0)}</span>
                   </div>
 
                   {/* Twilio — Phone numbers */}
@@ -653,14 +653,14 @@ export function OverviewTab() {
                       </div>
                       <div>
                         <p className="font-medium text-gray-900">Twilio — Telefoonnummers</p>
-                        <p className="text-xs text-gray-400">{costs?.twilio_numbers_count_month || 0} nummers</p>
+                        <p className="text-xs text-gray-400">{costs?.twilio_numbers_count_range || 0} nummers</p>
                       </div>
                     </div>
-                    <span className="text-lg font-semibold text-gray-900">{formatCurrency(costs?.twilio_numbers_cost_month_cents || 0)}</span>
+                    <span className="text-lg font-semibold text-gray-900">{formatCurrency(costs?.twilio_numbers_cost_range_cents || 0)}</span>
                   </div>
 
                   {/* Optional rows */}
-                  {(costs?.twilio_media_streams_cost_month_cents || 0) > 0 && (
+                  {(costs?.twilio_media_streams_cost_range_cents || 0) > 0 && (
                     <div className="flex items-center justify-between py-3 border-b border-gray-100">
                       <div className="flex items-center gap-3">
                         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-50">
@@ -668,10 +668,10 @@ export function OverviewTab() {
                         </div>
                         <p className="font-medium text-gray-900">Media Streams</p>
                       </div>
-                      <span className="text-lg font-semibold text-gray-900">{formatCurrency(costs.twilio_media_streams_cost_month_cents)}</span>
+                      <span className="text-lg font-semibold text-gray-900">{formatCurrency(costs.twilio_media_streams_cost_range_cents)}</span>
                     </div>
                   )}
-                  {(costs?.twilio_recordings_cost_month_cents || 0) > 0 && (
+                  {(costs?.twilio_recordings_cost_range_cents || 0) > 0 && (
                     <div className="flex items-center justify-between py-3 border-b border-gray-100">
                       <div className="flex items-center gap-3">
                         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-50">
@@ -679,7 +679,7 @@ export function OverviewTab() {
                         </div>
                         <p className="font-medium text-gray-900">Opnames</p>
                       </div>
-                      <span className="text-lg font-semibold text-gray-900">{formatCurrency(costs.twilio_recordings_cost_month_cents)}</span>
+                      <span className="text-lg font-semibold text-gray-900">{formatCurrency(costs.twilio_recordings_cost_range_cents)}</span>
                     </div>
                   )}
                 </div>
