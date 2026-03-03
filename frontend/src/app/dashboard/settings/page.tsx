@@ -445,7 +445,15 @@ function SettingsContent() {
   }, [])
 
   const handleUpgrade = (plan: string, interval: 'monthly' | 'yearly' = 'monthly') => {
-    checkoutMutation.mutate({ plan, interval })
+    const hasActiveSubscription =
+      subscription?.has_stripe &&
+      (subscription?.status === 'active' || subscription?.status === 'trialing')
+
+    if (hasActiveSubscription) {
+      portalMutation.mutate()
+    } else {
+      checkoutMutation.mutate({ plan, interval })
+    }
   }
 
   const handleManageSubscription = () => {
@@ -997,11 +1005,11 @@ function SettingsContent() {
                             className="mt-6 w-full"
                             variant={subscription?.status !== 'active' && subscription?.status !== 'trialing' ? 'primary' : 'outline'}
                             onClick={() => handleUpgrade('starter')}
-                            disabled={checkoutMutation.isPending}
+                            disabled={checkoutMutation.isPending || portalMutation.isPending}
                           >
-                            {checkoutMutation.isPending ? 'Laden...' : 
-                              subscription?.status !== 'active' && subscription?.status !== 'trialing' 
-                                ? 'Start gratis proefperiode' 
+                            {(checkoutMutation.isPending || portalMutation.isPending) ? 'Laden...' :
+                              subscription?.status !== 'active' && subscription?.status !== 'trialing'
+                                ? 'Start gratis proefperiode'
                                 : subscription?.plan === 'business' || subscription?.plan === 'enterprise'
                                   ? 'Downgraden'
                                   : 'Kiezen'}
@@ -1052,11 +1060,11 @@ function SettingsContent() {
                           <Button
                             className="mt-6 w-full"
                             onClick={() => handleUpgrade('business')}
-                            disabled={checkoutMutation.isPending}
+                            disabled={checkoutMutation.isPending || portalMutation.isPending}
                           >
-                            {checkoutMutation.isPending ? 'Laden...' : 
-                              subscription?.status !== 'active' && subscription?.status !== 'trialing' 
-                                ? 'Start gratis proefperiode' 
+                            {(checkoutMutation.isPending || portalMutation.isPending) ? 'Laden...' :
+                              subscription?.status !== 'active' && subscription?.status !== 'trialing'
+                                ? 'Start gratis proefperiode'
                                 : subscription?.plan === 'starter'
                                   ? 'Upgraden'
                                   : subscription?.plan === 'enterprise'
