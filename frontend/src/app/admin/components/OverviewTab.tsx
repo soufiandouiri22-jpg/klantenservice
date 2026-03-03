@@ -412,94 +412,87 @@ export function OverviewTab() {
           {costsLoading ? (
             <div className="flex justify-center py-8"><Spinner /></div>
           ) : (
-            <div className="flex flex-col lg:flex-row gap-8">
-              {/* Left: totaal + stacked bar */}
-              <div className="flex-shrink-0 lg:w-56 flex flex-col items-center justify-center">
-                <p className="text-sm text-gray-500 mb-1">Totaal</p>
-                <p className="text-4xl font-bold text-gray-900">{formatCurrency(totalCosts)}</p>
-                <p className="text-xs text-gray-400 mt-1 capitalize">
-                  {format(costMonth, 'MMMM yyyy', { locale: nl })}
-                </p>
+            <div className="space-y-0">
+              {/* Breakdown list */}
+              <div className="flex items-center justify-between py-3 border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-50">
+                    <img src="/app-icons/elevenlabs.svg" alt="ElevenLabs" className="h-5 w-5" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900">ElevenLabs</p>
+                    <p className="text-xs text-gray-400">{(costs?.elevenlabs_characters_today || 0).toLocaleString()} characters</p>
+                  </div>
+                </div>
+                <span className="text-lg font-semibold text-gray-900">{formatCurrency(elCosts)}</span>
+              </div>
+
+              <div className="flex items-center justify-between py-3 border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-50">
+                    <Phone className="h-5 w-5 text-red-500" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900">Twilio — Belkosten</p>
+                    <p className="text-xs text-gray-400">{costs?.twilio_calls_today || 0} calls · {costs?.twilio_minutes_today || 0} min</p>
+                  </div>
+                </div>
+                <span className="text-lg font-semibold text-gray-900">{formatCurrency(costs?.twilio_calls_cost_range_cents || 0)}</span>
+              </div>
+
+              <div className="flex items-center justify-between py-3 border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-50">
+                    <Phone className="h-5 w-5 text-red-400" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900">Twilio — Telefoonnummers</p>
+                    <p className="text-xs text-gray-400">{costs?.twilio_numbers_count_range || 0} nummers</p>
+                  </div>
+                </div>
+                <span className="text-lg font-semibold text-gray-900">{formatCurrency(costs?.twilio_numbers_cost_range_cents || 0)}</span>
+              </div>
+
+              {(costs?.twilio_media_streams_cost_range_cents || 0) > 0 && (
+                <div className="flex items-center justify-between py-3 border-b border-gray-100">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-50">
+                      <Phone className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <p className="font-medium text-gray-900">Media Streams</p>
+                  </div>
+                  <span className="text-lg font-semibold text-gray-900">{formatCurrency(costs.twilio_media_streams_cost_range_cents)}</span>
+                </div>
+              )}
+              {(costs?.twilio_recordings_cost_range_cents || 0) > 0 && (
+                <div className="flex items-center justify-between py-3 border-b border-gray-100">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-50">
+                      <Phone className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <p className="font-medium text-gray-900">Opnames</p>
+                  </div>
+                  <span className="text-lg font-semibold text-gray-900">{formatCurrency(costs.twilio_recordings_cost_range_cents)}</span>
+                </div>
+              )}
+
+              {/* Stacked bar + Total */}
+              <div className="pt-5">
                 {totalCosts > 0 && (
-                  <div className="w-full mt-4 h-3 rounded-full overflow-hidden flex bg-gray-100">
+                  <div className="h-2.5 rounded-full overflow-hidden flex bg-gray-100 mb-3">
                     <div className="bg-violet-500 transition-all" style={{ width: `${elPct}%` }} />
                     <div className="bg-red-400 transition-all" style={{ width: `${twPct}%` }} />
                   </div>
                 )}
-                <div className="flex gap-4 mt-2 text-xs text-gray-500">
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-violet-500" />ElevenLabs</span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400" />Twilio</span>
-                </div>
-              </div>
-
-              {/* Right: breakdown list */}
-              <div className="flex-1 min-w-0">
-                <div className="space-y-4">
-                  {/* ElevenLabs */}
-                  <div className="flex items-center justify-between py-3 border-b border-gray-100">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-50">
-                        <img src="/app-icons/elevenlabs.svg" alt="ElevenLabs" className="h-5 w-5" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900">ElevenLabs</p>
-                        <p className="text-xs text-gray-400">{(costs?.elevenlabs_characters_today || 0).toLocaleString()} characters</p>
-                      </div>
-                    </div>
-                    <span className="text-lg font-semibold text-gray-900">{formatCurrency(elCosts)}</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex gap-4 text-xs text-gray-500">
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-violet-500" />ElevenLabs</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400" />Twilio</span>
                   </div>
-
-                  {/* Twilio — Calls */}
-                  <div className="flex items-center justify-between py-3 border-b border-gray-100">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-50">
-                        <Phone className="h-5 w-5 text-red-500" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900">Twilio — Belkosten</p>
-                        <p className="text-xs text-gray-400">{costs?.twilio_calls_today || 0} calls · {costs?.twilio_minutes_today || 0} min</p>
-                      </div>
-                    </div>
-                    <span className="text-lg font-semibold text-gray-900">{formatCurrency(costs?.twilio_calls_cost_range_cents || 0)}</span>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalCosts)}</p>
+                    <p className="text-xs text-gray-400 capitalize">{format(costMonth, 'MMMM yyyy', { locale: nl })}</p>
                   </div>
-
-                  {/* Twilio — Phone numbers */}
-                  <div className="flex items-center justify-between py-3 border-b border-gray-100">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-50">
-                        <Phone className="h-5 w-5 text-red-400" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900">Twilio — Telefoonnummers</p>
-                        <p className="text-xs text-gray-400">{costs?.twilio_numbers_count_range || 0} nummers</p>
-                      </div>
-                    </div>
-                    <span className="text-lg font-semibold text-gray-900">{formatCurrency(costs?.twilio_numbers_cost_range_cents || 0)}</span>
-                  </div>
-
-                  {/* Optional rows */}
-                  {(costs?.twilio_media_streams_cost_range_cents || 0) > 0 && (
-                    <div className="flex items-center justify-between py-3 border-b border-gray-100">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-50">
-                          <Phone className="h-5 w-5 text-gray-400" />
-                        </div>
-                        <p className="font-medium text-gray-900">Media Streams</p>
-                      </div>
-                      <span className="text-lg font-semibold text-gray-900">{formatCurrency(costs.twilio_media_streams_cost_range_cents)}</span>
-                    </div>
-                  )}
-                  {(costs?.twilio_recordings_cost_range_cents || 0) > 0 && (
-                    <div className="flex items-center justify-between py-3 border-b border-gray-100">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-50">
-                          <Phone className="h-5 w-5 text-gray-400" />
-                        </div>
-                        <p className="font-medium text-gray-900">Opnames</p>
-                      </div>
-                      <span className="text-lg font-semibold text-gray-900">{formatCurrency(costs.twilio_recordings_cost_range_cents)}</span>
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
