@@ -69,7 +69,7 @@ async def run_indexing(website_id: str, db_url: str):
                     company_id=str(website.company_id),
                     type=NotificationType.WEBSITE_INDEXED,
                     title=f"Website geïndexeerd: {website.base_url}",
-                    message=f"{website.total_pages or 0} pagina's succesvol geïndexeerd.",
+                    message=f"{website.pages_indexed or 0} pagina's succesvol geïndexeerd.",
                     url="/dashboard/knowledge",
                 )
             elif website.status == IndexStatus.failed:
