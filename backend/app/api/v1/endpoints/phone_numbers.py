@@ -108,73 +108,101 @@ async def create_phone_number(
                 detail=f"AI-medewerker '{ai_worker.name}' heeft al een telefoonnummer gekoppeld ({existing_phone.number}). Ontkoppel dit eerst.",
             )
     
-    # Automatically purchase an AI number from Twilio
+    # Build webhook URL for voice calls
+    webhook_base = settings.WEBSOCKET_URL.replace("wss://", "https://").replace("/ws/voice", "")
+    if not webhook_base:
+        webhook_base = "https://api.klantenservice.ai"
+    voice_webhook_url = f"{webhook_base}/api/v1/webhooks/twilio/voice"
+
     client = get_twilio_client()
-    
+
     try:
-        # Search for available numbers
-        available = []
-        try:
-            available = client.available_phone_numbers("NL").mobile.list(limit=1)
-        except (TwilioRestException, TwilioException):
-            pass
-        
-        if not available:
+        # --- Try to reuse an existing Twilio number owned by this company ---
+        owned_twilio_numbers = client.incoming_phone_numbers.list(limit=50)
+        company_name_tag = f"klantenservice.ai - {company.name}"
+
+        # Numbers currently tracked in our DB for this company
+        db_numbers = {
+            pn.number
+            for pn in db.query(PhoneNumber.number).filter(PhoneNumber.company_id == company.id).all()
+        }
+
+        reusable = None
+        for tn in owned_twilio_numbers:
+            if tn.phone_number not in db_numbers and (
+                tn.friendly_name and company.name.lower() in tn.friendly_name.lower()
+            ):
+                reusable = tn
+                break
+
+        if reusable:
+            # Update webhook URLs on the reused number
+            reusable.update(
+                voice_url=voice_webhook_url,
+                voice_method="POST",
+                status_callback=f"{webhook_base}/api/v1/webhooks/twilio/status",
+                status_callback_method="POST",
+                friendly_name=data.friendly_name or company_name_tag,
+            )
+            ai_number = reusable.phone_number
+            twilio_sid = reusable.sid
+        else:
+            # No reusable number found — purchase a new one
+            available = []
             try:
-                available = client.available_phone_numbers("NL").local.list(limit=1)
+                available = client.available_phone_numbers("NL").mobile.list(limit=1)
             except (TwilioRestException, TwilioException):
                 pass
-        
-        if not available:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Er zijn momenteel geen telefoonnummers beschikbaar. Probeer het later opnieuw.",
-            )
-        
-        ai_number = available[0].phone_number
-        
-        # Build webhook URL for voice calls
-        webhook_base = settings.WEBSOCKET_URL.replace("wss://", "https://").replace("/ws/voice", "")
-        if not webhook_base:
-            webhook_base = "https://api.klantenservice.ai"
-        voice_webhook_url = f"{webhook_base}/api/v1/webhooks/twilio/voice"
-        
-        # Purchase the AI number from Twilio
-        # Use the central klantenservice.ai address for regulatory compliance
-        purchase_params = {
-            "phone_number": ai_number,
-            "friendly_name": data.friendly_name or f"klantenservice.ai - {company.name}",
-            "voice_url": voice_webhook_url,
-            "voice_method": "POST",
-            "status_callback": f"{webhook_base}/api/v1/webhooks/twilio/status",
-            "status_callback_method": "POST",
-        }
-        
-        # Add AddressSid if configured (required for NL numbers)
-        if settings.TWILIO_ADDRESS_SID:
-            purchase_params["address_sid"] = settings.TWILIO_ADDRESS_SID
-        
-        purchased = client.incoming_phone_numbers.create(**purchase_params)
-        
+
+            if not available:
+                try:
+                    available = client.available_phone_numbers("NL").local.list(limit=1)
+                except (TwilioRestException, TwilioException):
+                    pass
+
+            if not available:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Er zijn momenteel geen telefoonnummers beschikbaar. Probeer het later opnieuw.",
+                )
+
+            ai_number = available[0].phone_number
+
+            purchase_params = {
+                "phone_number": ai_number,
+                "friendly_name": data.friendly_name or company_name_tag,
+                "voice_url": voice_webhook_url,
+                "voice_method": "POST",
+                "status_callback": f"{webhook_base}/api/v1/webhooks/twilio/status",
+                "status_callback_method": "POST",
+            }
+
+            if settings.TWILIO_ADDRESS_SID:
+                purchase_params["address_sid"] = settings.TWILIO_ADDRESS_SID
+
+            purchased = client.incoming_phone_numbers.create(**purchase_params)
+            ai_number = purchased.phone_number
+            twilio_sid = purchased.sid
+
         phone_number = PhoneNumber(
             id=uuid4(),
             company_id=company.id,
             ai_worker_id=data.ai_worker_id,
-            number=ai_number,  # AI/Twilio number
-            business_number=data.business_number,  # Customer's actual number
+            number=ai_number,
+            business_number=data.business_number,
             friendly_name=data.friendly_name,
-            twilio_sid=purchased.sid,
+            twilio_sid=twilio_sid,
             setup_completed=False,
             forwarding_verified=False,
             is_active=True,
         )
-        
+
         db.add(phone_number)
         db.commit()
         db.refresh(phone_number)
-        
+
         return phone_number
-        
+
     except TwilioRestException as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -275,8 +303,10 @@ async def delete_phone_number(
     db: Session = Depends(get_db)
 ):
     """
-    Delete a phone number.
-    Requires admin or owner role.
+    Unlink a phone number from the company.
+    The Twilio number is kept alive so it can be reused when the company
+    sets up a new number (avoids purchasing a new number every time).
+    Use the /release endpoint to fully release the number back to Twilio.
     """
     phone = db.query(PhoneNumber).filter(
         PhoneNumber.id == phone_id,
