@@ -8,10 +8,10 @@ All voices support TTS previews and Conversational AI.
 # ElevenLabs voices available for customers
 # IDs marked as "PLACEHOLDER" need to be replaced with real ElevenLabs voice IDs
 ELEVENLABS_VOICES = [
+    {"id": "AVIlLDn2TVmdaDycgbo3", "name": "Eric", "description": "Natuurlijk en authentiek", "gender": "male"},
     {"id": "OlBRrVAItyi00MuGMbna", "name": "Emma", "description": "Vriendelijk en professioneel", "gender": "female"},
     {"id": "XWw6BayktH5jsnELw9Bc", "name": "Arjen", "description": "Kalm en betrouwbaar", "gender": "male"},
     {"id": "tvFp0BgJPrEXGoDhDIA4", "name": "Thomas", "description": "Natuurlijk en professioneel", "gender": "male"},
-    {"id": "AVIlLDn2TVmdaDycgbo3", "name": "Eric", "description": "Natuurlijk en authentiek", "gender": "male"},
     {"id": "mNOlrB5V39qx4wQwSjG3", "name": "Marlies", "description": "Vriendelijk en warm", "gender": "female"},
     {"id": "94W4cf0CMSgymY1uoRiX", "name": "Noa", "description": "Jong en modern", "gender": "female"},
 ]
