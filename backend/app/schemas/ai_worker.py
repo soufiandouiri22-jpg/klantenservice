@@ -20,7 +20,7 @@ class BehaviorSettings(BaseModel):
 
 class AIWorkerBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
-    role_title: str = Field(default="Klantenservice medewerker", max_length=100)
+    role_title: str = Field(default="Klantenservice", max_length=100)
     tone_of_voice: Optional[str] = None
 
 

@@ -35,7 +35,7 @@ class AIWorker(Base):
     
     # Identity
     name = Column(String(100), nullable=False)  # e.g., "Anna", "Thomas"
-    role_title = Column(String(100), default="Klantenservice medewerker")
+    role_title = Column(String(100), default="Klantenservice")
     avatar_url = Column(String(500), nullable=True)
     
     # Voice & Language

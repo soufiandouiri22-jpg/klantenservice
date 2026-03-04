@@ -33,7 +33,7 @@ export default function AIWorkersPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [selectedWorker, setSelectedWorker] = useState<any>(null)
   const [newWorkerName, setNewWorkerName] = useState('')
-  const [newWorkerRole, setNewWorkerRole] = useState('Klantenservice medewerker')
+  const [newWorkerRole, setNewWorkerRole] = useState('Klantenservice')
 
   // Voice preview state
   const [previewLoading, setPreviewLoading] = useState<string | null>(null)
@@ -347,7 +347,7 @@ export default function AIWorkersPage() {
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         title="Nieuwe AI-medewerker"
-        description="Geef uw nieuwe AI-medewerker een naam en rol."
+        description="Geef uw nieuwe AI-medewerker een naam en afdeling."
       >
         <div className="space-y-4">
           <Input
@@ -357,8 +357,8 @@ export default function AIWorkersPage() {
             onChange={(e) => setNewWorkerName(e.target.value)}
           />
           <Input
-            label="Rol / Functie"
-            placeholder="bijv. Klantenservice medewerker"
+            label="Afdeling / Vestiging"
+            placeholder="bijv. Klantenservice, Sales, Vestiging Amsterdam"
             value={newWorkerRole}
             onChange={(e) => setNewWorkerRole(e.target.value)}
           />
@@ -399,7 +399,7 @@ export default function AIWorkersPage() {
                 onBlur={() => handleSettingChange('name', selectedWorker.name)}
               />
               <Input
-                label="Rol / Functie"
+                label="Afdeling / Vestiging"
                 value={selectedWorker.role_title}
                 onChange={(e) => setSelectedWorker({ ...selectedWorker, role_title: e.target.value })}
                 onBlur={() => handleSettingChange('role_title', selectedWorker.role_title)}
