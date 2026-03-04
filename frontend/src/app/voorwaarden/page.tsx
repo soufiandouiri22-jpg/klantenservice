@@ -30,7 +30,7 @@ export default function VoorwaardenPage() {
             <h2 className="text-xl font-semibold text-gray-900 mt-8 mb-4">Artikel 1 - Definities</h2>
             <p className="text-gray-600 mb-4">In deze algemene voorwaarden wordt verstaan onder:</p>
             <ul className="list-disc pl-6 text-gray-600 mb-4">
-              <li><strong>Klantenservice.ai:</strong> De besloten vennootschap Klantenservice.ai, gevestigd te Amsterdam, ingeschreven bij de KvK onder nummer [invullen].</li>
+              <li><strong>Klantenservice.ai:</strong> De besloten vennootschap Klantenservice.ai, gevestigd te Amsterdam, ingeschreven bij de KvK onder nummer 69850070.</li>
               <li><strong>Klant:</strong> De natuurlijke of rechtspersoon die een overeenkomst aangaat met Klantenservice.ai.</li>
               <li><strong>Diensten:</strong> De door Klantenservice.ai aangeboden AI-telefoniediensten en gerelateerde services.</li>
               <li><strong>Overeenkomst:</strong> De overeenkomst tussen Klantenservice.ai en Klant voor het leveren van Diensten.</li>

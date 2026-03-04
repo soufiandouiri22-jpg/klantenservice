@@ -47,7 +47,7 @@ export default function PrivacyPage() {
               <li>Bedrijfsnaam: Klantenservice.ai</li>
               <li>Adres: Amsterdam, Nederland</li>
               <li>E-mail: privacy@klantenservice.ai</li>
-              <li>KvK-nummer: [Invullen]</li>
+              <li>KvK-nummer: 69850070</li>
             </ul>
 
             <h2 className="text-xl font-semibold text-gray-900 mt-8 mb-4">3. Welke persoonsgegevens verzamelen wij?</h2>
