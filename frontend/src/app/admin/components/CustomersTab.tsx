@@ -422,7 +422,7 @@ function CustomerDetailContent({ customer, onSave, onSubscriptionSave, onDelete,
             <p className="text-sm font-medium text-gray-700">Trial gebruikt</p>
             <p className="text-xs text-gray-500">Aan = geen gratis proefperiode meer bij checkout</p>
           </div>
-          <Toggle checked={trialUsed} onChange={setTrialUsed} />
+          <Toggle enabled={trialUsed} onChange={setTrialUsed} />
         </div>
         {hasSubscriptionChanges && (
           <div className="mt-4 flex justify-end">
