@@ -86,7 +86,7 @@ export default function DashboardPage() {
   })
 
   // Check subscription status
-  const { data: subscription } = useQuery({
+  const { data: subscription, isLoading: subscriptionLoading } = useQuery({
     queryKey: ['subscription'],
     queryFn: companyApi.getSubscription,
   })
@@ -115,7 +115,7 @@ export default function DashboardPage() {
     subscription?.status === 'past_due' ||
     (subscription?.status !== 'trialing' && subscription?.status !== 'active' && !subscription?.has_stripe)
 
-  const isLoading = statsLoading || callsLoading || appointmentsLoading || actionsLoading || workersLoading
+  const isLoading = statsLoading || callsLoading || appointmentsLoading || actionsLoading || workersLoading || subscriptionLoading
 
   if (isLoading) {
     return (

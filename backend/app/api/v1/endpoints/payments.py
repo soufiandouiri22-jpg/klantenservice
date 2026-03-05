@@ -445,6 +445,15 @@ async def handle_subscription_updated(subscription: dict, db: Session):
     ).first()
     
     if not company:
+        customer_id = subscription.get("customer")
+        if customer_id:
+            company = db.query(Company).filter(
+                Company.stripe_customer_id == customer_id
+            ).first()
+            if company:
+                company.stripe_subscription_id = subscription_id
+    
+    if not company:
         logger.warning(f"Company not found for subscription: {subscription_id}")
         return
     
@@ -510,9 +519,9 @@ async def handle_subscription_deleted(subscription: dict, db: Session):
         return
     
     # Set status to canceled — they lose access immediately
+    # Keep stripe_subscription_id so future webhooks can still find this company
     company.subscription_status = "canceled"
-    company.stripe_subscription_id = None
-    company.subscription_ends_at = None  # Period has ended
+    company.subscription_ends_at = None
     
     db.commit()
     
@@ -530,6 +539,15 @@ async def handle_invoice_paid(invoice: dict, db: Session):
         Company.stripe_subscription_id == subscription_id
     ).first()
     
+    if not company:
+        customer_id = invoice.get("customer")
+        if customer_id:
+            company = db.query(Company).filter(
+                Company.stripe_customer_id == customer_id
+            ).first()
+            if company:
+                company.stripe_subscription_id = subscription_id
+    
     if company:
         company.subscription_status = "active"
         db.commit()
@@ -546,6 +564,15 @@ async def handle_payment_failed(invoice: dict, db: Session):
     company = db.query(Company).filter(
         Company.stripe_subscription_id == subscription_id
     ).first()
+    
+    if not company:
+        customer_id = invoice.get("customer")
+        if customer_id:
+            company = db.query(Company).filter(
+                Company.stripe_customer_id == customer_id
+            ).first()
+            if company:
+                company.stripe_subscription_id = subscription_id
     
     if company:
         company.subscription_status = "past_due"

@@ -81,6 +81,9 @@ function SettingsContent() {
   // BTW validation state
   const [btwStatus, setBtwStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle')
 
+  // Billing interval toggle
+  const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('monthly')
+
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false)
   const [newUserData, setNewUserData] = useState({
     email: '',
@@ -959,10 +962,37 @@ function SettingsContent() {
                 {/* Plans */}
                 <Card>
                   <CardHeader>
-                    <CardTitle>Kies uw abonnement</CardTitle>
-                    <CardDescription>
-                      Start met 14 dagen gratis proefperiode. Geen creditcard vereist om te beginnen.
-                    </CardDescription>
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                      <div>
+                        <CardTitle>Kies uw abonnement</CardTitle>
+                        <CardDescription>
+                          Start met 14 dagen gratis proefperiode. Geen creditcard vereist om te beginnen.
+                        </CardDescription>
+                      </div>
+                      <div className="inline-flex items-center gap-1 rounded-full bg-gray-100 p-1">
+                        <button
+                          onClick={() => setBillingInterval('monthly')}
+                          className={`rounded-full px-4 py-1.5 text-sm font-medium transition-all ${
+                            billingInterval === 'monthly'
+                              ? 'bg-white text-gray-900 shadow-sm'
+                              : 'text-gray-500 hover:text-gray-700'
+                          }`}
+                        >
+                          Maandelijks
+                        </button>
+                        <button
+                          onClick={() => setBillingInterval('yearly')}
+                          className={`rounded-full px-4 py-1.5 text-sm font-medium transition-all ${
+                            billingInterval === 'yearly'
+                              ? 'bg-white text-gray-900 shadow-sm'
+                              : 'text-gray-500 hover:text-gray-700'
+                          }`}
+                        >
+                          Jaarlijks
+                          <span className="ml-1 text-xs font-semibold text-green-600">-15%</span>
+                        </button>
+                      </div>
+                    </div>
                   </CardHeader>
                   <CardBody>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -975,8 +1005,11 @@ function SettingsContent() {
                         <h4 className="text-xl font-bold text-gray-900">Starter</h4>
                         <p className="text-sm text-gray-500 mt-1">Perfect voor kleine ondernemers</p>
                         <div className="mt-4">
-                          <span className="text-3xl font-bold text-gray-900">€149</span>
+                          <span className="text-3xl font-bold text-gray-900">€{billingInterval === 'yearly' ? '125' : '149'}</span>
                           <span className="text-gray-500">/maand</span>
+                          {billingInterval === 'yearly' && (
+                            <p className="text-xs text-gray-400 mt-1">€1.499 per jaar gefactureerd</p>
+                          )}
                         </div>
                         <ul className="mt-4 space-y-2">
                           <li className="flex items-center text-sm text-gray-600">
@@ -1004,7 +1037,7 @@ function SettingsContent() {
                           <Button
                             className="mt-6 w-full"
                             variant={subscription?.status !== 'active' && subscription?.status !== 'trialing' ? 'primary' : 'outline'}
-                            onClick={() => handleUpgrade('starter')}
+                            onClick={() => handleUpgrade('starter', billingInterval)}
                             disabled={checkoutMutation.isPending || portalMutation.isPending}
                           >
                             {(checkoutMutation.isPending || portalMutation.isPending) ? 'Laden...' :
@@ -1031,8 +1064,11 @@ function SettingsContent() {
                         <h4 className="text-xl font-bold text-gray-900">Business</h4>
                         <p className="text-sm text-gray-500 mt-1">Ideaal voor groeiende bedrijven</p>
                         <div className="mt-4">
-                          <span className="text-3xl font-bold text-gray-900">€299</span>
+                          <span className="text-3xl font-bold text-gray-900">€{billingInterval === 'yearly' ? '258' : '299'}</span>
                           <span className="text-gray-500">/maand</span>
+                          {billingInterval === 'yearly' && (
+                            <p className="text-xs text-gray-400 mt-1">€3.099 per jaar gefactureerd</p>
+                          )}
                         </div>
                         <ul className="mt-4 space-y-2">
                           <li className="flex items-center text-sm text-gray-600">
@@ -1059,7 +1095,7 @@ function SettingsContent() {
                         ) : (
                           <Button
                             className="mt-6 w-full"
-                            onClick={() => handleUpgrade('business')}
+                            onClick={() => handleUpgrade('business', billingInterval)}
                             disabled={checkoutMutation.isPending || portalMutation.isPending}
                           >
                             {(checkoutMutation.isPending || portalMutation.isPending) ? 'Laden...' :

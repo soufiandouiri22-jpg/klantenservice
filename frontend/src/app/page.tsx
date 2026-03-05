@@ -45,14 +45,18 @@ const features = [
 const plans = [
   {
     name: 'Starter',
-    price: '149',
+    monthlyPrice: '149',
+    yearlyPrice: '125',
+    yearlyTotal: '1.499',
     workers: 1,
     description: 'Perfect voor kleine ondernemers',
     features: ['1 AI-medewerker', '500 belminuten/maand', 'Agenda integratie', 'Website kennis', '30 dagen logs'],
   },
   {
     name: 'Business',
-    price: '299',
+    monthlyPrice: '299',
+    yearlyPrice: '258',
+    yearlyTotal: '3.099',
     workers: 3,
     popular: true,
     description: 'Ideaal voor groeiende bedrijven',
@@ -60,7 +64,8 @@ const plans = [
   },
   {
     name: 'Enterprise',
-    price: 'Op aanvraag',
+    monthlyPrice: 'Op aanvraag',
+    yearlyPrice: 'Op aanvraag',
     workers: 7,
     description: 'Voor grote organisaties',
     features: ['5+ AI-medewerkers', 'Alles van Business', 'Dedicated support', 'Onbeperkte logs', 'Custom integraties'],
@@ -670,6 +675,7 @@ function TestimonialSlider() {
 export default function HomePage() {
   const router = useRouter()
   const [checking, setChecking] = useState(true)
+  const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('monthly')
 
   useEffect(() => {
     const token = localStorage.getItem('access_token')
@@ -978,7 +984,35 @@ export default function HomePage() {
             <p className="mt-4 text-lg text-gray-600">
               Kies het pakket dat bij uw bedrijf past
             </p>
-            <div className="mt-6 inline-flex items-center gap-2 rounded-full bg-orange-100 px-4 py-2">
+
+            {/* Billing toggle */}
+            <div className="mt-8 inline-flex items-center gap-3 rounded-full bg-gray-100 p-1">
+              <button
+                onClick={() => setBillingInterval('monthly')}
+                className={`rounded-full px-5 py-2 text-sm font-medium transition-all ${
+                  billingInterval === 'monthly'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Maandelijks
+              </button>
+              <button
+                onClick={() => setBillingInterval('yearly')}
+                className={`rounded-full px-5 py-2 text-sm font-medium transition-all ${
+                  billingInterval === 'yearly'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Jaarlijks
+                <span className="ml-1.5 inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
+                  -15%
+                </span>
+              </button>
+            </div>
+
+            <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-orange-100 px-4 py-2">
               <span className="text-orange-600 font-semibold">🎉 Probeer het gratis</span>
               <span className="text-orange-500">•</span>
               <span className="text-orange-600">Annuleren kan altijd</span>
@@ -1004,18 +1038,23 @@ export default function HomePage() {
                     {plan.name}
                   </h3>
                   <div className="mt-4">
-                    {typeof plan.price === 'string' && plan.price.includes('aanvraag') ? (
+                    {plan.monthlyPrice.includes('aanvraag') ? (
                       <span className={`text-3xl font-bold ${plan.popular ? 'text-white' : 'text-gray-900'}`}>
-                        {plan.price}
+                        {plan.monthlyPrice}
                       </span>
                     ) : (
                       <>
                         <span className={`text-5xl font-bold ${plan.popular ? 'text-white' : 'text-gray-900'}`}>
-                          €{plan.price}
+                          €{billingInterval === 'yearly' ? plan.yearlyPrice : plan.monthlyPrice}
                         </span>
                         <span className={`text-base ${plan.popular ? 'text-primary-200' : 'text-gray-500'}`}>
                           /maand
                         </span>
+                        {billingInterval === 'yearly' && plan.yearlyTotal && (
+                          <p className={`mt-1 text-sm ${plan.popular ? 'text-primary-200' : 'text-gray-500'}`}>
+                            €{plan.yearlyTotal} per jaar gefactureerd
+                          </p>
+                        )}
                         <p className={`mt-1 text-sm font-medium ${plan.popular ? 'text-orange-300' : 'text-orange-500'}`}>
                           14 dagen gratis
                         </p>
@@ -1037,16 +1076,16 @@ export default function HomePage() {
                   ))}
                 </ul>
                 <Link
-                  href={typeof plan.price === 'string' && plan.price.includes('aanvraag') ? '/contact' : `/checkout?plan=${plan.name.toLowerCase()}`}
+                  href={plan.monthlyPrice.includes('aanvraag') ? '/contact' : `/checkout?plan=${plan.name.toLowerCase()}&interval=${billingInterval}`}
                   className={`mt-8 block w-full rounded-xl py-4 text-center text-sm font-semibold transition-colors ${
                     plan.popular
                       ? 'bg-white text-primary-600 hover:bg-primary-50'
                       : 'bg-primary-600 text-white hover:bg-primary-700'
                   }`}
                 >
-                  {typeof plan.price === 'string' && plan.price.includes('aanvraag') ? 'Plan een gesprek' : 'Probeer het gratis uit'}
+                  {plan.monthlyPrice.includes('aanvraag') ? 'Plan een gesprek' : 'Probeer het gratis uit'}
                 </Link>
-                {typeof plan.price !== 'string' || !plan.price.includes('aanvraag') ? (
+                {!plan.monthlyPrice.includes('aanvraag') ? (
                   <p className={`mt-3 text-center text-xs ${plan.popular ? 'text-primary-200' : 'text-gray-400'}`}>
                     ✓ 14 dagen gratis proberen
                   </p>
