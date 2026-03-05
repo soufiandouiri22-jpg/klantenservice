@@ -49,7 +49,6 @@ interface Customer {
 interface CustomerDetail extends Customer {
   phone?: string
   stripe_customer_id?: string
-  trial_used?: boolean
   is_verified: boolean
   feature_flags: Record<string, any>
   admin_overrides: Record<string, any>
@@ -110,7 +109,7 @@ export function CustomersTab() {
   })
 
   const updateSubscriptionMutation = useMutation({
-    mutationFn: ({ customerId, data }: { customerId: string; data: { subscription_plan?: string; subscription_status?: string; trial_used?: boolean } }) =>
+    mutationFn: ({ customerId, data }: { customerId: string; data: { subscription_plan?: string; subscription_status?: string } }) =>
       adminApi.updateSubscription(customerId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-customers'] })
@@ -354,7 +353,7 @@ export function CustomersTab() {
 interface CustomerDetailContentProps {
   customer: CustomerDetail
   onSave: (overrides: any) => void
-  onSubscriptionSave: (data: { subscription_plan?: string; subscription_status?: string; trial_used?: boolean }) => void
+  onSubscriptionSave: (data: { subscription_plan?: string; subscription_status?: string }) => void
   onDelete: () => void
   isSaving: boolean
   isSubscriptionSaving: boolean
@@ -365,13 +364,12 @@ function CustomerDetailContent({ customer, onSave, onSubscriptionSave, onDelete,
   const [overrides, setOverrides] = useState(customer.admin_overrides || {})
   const [selectedPlan, setSelectedPlan] = useState(customer.subscription_plan)
   const [selectedStatus, setSelectedStatus] = useState(customer.subscription_status)
-  const [trialUsed, setTrialUsed] = useState(customer.trial_used || false)
 
   const handleChange = (key: string, value: any) => {
     setOverrides((prev: any) => ({ ...prev, [key]: value }))
   }
 
-  const hasSubscriptionChanges = selectedPlan !== customer.subscription_plan || selectedStatus !== customer.subscription_status || trialUsed !== (customer.trial_used || false)
+  const hasSubscriptionChanges = selectedPlan !== customer.subscription_plan || selectedStatus !== customer.subscription_status
 
   return (
     <div className="space-y-6">
@@ -417,17 +415,10 @@ function CustomerDetailContent({ customer, onSave, onSubscriptionSave, onDelete,
             <option value="canceled">Opgezegd (geen toegang)</option>
           </Select>
         </div>
-        <div className="flex items-center justify-between mt-4">
-          <div>
-            <p className="text-sm font-medium text-gray-700">Trial gebruikt</p>
-            <p className="text-xs text-gray-500">Aan = geen gratis proefperiode meer bij checkout</p>
-          </div>
-          <Toggle enabled={trialUsed} onChange={setTrialUsed} />
-        </div>
         {hasSubscriptionChanges && (
           <div className="mt-4 flex justify-end">
             <Button
-              onClick={() => onSubscriptionSave({ subscription_plan: selectedPlan, subscription_status: selectedStatus, trial_used: trialUsed })}
+              onClick={() => onSubscriptionSave({ subscription_plan: selectedPlan, subscription_status: selectedStatus })}
               isLoading={isSubscriptionSaving}
               size="sm"
             >

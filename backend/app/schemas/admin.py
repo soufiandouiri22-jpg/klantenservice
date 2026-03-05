@@ -219,7 +219,6 @@ class CustomerDetail(BaseModel):
     subscription_status: str
     billing_interval: str = "monthly"
     stripe_customer_id: Optional[str]
-    trial_used: bool = False
     
     # Status
     is_active: bool
@@ -249,7 +248,6 @@ class CustomerOverridesUpdate(BaseModel):
 class SubscriptionUpdate(BaseModel):
     subscription_plan: Optional[str] = None  # starter, business, enterprise
     subscription_status: Optional[str] = None  # active, trialing, pending, canceled
-    trial_used: Optional[bool] = None
 
 
 class KillSwitchRequest(BaseModel):

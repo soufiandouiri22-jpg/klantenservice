@@ -1061,7 +1061,6 @@ async def get_customer_detail(
         subscription_status=company.subscription_status or "active",
         billing_interval=company.billing_interval.value if company.billing_interval else "monthly",
         stripe_customer_id=company.stripe_customer_id,
-        trial_used=company.trial_used or False,
         is_active=company.is_active,
         is_verified=company.is_verified,
         is_kill_switched=company.is_kill_switched or False,
@@ -1146,9 +1145,6 @@ async def update_customer_subscription(
                 detail=f"Ongeldige status. Kies uit: {', '.join(valid_statuses)}"
             )
         company.subscription_status = data.subscription_status
-    
-    if data.trial_used is not None:
-        company.trial_used = data.trial_used
     
     db.commit()
     db.refresh(company)
