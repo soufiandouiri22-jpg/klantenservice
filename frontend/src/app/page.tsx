@@ -985,8 +985,14 @@ export default function HomePage() {
               Kies het pakket dat bij uw bedrijf past
             </p>
 
+            <div className="mt-6 inline-flex items-center gap-2 rounded-full bg-orange-100 px-4 py-2">
+              <span className="text-orange-600 font-semibold">🎉 Probeer het gratis</span>
+              <span className="text-orange-500">•</span>
+              <span className="text-orange-600">Annuleren kan altijd</span>
+            </div>
+
             {/* Billing toggle */}
-            <div className="mt-8 inline-flex items-center gap-3 rounded-full bg-gray-100 p-1">
+            <div className="mt-6 inline-flex items-center gap-3 rounded-full bg-gray-100 p-1">
               <button
                 onClick={() => setBillingInterval('monthly')}
                 className={`rounded-full px-5 py-2 text-sm font-medium transition-all ${
@@ -1010,12 +1016,6 @@ export default function HomePage() {
                   -15%
                 </span>
               </button>
-            </div>
-
-            <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-orange-100 px-4 py-2">
-              <span className="text-orange-600 font-semibold">🎉 Probeer het gratis</span>
-              <span className="text-orange-500">•</span>
-              <span className="text-orange-600">Annuleren kan altijd</span>
             </div>
           </FadeUp>
           <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
