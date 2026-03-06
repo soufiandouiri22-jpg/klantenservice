@@ -304,7 +304,7 @@ export default function PhonePage() {
             description="Laat de AI uw zakelijke telefoontjes beantwoorden. Klanten bellen uw bestaande nummer en worden automatisch geholpen."
             action={
               canEdit ? (
-                <Button size="lg" onClick={openWizard}>
+                <Button onClick={openWizard}>
                   Mijn nummer koppelen
                 </Button>
               ) : undefined
