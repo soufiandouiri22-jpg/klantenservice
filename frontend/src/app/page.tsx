@@ -115,6 +115,7 @@ const integrations = [
 const testimonials = [
   {
     company: 'DentaCare',
+    avatar: '/avatars/dr-van-der-berg.jpg',
     logo: '/company-logos/dentacare.png',
     logoType: 'image',
     gradient: 'from-blue-500 to-blue-600',
@@ -127,6 +128,7 @@ const testimonials = [
   },
   {
     company: 'Van Dijk Makelaars',
+    avatar: '/avatars/jeroen-k.jpg',
     logo: '/company-logos/vandijk.png',
     logoType: 'image',
     gradient: 'from-amber-500 to-orange-500',
@@ -139,6 +141,7 @@ const testimonials = [
   },
   {
     company: 'AutoPro Service',
+    avatar: '/avatars/patrick-s.jpg',
     logo: '/company-logos/autopro.png',
     logoType: 'image',
     gradient: 'from-red-500 to-rose-600',
@@ -151,6 +154,7 @@ const testimonials = [
   },
   {
     company: 'Brasserie Blauw',
+    avatar: '/avatars/lisa-m.jpg',
     logo: '/company-logos/brasserie.jpg',
     logoType: 'image',
     gradient: 'from-indigo-500 to-purple-600',
@@ -163,6 +167,7 @@ const testimonials = [
   },
   {
     company: 'TechFlow Solutions',
+    avatar: '/avatars/mark-r.jpg',
     logo: '/company-logos/techflow.png',
     logoType: 'image',
     gradient: 'from-emerald-500 to-teal-600',
@@ -607,12 +612,8 @@ function TestimonialCard({ t }: { t: typeof testimonials[0] }) {
       <div className="flex flex-col gap-3 mb-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 md:w-12 md:h-12 rounded-xl ${t.logoType === 'emoji' ? `bg-gradient-to-br ${t.gradient}` : 'bg-white border border-gray-100'} flex items-center justify-center overflow-hidden flex-shrink-0`}>
-              {t.logoType === 'image' ? (
-                <Image src={t.logo} alt={t.company} width={48} height={48} className="w-full h-full object-contain p-1" />
-              ) : (
-                <span className="text-xl md:text-2xl">{t.logo}</span>
-              )}
+            <div className="w-10 h-10 md:w-12 md:h-12 rounded-full overflow-hidden flex-shrink-0 border-2 border-gray-100">
+              <Image src={t.avatar} alt={t.author} width={48} height={48} className="w-full h-full object-cover" />
             </div>
             <span className="font-bold text-gray-900 text-base md:text-lg">{t.company}</span>
           </div>
