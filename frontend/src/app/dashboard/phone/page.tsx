@@ -19,6 +19,7 @@ import { Input } from '@/components/ui/Input'
 import { PageLoader } from '@/components/ui/Spinner'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Select } from '@/components/ui/Select'
+import Link from 'next/link'
 import { phoneNumbersApi, aiWorkersApi } from '@/lib/api'
 import { formatPhoneNumber } from '@/lib/utils'
 import { useAuthStore } from '@/lib/store'
@@ -278,6 +279,9 @@ export default function PhonePage() {
     )
   }
 
+  // Workers that don't have a phone number yet (for "Koppel aan AI-medewerker" in wizard)
+  const availableWorkersForPhone = aiWorkers?.filter((w: any) => !w.linked_phone) || []
+
   return (
     <DashboardLayout>
       <Header
@@ -499,20 +503,30 @@ export default function PhonePage() {
                     onChange={(e) => setFriendlyName(e.target.value)}
                   />
 
-                  {aiWorkers && aiWorkers.length > 0 && (
-                    <Select
-                      label="Wie neemt op?"
-                      value={selectedAIWorkerId}
-                      onChange={(e) => setSelectedAIWorkerId(e.target.value)}
-                    >
-                      <option value="">-- Selecteer AI-medewerker --</option>
-                      {aiWorkers.map((worker: any) => (
-                        <option key={worker.id} value={worker.id}>
-                          {worker.name}
-                        </option>
-                      ))}
-                    </Select>
-                  )}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Koppel aan AI-medewerker
+                    </label>
+                    {availableWorkersForPhone.length === 0 ? (
+                      <p className="text-sm text-amber-600 bg-amber-50 rounded-lg p-3">
+                        {!aiWorkers?.length
+                          ? 'Maak eerst een AI-medewerker aan voordat u een telefoonnummer kunt koppelen.'
+                          : 'Alle AI-medewerkers hebben al een telefoonnummer gekoppeld. Maak eerst een nieuwe medewerker aan of ontkoppel een bestaand nummer.'}
+                      </p>
+                    ) : (
+                      <Select
+                        value={selectedAIWorkerId}
+                        onChange={(e) => setSelectedAIWorkerId(e.target.value)}
+                      >
+                        <option value="">Selecteer een medewerker...</option>
+                        {availableWorkersForPhone.map((worker: any) => (
+                          <option key={worker.id} value={worker.id}>
+                            {worker.name} — {worker.role_title}
+                          </option>
+                        ))}
+                      </Select>
+                    )}
+                  </div>
                 </div>
 
                 <div className="flex justify-end pt-4">

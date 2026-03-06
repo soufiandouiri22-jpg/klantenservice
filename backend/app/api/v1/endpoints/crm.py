@@ -17,6 +17,7 @@ from app.core.database import get_db
 from app.core.security import encrypt_value
 from app.models.user import User
 from app.models.company import Company
+from app.models.ai_worker import AIWorker
 from app.models.crm_integration import CRMIntegration, CRMProvider
 from app.schemas.crm import (
     CRMIntegrationCreate,
@@ -169,6 +170,12 @@ async def create_crm_integration(
     db: Session = Depends(get_db),
 ):
     """Create a new CRM integration (pre-OAuth)."""
+    ai_worker_count = db.query(AIWorker).filter(AIWorker.company_id == company.id).count()
+    if ai_worker_count == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Maak eerst een AI-medewerker aan voordat u een integratie kunt koppelen.",
+        )
     existing = (
         db.query(CRMIntegration)
         .filter(

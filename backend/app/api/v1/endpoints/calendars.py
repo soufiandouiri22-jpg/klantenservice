@@ -435,6 +435,12 @@ async def create_calendar(
     db: Session = Depends(get_db),
 ):
     """Create a new calendar integration (pre-OAuth — record created, then user connects)."""
+    ai_worker_count = db.query(AIWorker).filter(AIWorker.company_id == company.id).count()
+    if ai_worker_count == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Maak eerst een AI-medewerker aan voordat u een agenda kunt koppelen.",
+        )
     if not data.ai_worker_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

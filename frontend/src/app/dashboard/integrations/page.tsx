@@ -23,7 +23,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Modal } from '@/components/ui/Modal'
 import { PageLoader } from '@/components/ui/Spinner'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { crmApi } from '@/lib/api'
+import { crmApi, aiWorkersApi } from '@/lib/api'
 import { formatRelativeTime } from '@/lib/utils'
 import { useAuthStore } from '@/lib/store'
 
@@ -81,6 +81,11 @@ function IntegrationsPageInner() {
   const { data: integrations, isLoading } = useQuery({
     queryKey: ['crm-integrations'],
     queryFn: crmApi.list,
+  })
+
+  const { data: aiWorkers } = useQuery({
+    queryKey: ['ai-workers'],
+    queryFn: aiWorkersApi.list,
   })
 
   const createMutation = useMutation({

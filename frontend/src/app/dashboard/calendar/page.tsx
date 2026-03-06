@@ -753,7 +753,9 @@ function CalendarPageInner() {
               </label>
               {availableWorkers.length === 0 ? (
                 <p className="text-sm text-amber-600 bg-amber-50 rounded-lg p-3">
-                  Alle AI-medewerkers hebben al een agenda gekoppeld. Maak eerst een nieuwe medewerker aan of ontkoppel een bestaande agenda.
+                  {!workers?.length
+                    ? 'Maak eerst een AI-medewerker aan voordat u een agenda kunt koppelen.'
+                    : 'Alle AI-medewerkers hebben al een agenda gekoppeld. Maak eerst een nieuwe medewerker aan of ontkoppel een bestaande agenda.'}
                 </p>
               ) : (
                 <Select

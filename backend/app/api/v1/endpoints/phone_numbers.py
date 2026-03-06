@@ -74,6 +74,14 @@ async def create_phone_number(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"U heeft het maximum aantal telefoonnummers ({company.ai_worker_limit}) bereikt. Upgrade uw abonnement voor meer nummers.",
         )
+
+    # Require at least one AI worker before adding phone numbers
+    ai_worker_count = db.query(AIWorker).filter(AIWorker.company_id == company.id).count()
+    if ai_worker_count == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Maak eerst een AI-medewerker aan voordat u een telefoonnummer kunt koppelen.",
+        )
     
     # Check if business number already exists for this company
     existing = db.query(PhoneNumber).filter(

@@ -1005,11 +1005,8 @@ function SettingsContent() {
                         <h4 className="text-xl font-bold text-gray-900">Starter</h4>
                         <p className="text-sm text-gray-500 mt-1">Perfect voor kleine ondernemers</p>
                         <div className="mt-4">
-                          <span className="text-3xl font-bold text-gray-900">€{billingInterval === 'yearly' ? '125' : '149'}</span>
-                          <span className="text-gray-500">/maand</span>
-                          {billingInterval === 'yearly' && (
-                            <p className="text-xs text-gray-400 mt-1">€1.499 per jaar gefactureerd</p>
-                          )}
+                          <span className="text-3xl font-bold text-gray-900">€{billingInterval === 'yearly' ? '1.499' : '149'}</span>
+                          <span className="text-gray-500">{billingInterval === 'yearly' ? '/jaar' : '/maand'}</span>
                         </div>
                         <ul className="mt-4 space-y-2">
                           <li className="flex items-center text-sm text-gray-600">
@@ -1023,6 +1020,10 @@ function SettingsContent() {
                           <li className="flex items-center text-sm text-gray-600">
                             <Check className="h-4 w-4 text-green-500 mr-2" />
                             Agenda integratie
+                          </li>
+                          <li className="flex items-center text-sm text-gray-600">
+                            <Check className="h-4 w-4 text-green-500 mr-2" />
+                            CRM integratie
                           </li>
                           <li className="flex items-center text-sm text-gray-600">
                             <Check className="h-4 w-4 text-green-500 mr-2" />
@@ -1064,16 +1065,13 @@ function SettingsContent() {
                         <h4 className="text-xl font-bold text-gray-900">Business</h4>
                         <p className="text-sm text-gray-500 mt-1">Ideaal voor groeiende bedrijven</p>
                         <div className="mt-4">
-                          <span className="text-3xl font-bold text-gray-900">€{billingInterval === 'yearly' ? '258' : '299'}</span>
-                          <span className="text-gray-500">/maand</span>
-                          {billingInterval === 'yearly' && (
-                            <p className="text-xs text-gray-400 mt-1">€3.099 per jaar gefactureerd</p>
-                          )}
+                          <span className="text-3xl font-bold text-gray-900">€{billingInterval === 'yearly' ? '3.099' : '299'}</span>
+                          <span className="text-gray-500">{billingInterval === 'yearly' ? '/jaar' : '/maand'}</span>
                         </div>
                         <ul className="mt-4 space-y-2">
                           <li className="flex items-center text-sm text-gray-600">
                             <Check className="h-4 w-4 text-green-500 mr-2" />
-                            5 AI-medewerkers
+                            3 AI-medewerkers
                           </li>
                           <li className="flex items-center text-sm text-gray-600">
                             <Check className="h-4 w-4 text-green-500 mr-2" />
@@ -1081,11 +1079,15 @@ function SettingsContent() {
                           </li>
                           <li className="flex items-center text-sm text-gray-600">
                             <Check className="h-4 w-4 text-green-500 mr-2" />
+                            Alles van Starter
+                          </li>
+                          <li className="flex items-center text-sm text-gray-600">
+                            <Check className="h-4 w-4 text-green-500 mr-2" />
                             Prioriteit support
                           </li>
                           <li className="flex items-center text-sm text-gray-600">
                             <Check className="h-4 w-4 text-green-500 mr-2" />
-                            API toegang
+                            Dedicated onboarding
                           </li>
                         </ul>
                         {(subscription?.status === 'active' || subscription?.status === 'trialing') && subscription?.plan === 'business' ? (
@@ -1124,15 +1126,19 @@ function SettingsContent() {
                         <ul className="mt-4 space-y-2">
                           <li className="flex items-center text-sm text-gray-600">
                             <Check className="h-4 w-4 text-green-500 mr-2" />
-                            7+ AI-medewerkers
+                            5+ AI-medewerkers
                           </li>
                           <li className="flex items-center text-sm text-gray-600">
                             <Check className="h-4 w-4 text-green-500 mr-2" />
-                            Onbeperkte belminuten
+                            Alles van Business
                           </li>
                           <li className="flex items-center text-sm text-gray-600">
                             <Check className="h-4 w-4 text-green-500 mr-2" />
                             Dedicated support
+                          </li>
+                          <li className="flex items-center text-sm text-gray-600">
+                            <Check className="h-4 w-4 text-green-500 mr-2" />
+                            Onbeperkte logs
                           </li>
                           <li className="flex items-center text-sm text-gray-600">
                             <Check className="h-4 w-4 text-green-500 mr-2" />

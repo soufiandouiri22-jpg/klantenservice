@@ -50,7 +50,7 @@ const plans = [
     yearlyTotal: '1.499',
     workers: 1,
     description: 'Perfect voor kleine ondernemers',
-    features: ['1 AI-medewerker', '500 belminuten/maand', 'Agenda integratie', 'Website kennis', '30 dagen logs'],
+    features: ['1 AI-medewerker', '500 belminuten/maand', 'Agenda integratie', 'CRM integratie', 'Website kennis'],
   },
   {
     name: 'Business',
@@ -60,7 +60,7 @@ const plans = [
     workers: 3,
     popular: true,
     description: 'Ideaal voor groeiende bedrijven',
-    features: ['3 AI-medewerkers', '2000 belminuten/maand', 'Prioriteit support', '90 dagen logs', 'API toegang'],
+    features: ['3 AI-medewerkers', '2000 belminuten/maand', 'Alles van Starter', 'Prioriteit support', 'Dedicated onboarding'],
   },
   {
     name: 'Enterprise',
@@ -985,12 +985,6 @@ export default function HomePage() {
               Kies het pakket dat bij uw bedrijf past
             </p>
 
-            <div className="mt-6 inline-flex items-center gap-2 rounded-full bg-orange-100 px-4 py-2">
-              <span className="text-orange-600 font-semibold">🎉 Probeer het gratis</span>
-              <span className="text-orange-500">•</span>
-              <span className="text-orange-600">Annuleren kan altijd</span>
-            </div>
-
             {/* Billing toggle */}
             <div className="mt-6 inline-flex items-center gap-3 rounded-full bg-gray-100 p-1">
               <button
@@ -1045,16 +1039,11 @@ export default function HomePage() {
                     ) : (
                       <>
                         <span className={`text-5xl font-bold ${plan.popular ? 'text-white' : 'text-gray-900'}`}>
-                          €{billingInterval === 'yearly' ? plan.yearlyPrice : plan.monthlyPrice}
+                          €{billingInterval === 'yearly' ? plan.yearlyTotal : plan.monthlyPrice}
                         </span>
                         <span className={`text-base ${plan.popular ? 'text-primary-200' : 'text-gray-500'}`}>
-                          /maand
+                          {billingInterval === 'yearly' ? '/jaar' : '/maand'}
                         </span>
-                        {billingInterval === 'yearly' && plan.yearlyTotal && (
-                          <p className={`mt-1 text-sm ${plan.popular ? 'text-primary-200' : 'text-gray-500'}`}>
-                            €{plan.yearlyTotal} per jaar gefactureerd
-                          </p>
-                        )}
                         <p className={`mt-1 text-sm font-medium ${plan.popular ? 'text-orange-300' : 'text-orange-500'}`}>
                           14 dagen gratis
                         </p>
