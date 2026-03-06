@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
-  Phone, Settings, Clock, Trash2, Headphones, 
+  Phone, Settings, Clock, Trash2, Headphones, Plus,
   Check, ArrowRight, ArrowLeft, Copy, PhoneCall,
   CheckCircle2, XCircle, Loader2, HelpCircle
 } from 'lucide-react'
@@ -304,7 +304,7 @@ export default function PhonePage() {
             description="Laat de AI uw zakelijke telefoontjes beantwoorden. Klanten bellen uw bestaande nummer en worden automatisch geholpen."
             action={
               canEdit ? (
-                <Button onClick={openWizard}>
+                <Button leftIcon={<Plus className="h-4 w-4" />} onClick={openWizard}>
                   Mijn nummer koppelen
                 </Button>
               ) : undefined
