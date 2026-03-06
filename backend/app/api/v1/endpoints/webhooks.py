@@ -122,6 +122,14 @@ async def twilio_voice_webhook(
         twiml = _tts_twiml("Dit nummer is niet in gebruik.")
         return Response(content=twiml, media_type="text/xml")
     
+    # Auto-verify forwarding when a forwarded call comes in
+    forwarded_from = form_dict.get("ForwardedFrom")
+    if forwarded_from and not phone.forwarding_verified:
+        phone.forwarding_verified = True
+        phone.setup_completed = True
+        db.commit()
+        logger.info(f"Forwarding auto-verified for phone {phone.number} (forwarded from {forwarded_from})")
+    
     company = db.query(Company).filter(Company.id == phone.company_id).first()
     
     # Check kill switch - immediately reject calls for kill-switched companies
