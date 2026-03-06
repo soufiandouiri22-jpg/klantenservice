@@ -56,7 +56,7 @@ const plans = [
     name: 'Business',
     monthlyPrice: '299',
     yearlyPrice: '258',
-    yearlyTotal: '3.099',
+    yearlyTotal: '2.999',
     workers: 3,
     popular: true,
     description: 'Ideaal voor groeiende bedrijven',
