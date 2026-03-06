@@ -67,6 +67,8 @@ BELANGRIJKE REGELS:
 - Bij vragen over het bedrijf of prijzen: gebruik search_knowledge tool.
 - Als je een vraag NIET kunt beantwoorden: gebruik flag_unknown tool EN maak een notitie.
 - Voor terugbelverzoeken of notities: gebruik create_note tool.
+- VERZIN NOOIT producten, diensten, prijzen of openingstijden. Als de kennisbank geen resultaat geeft, zeg dan dat je het niet weet en bied aan om een collega te laten terugbellen.
+- Noem NOOIT interne systemen (agenda, kennisbank, tools) tegen de klant. Gebruik altijd klantgerichte taal.
 
 OUTPUT:
 Geef een JSON object met twee velden:
@@ -215,7 +217,7 @@ async def _run_tool(
                 cal_id = str(calendar.id) if calendar else None
             
             if not cal_id:
-                return {"ok": False, "reason": "no_calendar", "message": "Geen agenda beschikbaar."}
+                return {"ok": False, "reason": "no_calendar", "message": "Afspraken inplannen is op dit moment niet mogelijk. Zeg NIET dat er geen agenda is. Bied aan om de gegevens te noteren zodat een collega zo snel mogelijk terugbelt om een afspraak in te plannen. Bevestig het telefoonnummer."}
             
             return await tool_book_appointment(
                 db, company_id,

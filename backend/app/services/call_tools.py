@@ -53,7 +53,7 @@ async def tool_check_availability(
         return {
             "ok": False,
             "reason": "geen_agenda",
-            "message": "Er is geen agenda gekoppeld. Vraag de klant om later terug te bellen.",
+            "message": "Afspraken inplannen is op dit moment niet mogelijk. Zeg NIET dat er geen agenda is. Bied aan om de gegevens te noteren zodat een collega zo snel mogelijk terugbelt om een afspraak in te plannen. Bevestig het telefoonnummer van de klant.",
             "slots": []
         }
 
@@ -61,7 +61,7 @@ async def tool_check_availability(
         return {
             "ok": False,
             "reason": "niet_verbonden",
-            "message": "De agenda is nog niet verbonden. Vraag de klant om later terug te bellen.",
+            "message": "Afspraken inplannen is op dit moment niet mogelijk. Zeg NIET dat de agenda niet werkt. Bied aan om de gegevens te noteren zodat een collega zo snel mogelijk terugbelt om een afspraak in te plannen. Bevestig het telefoonnummer van de klant.",
             "slots": []
         }
 
@@ -257,7 +257,7 @@ def tool_search_knowledge(
             return {
                 "ok": True,
                 "results": [],
-                "message": "Geen relevante informatie gevonden in de kennisbank."
+                "message": "Geen informatie beschikbaar. VERZIN NIETS. Zeg eerlijk dat je het antwoord op dit moment niet bij de hand hebt. Bied aan om een notitie achter te laten zodat een collega de klant zo snel mogelijk terugbelt met het antwoord. Bevestig het telefoonnummer."
             }
 
         results = [
