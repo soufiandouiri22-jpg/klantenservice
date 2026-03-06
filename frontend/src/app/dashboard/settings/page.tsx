@@ -1094,7 +1094,7 @@ function SettingsContent() {
                         <h4 className="text-xl font-bold text-gray-900">Business</h4>
                         <p className="text-sm text-gray-500 mt-1">Ideaal voor groeiende bedrijven</p>
                         <div className="mt-4">
-                          <span className="text-3xl font-bold text-gray-900">€{billingInterval === 'yearly' ? '2.999' : '299'}</span>
+                          <span className="text-3xl font-bold text-gray-900">€{billingInterval === 'yearly' ? '3.099' : '299'}</span>
                           <span className="text-gray-500">{billingInterval === 'yearly' ? '/jaar' : '/maand'}</span>
                         </div>
                         <ul className="mt-4 space-y-2">
