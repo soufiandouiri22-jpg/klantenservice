@@ -318,7 +318,9 @@ async def twilio_voice_webhook(
 
     # Time-aware greeting based on Amsterdam timezone
     ams_hour = datetime.now(ZoneInfo("Europe/Amsterdam")).hour
-    if ams_hour < 12:
+    if ams_hour < 6:
+        greeting = "Goedenavond"
+    elif ams_hour < 12:
         greeting = "Goedemorgen"
     elif ams_hour < 18:
         greeting = "Goedemiddag"

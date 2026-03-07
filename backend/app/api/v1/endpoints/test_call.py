@@ -105,7 +105,9 @@ async def get_test_call_signed_url(
     )
 
     ams_hour = datetime.now(ZoneInfo("Europe/Amsterdam")).hour
-    if ams_hour < 12:
+    if ams_hour < 6:
+        greeting = "Goedenavond"
+    elif ams_hour < 12:
         greeting = "Goedemorgen"
     elif ams_hour < 18:
         greeting = "Goedemiddag"
