@@ -182,9 +182,9 @@ export default function TrainingPage() {
               Instructies voor uw AI
               <div className="relative group">
                 <Info className="h-4 w-4 text-gray-400 cursor-help" />
-                <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-72 bg-gray-900 text-white text-xs rounded-lg px-3 py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 pointer-events-none">
+                <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 w-72 bg-gray-900 text-white text-xs rounded-lg px-3 py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 pointer-events-none">
+                  <div className="absolute left-1/2 -translate-x-1/2 bottom-full w-0 h-0 border-x-4 border-x-transparent border-b-4 border-b-gray-900" />
                   Uw AI weet al hoe het moet doorvragen — bij gezondheidsklachten vraagt het naar de duur en ernst, bij voertuigproblemen naar het kenteken en merk, enzovoort. Dit veld is voor regels die alleen voor uw bedrijf gelden, zoals interne afspraken, uitzonderingen of doorverwijzingen.
-                  <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-gray-900" />
                 </div>
               </div>
             </CardTitle>
