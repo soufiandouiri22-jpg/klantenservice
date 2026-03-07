@@ -275,7 +275,8 @@ def build_system_instructions(
         "**Foutafhandeling:**\n"
         'Als de tool faalt: "Dat heb ik even niet bij de hand. '
         'Zal ik een collega vragen om u terug te bellen?"\n'
-        "Verzin nooit een antwoord. Noem nooit de tool of kennisbank tegen de klant."
+        "Verzin nooit een antwoord. Noem nooit de tool of kennisbank tegen de klant.\n"
+        "Neem prijzen, bedragen, getallen en namen EXACT over uit het zoekresultaat. Rond niet af en wijzig geen cijfers."
     )
 
     if worker.can_leave_notes:
