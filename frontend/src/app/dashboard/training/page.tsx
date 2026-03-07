@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { Plus, GraduationCap, MessageSquare, Lightbulb, Trash2, Edit2, Check, X } from 'lucide-react'
+import { Plus, GraduationCap, MessageSquare, Lightbulb, Trash2, Edit2, Check, X, FileText } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { Header } from '@/components/layout/Header'
@@ -27,6 +27,24 @@ export default function TrainingPage() {
   const [newQuestion, setNewQuestion] = useState('')
   const [newAnswer, setNewAnswer] = useState('')
   const [newCategory, setNewCategory] = useState('')
+
+  const { data: instructionsData } = useQuery({
+    queryKey: ['training-instructions'],
+    queryFn: trainingApi.getInstructions,
+  })
+  const [instructionsValue, setInstructionsValue] = useState<string | null>(null)
+  const instructionsText = instructionsValue ?? instructionsData?.custom_instructions ?? ''
+
+  const updateInstructionsMutation = useMutation({
+    mutationFn: trainingApi.updateInstructions,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['training-instructions'] })
+      toast.success('Instructies opgeslagen')
+    },
+    onError: () => {
+      toast.error('Kon instructies niet opslaan')
+    },
+  })
 
   const { data: rules, isLoading: rulesLoading } = useQuery({
     queryKey: ['training-rules'],
@@ -156,6 +174,37 @@ export default function TrainingPage() {
       />
 
       <div className="p-4 sm:p-6 space-y-6">
+        {/* Custom Instructions */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-primary-600" />
+              Instructies voor uw AI
+            </CardTitle>
+          </CardHeader>
+          <CardBody>
+            <p className="text-sm text-gray-500 mb-3">
+              Beschrijf hoe uw AI-medewerker moet reageren op bellers. Bijvoorbeeld: welke vragen moet hij stellen, wanneer is iets spoed, welke informatie moet hij altijd vastleggen?
+            </p>
+            <textarea
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-none transition-colors"
+              rows={5}
+              placeholder={"Voorbeeld voor een huisarts:\n\"Vraag bij klachten altijd hoe lang het speelt en of er koorts is. Vraag altijd naar de geboortedatum van de patiënt. Bij spoed adviseer 112.\"\n\nVoorbeeld voor een garage:\n\"Vraag altijd naar het kenteken, merk en model. Bij onveilige situaties: plan een afspraak dezelfde dag.\""}
+              value={instructionsText}
+              onChange={(e) => setInstructionsValue(e.target.value)}
+              onBlur={() => {
+                if (canEdit && instructionsText !== (instructionsData?.custom_instructions ?? '')) {
+                  updateInstructionsMutation.mutate(instructionsText)
+                }
+              }}
+              disabled={!canEdit}
+            />
+            <p className="mt-2 text-xs text-gray-400">
+              Laat dit veld leeg als de standaard flow (afspraken, vragen beantwoorden, notities) al voldoende is. Wijzigingen worden automatisch opgeslagen.
+            </p>
+          </CardBody>
+        </Card>
+
         {/* Behavior Rules */}
         <Card>
           <CardHeader>

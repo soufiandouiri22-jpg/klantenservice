@@ -64,6 +64,16 @@ class PhoneNumber(Base):
         default="Uw afspraak bij {bedrijfsnaam} is bevestigd op {datum} om {tijd}. Tot dan!"
     )
 
+    # SMS callback template (for terugbelverzoeken)
+    sms_callback_template = Column(
+        String(500),
+        default="Uw verzoek is genoteerd bij {bedrijfsnaam}. U wordt zo snel mogelijk teruggebeld."
+    )
+
+    # Call transfer settings
+    transfer_enabled = Column(Boolean, default=False)
+    transfer_number = Column(String(20), nullable=True)
+
     # After hours settings
     after_hours_message = Column(
         String(500),

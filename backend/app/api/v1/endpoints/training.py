@@ -24,6 +24,27 @@ from app.api.deps import get_current_user, get_current_company, require_manager
 router = APIRouter()
 
 
+# Custom Instructions
+@router.get("/instructions")
+async def get_instructions(
+    current_user: User = Depends(get_current_user),
+    company: Company = Depends(get_current_company),
+):
+    return {"custom_instructions": company.custom_instructions or ""}
+
+
+@router.patch("/instructions")
+async def update_instructions(
+    data: dict,
+    current_user: User = Depends(require_manager),
+    company: Company = Depends(get_current_company),
+    db: Session = Depends(get_db),
+):
+    company.custom_instructions = (data.get("custom_instructions") or "").strip() or None
+    db.commit()
+    return {"custom_instructions": company.custom_instructions or ""}
+
+
 # Training Rules
 @router.get("/rules", response_model=List[TrainingRuleResponse])
 async def list_training_rules(

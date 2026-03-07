@@ -307,6 +307,8 @@ async def twilio_voice_webhook(
         example_answers=None,
         db=db,
         caller_context=caller_context,
+        custom_instructions=company.custom_instructions,
+        transfer_enabled=bool(phone.transfer_enabled and phone.transfer_number),
     )
 
     logger.info(
@@ -349,6 +351,7 @@ async def twilio_voice_webhook(
                 "call_log_id": str(call_log.id),
                 "customer_phone": from_number,
                 "company_name": company.name or "",
+                "call_sid": call_sid,
             },
             "conversation_config_override": {
                 "agent": {

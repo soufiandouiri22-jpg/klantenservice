@@ -34,6 +34,7 @@ CONTEXT_FIELDS = {
     "customer_phone",
     "company_name",
     "calendar_id",
+    "call_sid",
 }
 
 
@@ -57,6 +58,7 @@ def _extract_company_context(data: dict) -> Dict[str, Any]:
     call_log_id = data.get("call_log_id")
     customer_phone = data.get("customer_phone")
     calendar_id = data.get("calendar_id")
+    call_sid = data.get("call_sid")
 
     # Fallback: legacy nested dynamic_variables object
     if not company_id:
@@ -67,6 +69,7 @@ def _extract_company_context(data: dict) -> Dict[str, Any]:
             call_log_id = call_log_id or dv.get("call_log_id")
             customer_phone = customer_phone or dv.get("customer_phone")
             calendar_id = calendar_id or dv.get("calendar_id")
+            call_sid = call_sid or dv.get("call_sid")
 
     return {
         "company_id": company_id,
@@ -74,6 +77,7 @@ def _extract_company_context(data: dict) -> Dict[str, Any]:
         "call_log_id": call_log_id,
         "customer_phone": customer_phone,
         "calendar_id": calendar_id,
+        "call_sid": call_sid,
     }
 
 
@@ -99,6 +103,7 @@ async def _handle_tool(request: Request, tool_name: str) -> JSONResponse:
             "call_log_id": ctx.get("call_log_id"),
             "customer_phone": ctx.get("customer_phone"),
             "calendar_id": ctx.get("calendar_id"),
+            "call_sid": ctx.get("call_sid"),
         }
 
         arguments = {
@@ -156,3 +161,9 @@ async def tool_create_note(request: Request):
 async def tool_flag_unknown(request: Request):
     """ElevenLabs server tool: Flag an unanswered question."""
     return await _handle_tool(request, "flag_unknown")
+
+
+@router.post("/transfer_call")
+async def tool_transfer_call(request: Request):
+    """ElevenLabs server tool: Transfer call to a human agent."""
+    return await _handle_tool(request, "transfer_call")

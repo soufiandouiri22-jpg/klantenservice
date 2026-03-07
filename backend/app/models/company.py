@@ -88,6 +88,9 @@ class Company(Base):
     terms_accepted_at = Column(DateTime, nullable=True)  # When user agreed to terms & privacy
     marketing_consent = Column(Boolean, default=False)  # Opt-in for email marketing
     
+    # Custom AI instructions (shown on Training page)
+    custom_instructions = Column(Text, nullable=True)
+
     # Status
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)

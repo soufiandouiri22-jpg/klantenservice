@@ -249,39 +249,61 @@ def tool_search_knowledge(
             "message": "Geen zoekopdracht opgegeven."
         }
 
+    results = []
+
+    # Search verified ExampleAnswers (manual Q&A from Training page)
+    try:
+        from app.models.training import ExampleAnswer
+        query_lower = query.lower()
+        qa_matches = (
+            db.query(ExampleAnswer)
+            .filter(
+                ExampleAnswer.company_id == company_id,
+                ExampleAnswer.is_active == True,
+                ExampleAnswer.is_verified == True,
+            )
+            .all()
+        )
+        for qa in qa_matches:
+            if query_lower in (qa.question or "").lower() or any(
+                query_lower in (v or "").lower() for v in (qa.question_variations or [])
+            ):
+                results.append({
+                    "content": f"Vraag: {qa.question}\nAntwoord: {qa.answer}",
+                    "url": "",
+                    "title": qa.category or "Voorbeeldantwoord",
+                })
+    except Exception:
+        logger.warning("Failed to search ExampleAnswers", exc_info=True)
+
     try:
         store = VectorStore(company_id, db)
         chunks = store.search(query, website_id=None, limit=limit, db=db)
 
-        if not chunks:
-            return {
-                "ok": True,
-                "results": [],
-                "message": "Geen informatie beschikbaar. VERZIN NIETS. Zeg eerlijk dat je het antwoord op dit moment niet bij de hand hebt. Bied aan om een notitie achter te laten zodat een collega de klant zo snel mogelijk terugbelt met het antwoord. Bevestig het telefoonnummer."
-            }
+        if chunks:
+            results.extend([
+                {
+                    "content": c.get("content", "")[:500],
+                    "url": c.get("metadata", {}).get("url", ""),
+                    "title": c.get("metadata", {}).get("title", ""),
+                }
+                for c in chunks
+            ])
+    except Exception as e:
+        logger.error(f"Error searching vector store: {e}")
 
-        results = [
-            {
-                "content": c.get("content", "")[:500],
-                "url": c.get("metadata", {}).get("url", ""),
-                "title": c.get("metadata", {}).get("title", ""),
-            }
-            for c in chunks
-        ]
-
+    if not results:
         return {
             "ok": True,
-            "results": results,
-            "message": f"{len(results)} relevante resultaten gevonden."
+            "results": [],
+            "message": "Geen informatie beschikbaar. VERZIN NIETS. Zeg eerlijk dat je het antwoord op dit moment niet bij de hand hebt. Bied aan om een notitie achter te laten zodat een collega de klant zo snel mogelijk terugbelt met het antwoord. Bevestig het telefoonnummer."
         }
 
-    except Exception as e:
-        logger.error(f"Error searching knowledge: {e}")
-        return {
-            "ok": False,
-            "results": [],
-            "message": "Er is een technisch probleem met de kennisbank. Probeer het later opnieuw."
-        }
+    return {
+        "ok": True,
+        "results": results[:limit + 2],
+        "message": f"{len(results)} relevante resultaten gevonden."
+    }
 
 
 def tool_get_prices(
@@ -419,7 +441,33 @@ def tool_create_note(
             )
         except Exception:
             logger.warning("Failed to create note-action notification", exc_info=True)
-    
+
+        # Send callback SMS to the customer
+        if customer_phone:
+            try:
+                from app.models.phone_number import PhoneNumber
+                from app.models.company import Company
+                phone = (
+                    db.query(PhoneNumber)
+                    .filter(PhoneNumber.company_id == company_id, PhoneNumber.is_active == True)
+                    .first()
+                )
+                if phone and phone.sms_confirmation_enabled:
+                    company = db.query(Company).filter(Company.id == company_id).first()
+                    company_name = company.name if company else "ons bedrijf"
+                    template = phone.sms_callback_template or "Uw verzoek is genoteerd bij {bedrijfsnaam}. U wordt zo snel mogelijk teruggebeld."
+                    sms_text = template.replace("{bedrijfsnaam}", company_name)
+
+                    from app.services.sms_service import send_sms
+                    send_sms(
+                        to_number=customer_phone,
+                        from_number=phone.number,
+                        body=sms_text,
+                    )
+                    logger.info(f"Sent callback SMS to {customer_phone}")
+            except Exception:
+                logger.warning("Failed to send callback SMS", exc_info=True)
+
     return {
         "ok": True,
         "note_id": str(note.id),
@@ -531,4 +579,84 @@ def tool_flag_unknown(
             "ok": False,
             "action": "error",
             "message": "Kon vraag niet opslaan."
+        }
+
+
+def tool_transfer_call(
+    db: Session,
+    company_id: str,
+    call_log_id: Optional[str] = None,
+    call_sid: Optional[str] = None,
+    reason: str = "",
+) -> Dict[str, Any]:
+    """
+    Transfer the current call to a human agent via Twilio.
+
+    Looks up the PhoneNumber for the company, checks if transfer is enabled,
+    then uses the Twilio REST API to redirect the live call to a <Dial> TwiML.
+    """
+    from app.models.phone_number import PhoneNumber
+    from app.models.call_log import CallLog, CallOutcome
+    from app.models.ai_worker import AIWorker
+    from app.core.config import get_settings
+
+    settings = get_settings()
+
+    if not call_sid:
+        return {
+            "ok": False,
+            "message": "Doorverbinden is op dit moment niet mogelijk. Bied aan om een collega te laten terugbellen.",
+        }
+
+    phone = (
+        db.query(PhoneNumber)
+        .filter(PhoneNumber.company_id == company_id, PhoneNumber.is_active == True)
+        .first()
+    )
+
+    if not phone or not phone.transfer_enabled or not phone.transfer_number:
+        return {
+            "ok": False,
+            "message": "Doorverbinden is niet beschikbaar. Bied aan om een collega te laten terugbellen.",
+        }
+
+    try:
+        from twilio.rest import Client
+
+        client = Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
+
+        transfer_twiml = (
+            '<Response>'
+            '<Say language="nl-NL">Een moment alstublieft, ik verbind u door.</Say>'
+            f'<Dial>{phone.transfer_number}</Dial>'
+            '</Response>'
+        )
+
+        client.calls(call_sid).update(twiml=transfer_twiml)
+
+        if call_log_id:
+            call_log = db.query(CallLog).filter(CallLog.id == call_log_id).first()
+            if call_log:
+                call_log.outcome = CallOutcome.TRANSFERRED
+                if call_log.ai_worker_id:
+                    worker = db.query(AIWorker).filter(AIWorker.id == call_log.ai_worker_id).first()
+                    if worker:
+                        worker.end_call()
+                db.commit()
+
+        logger.info(
+            f"Call {call_sid} transferred to {phone.transfer_number} "
+            f"(reason: {reason[:80]})"
+        )
+
+        return {
+            "ok": True,
+            "message": "Gesprek wordt doorverbonden.",
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to transfer call {call_sid}: {e}", exc_info=True)
+        return {
+            "ok": False,
+            "message": "Doorverbinden is op dit moment niet mogelijk. Bied aan om een collega te laten terugbellen.",
         }

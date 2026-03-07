@@ -596,6 +596,20 @@ export const trainingApi = {
     const response = await api.post(`/training/detected-questions/${questionId}/dismiss`)
     return response.data
   },
+
+  getInstructions: async () => {
+    try {
+      const response = await api.get('/training/instructions')
+      return response.data
+    } catch {
+      return { custom_instructions: '' }
+    }
+  },
+
+  updateInstructions: async (customInstructions: string) => {
+    const response = await api.patch('/training/instructions', { custom_instructions: customInstructions })
+    return response.data
+  },
 }
 
 // Calls API

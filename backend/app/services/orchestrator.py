@@ -27,6 +27,7 @@ from app.services.call_tools import (
     tool_search_knowledge,
     tool_create_note,
     tool_flag_unknown,
+    tool_transfer_call,
 )
 from app.models.context_log import ContextLog
 from app.models.usage_log import UsageLog
@@ -169,6 +170,20 @@ TOOLS_OPENAI = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "transfer_call",
+            "description": "Verbind het gesprek door naar een menselijke collega. Gebruik ALLEEN als de beller expliciet om een mens vraagt of de situatie te complex is.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "reason": {"type": "string", "description": "Korte reden waarom het gesprek wordt doorverbonden"},
+                },
+                "required": ["reason"],
+            },
+        },
+    },
 ]
 
 
@@ -254,6 +269,15 @@ async def _run_tool(
                 db, company_id,
                 question=arguments.get("question", ""),
                 call_log_id=call_log_id,
+            )
+
+        if name == "transfer_call":
+            call_sid = context.get("call_sid")
+            return tool_transfer_call(
+                db, company_id,
+                call_log_id=call_log_id,
+                call_sid=call_sid,
+                reason=arguments.get("reason", ""),
             )
         
         return {"ok": False, "reason": "unknown_tool", "message": f"Onbekende tool: {name}"}

@@ -42,6 +42,8 @@ def build_system_instructions(
     system_prompts: Optional[str] = None,
     db=None,
     caller_context: Optional[dict] = None,
+    custom_instructions: Optional[str] = None,
+    transfer_enabled: bool = False,
 ) -> str:
     """
     Build system instructions for the ElevenLabs Conversational AI agent.
@@ -252,6 +254,10 @@ def build_system_instructions(
     if guardrails_parts:
         sections.append("# Guardrails\n\n" + "\n\n".join(guardrails_parts))
 
+    # 4.5 # Bedrijfsinstructies (custom instructions from Training page)
+    if custom_instructions and custom_instructions.strip():
+        sections.append("# Bedrijfsinstructies\n\n" + custom_instructions.strip())
+
     # 5. # Tools  (built dynamically from permissions + tool descriptions)
     tool_lines = []
     if behavior_rules:
@@ -279,6 +285,18 @@ def build_system_instructions(
             "**Wanneer gebruiken:**\n"
             "- Klant heeft een verzoek buiten jouw bevoegdheden\n"
             "- Er moet iets worden doorgegeven aan een collega"
+        )
+
+    if transfer_enabled:
+        tool_lines.append(
+            "## transfer_call\n"
+            "Verbind het gesprek door naar een menselijke collega.\n\n"
+            "**Wanneer gebruiken:**\n"
+            "- Beller vraagt expliciet om een mens te spreken\n"
+            "- Situatie is te complex om zelf af te handelen na doorvragen\n"
+            "- Beller is gefrustreerd en je kunt niet helpen\n\n"
+            "**Zeg altijd:** 'Ik verbind u door met een collega' voordat je de tool gebruikt.\n"
+            "Geef een korte reden mee zodat de collega weet waarom de beller belt."
         )
 
     tool_lines.append(

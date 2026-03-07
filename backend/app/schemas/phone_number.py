@@ -52,6 +52,9 @@ class PhoneNumberUpdate(BaseModel):
     voicemail_email: Optional[str] = None
     sms_confirmation_enabled: Optional[bool] = None
     sms_confirmation_template: Optional[str] = None
+    sms_callback_template: Optional[str] = None
+    transfer_enabled: Optional[bool] = None
+    transfer_number: Optional[str] = Field(None, max_length=20)
     after_hours_message: Optional[str] = None
     after_hours_voicemail: Optional[bool] = None
     is_active: Optional[bool] = None
@@ -76,6 +79,9 @@ class PhoneNumberResponse(PhoneNumberBase):
     voicemail_email: Optional[str]
     sms_confirmation_enabled: bool
     sms_confirmation_template: Optional[str]
+    sms_callback_template: Optional[str] = None
+    transfer_enabled: bool = False
+    transfer_number: Optional[str] = None
     after_hours_message: str
     after_hours_voicemail: bool
     is_active: bool
