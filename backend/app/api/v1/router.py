@@ -26,6 +26,7 @@ from app.api.v1.endpoints import (
     kvk,
     elevenlabs_tools,
     test_call,
+    demo,
 )
 
 api_router = APIRouter()
@@ -182,4 +183,11 @@ api_router.include_router(
     test_call.router,
     prefix="/test-call",
     tags=["Test Call"]
+)
+
+# Demo (public landing page voice demo, no auth)
+api_router.include_router(
+    demo.router,
+    prefix="/demo",
+    tags=["Demo"]
 )

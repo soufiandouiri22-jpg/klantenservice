@@ -8,6 +8,7 @@ import { ArrowRight, Check, Headphones, Calendar, Globe, MessageSquare, Shield, 
 import Image from 'next/image'
 import PublicHeader from '@/components/layout/PublicHeader'
 import Footer from '@/components/layout/Footer'
+import { DemoCallWidget } from '@/components/DemoCallWidget'
 
 const features = [
   {
@@ -279,10 +280,10 @@ function DemoSection() {
       <div className="max-w-5xl mx-auto w-full">
         <FadeUp className="text-center mb-12">
           <h2 className="text-3xl md:text-4xl lg:text-5xl font-display font-bold text-gray-900">
-            Zie het in actie
+            Probeer het zelf
           </h2>
           <p className="mt-4 text-lg text-gray-600 max-w-2xl mx-auto">
-            Bekijk hoe onze AI-telefonist uw klanten te woord staat en afspraken inplant.
+            Spreek live met onze AI-telefonist. Stel vragen, plan een demo in — ervaar het direct.
           </p>
         </FadeUp>
 
@@ -306,13 +307,10 @@ function DemoSection() {
 
             <div className="relative bg-gradient-to-br from-gray-900 to-gray-800 aspect-video flex items-center justify-center">
               <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:2rem_2rem]" />
-              <button className="relative z-10 flex items-center justify-center w-20 h-20 bg-primary-600 rounded-full shadow-lg shadow-primary-600/50 hover:bg-primary-500 hover:scale-105 transition-all group">
-                <Play className="h-8 w-8 text-white ml-1" fill="currentColor" />
-              </button>
-              <div className="absolute w-20 h-20 rounded-full border-2 border-primary-400 animate-ping opacity-20" />
+              <DemoCallWidget />
               <div className="absolute bottom-4 right-4 flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-lg px-3 py-2">
                 <Headphones className="h-4 w-4 text-primary-400" />
-                <span className="text-sm text-white/80">Demo gesprek</span>
+                <span className="text-sm text-white/80">Live demo</span>
               </div>
             </div>
           </div>

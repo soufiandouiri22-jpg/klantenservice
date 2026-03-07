@@ -89,6 +89,9 @@ class Settings(BaseSettings):
     ELEVENLABS_API_KEY: str = ""
     ELEVENLABS_AGENT_ID: str = ""  # Created via API; used for register_call
     
+    # Demo (public landing page voice demo)
+    DEMO_COMPANY_EMAIL: str = "anarchyamsterdam@gmail.com"
+    
     # KVK (Kamer van Koophandel)
     KVK_API_KEY: str = "l74f93124b88e640109dad5323a65f58bd"
     KVK_API_URL: str = "https://api.kvk.nl/api/v2"

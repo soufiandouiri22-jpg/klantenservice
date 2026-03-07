@@ -490,6 +490,27 @@ let mockAnswers: any[] = [
 
 let mockRulesState = [...MOCK_TRAINING_RULES]
 
+// Demo API (public, no auth)
+export const demoApi = {
+  getSignedUrl: async () => {
+    const response = await api.post('/demo/signed-url')
+    return response.data as {
+      signed_url: string
+      overrides: {
+        agent: { prompt: { prompt: string }; firstMessage: string }
+        tts: { voiceId: string }
+      }
+      dynamic_variables: Record<string, string>
+      worker_name: string
+      call_log_id: string
+    }
+  },
+  endCall: async (callLogId: string) => {
+    const response = await api.post('/demo/end', { call_log_id: callLogId })
+    return response.data
+  },
+}
+
 // Test Call API
 export const testCallApi = {
   check: async () => {
