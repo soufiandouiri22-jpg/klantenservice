@@ -985,10 +985,10 @@ export default function PhonePage() {
                       className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-500"
                       value={settingsForm.transfer_number}
                       onChange={(e) => setSettingsForm({ ...settingsForm, transfer_number: e.target.value })}
-                      placeholder="+31612345678"
+                      placeholder="0612345678"
                     />
                     <p className="text-xs text-gray-400 mt-1">
-                      Het nummer waarnaar gesprekken worden doorverbonden. Gebruik internationaal formaat (+31...).
+                      Het nummer waarnaar gesprekken worden doorverbonden. Mobiel of vast, bijv. 06, 020, 088.
                     </p>
                   </div>
                 )}
