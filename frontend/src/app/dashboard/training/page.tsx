@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { Plus, GraduationCap, MessageSquare, Lightbulb, Trash2, Edit2, Check, X, FileText } from 'lucide-react'
+import { Plus, GraduationCap, MessageSquare, Lightbulb, Trash2, Edit2, Check, X, FileText, Info } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { Header } from '@/components/layout/Header'
@@ -180,16 +180,20 @@ export default function TrainingPage() {
             <CardTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5 text-primary-600" />
               Instructies voor uw AI
+              <div className="relative group">
+                <Info className="h-4 w-4 text-gray-400 cursor-help" />
+                <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-72 bg-gray-900 text-white text-xs rounded-lg px-3 py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 pointer-events-none">
+                  Uw AI weet al hoe het moet doorvragen — bij gezondheidsklachten vraagt het naar de duur en ernst, bij voertuigproblemen naar het kenteken en merk, enzovoort. Dit veld is voor regels die alleen voor uw bedrijf gelden, zoals interne afspraken, uitzonderingen of doorverwijzingen.
+                  <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-gray-900" />
+                </div>
+              </div>
             </CardTitle>
           </CardHeader>
           <CardBody>
-            <p className="text-sm text-gray-500 mb-3">
-              Beschrijf hoe uw AI-medewerker moet reageren op bellers. Bijvoorbeeld: welke vragen moet hij stellen, wanneer is iets spoed, welke informatie moet hij altijd vastleggen?
-            </p>
             <textarea
               className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-none transition-colors"
               rows={5}
-              placeholder={"Voorbeeld voor een huisarts:\n\"Vraag bij klachten altijd hoe lang het speelt en of er koorts is. Vraag altijd naar de geboortedatum van de patiënt. Bij spoed adviseer 112.\"\n\nVoorbeeld voor een garage:\n\"Vraag altijd naar het kenteken, merk en model. Bij onveilige situaties: plan een afspraak dezelfde dag.\""}
+              placeholder={'Bijv. "Wij leveren alleen aan bedrijven, niet aan particulieren."\nof "Kinderen onder 4 jaar altijd dezelfde dag inplannen."'}
               value={instructionsText}
               onChange={(e) => setInstructionsValue(e.target.value)}
               onBlur={() => {
@@ -200,7 +204,7 @@ export default function TrainingPage() {
               disabled={!canEdit}
             />
             <p className="mt-2 text-xs text-gray-400">
-              Laat dit veld leeg als de standaard flow (afspraken, vragen beantwoorden, notities) al voldoende is. Wijzigingen worden automatisch opgeslagen.
+              Laat dit veld leeg als de standaard flow al voldoende is. Wijzigingen worden automatisch opgeslagen.
             </p>
           </CardBody>
         </Card>
