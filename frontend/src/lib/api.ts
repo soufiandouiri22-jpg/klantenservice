@@ -490,6 +490,21 @@ let mockAnswers: any[] = [
 
 let mockRulesState = [...MOCK_TRAINING_RULES]
 
+// Test Call API
+export const testCallApi = {
+  getSignedUrl: async () => {
+    const response = await api.post('/test-call/signed-url')
+    return response.data as {
+      signed_url: string
+      overrides: {
+        agent: { prompt: { prompt: string }; firstMessage: string }
+        tts: { voiceId: string }
+      }
+      worker_name: string
+    }
+  },
+}
+
 // Training API
 export const trainingApi = {
   getRules: async () => {

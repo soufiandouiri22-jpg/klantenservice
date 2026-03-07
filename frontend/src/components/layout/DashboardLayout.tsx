@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Sidebar } from './Sidebar'
+import { TestCallWidget } from '@/components/TestCallWidget'
 import { useSidebarStore, useAuthStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { authApi } from '@/lib/api'
@@ -68,6 +69,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       >
         {children}
       </main>
+      <TestCallWidget />
     </div>
   )
 }

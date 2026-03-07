@@ -25,6 +25,7 @@ from app.api.v1.endpoints import (
     notifications,
     kvk,
     elevenlabs_tools,
+    test_call,
 )
 
 api_router = APIRouter()
@@ -174,4 +175,11 @@ api_router.include_router(
     elevenlabs_tools.router,
     prefix="/elevenlabs/tools",
     tags=["ElevenLabs Tools"]
+)
+
+# Test Call (in-browser AI voice test)
+api_router.include_router(
+    test_call.router,
+    prefix="/test-call",
+    tags=["Test Call"]
 )
