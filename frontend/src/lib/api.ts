@@ -492,6 +492,10 @@ let mockRulesState = [...MOCK_TRAINING_RULES]
 
 // Test Call API
 export const testCallApi = {
+  check: async () => {
+    const response = await api.get('/test-call/check')
+    return response.data as { available: boolean; worker_name: string | null }
+  },
   getSignedUrl: async () => {
     const response = await api.post('/test-call/signed-url')
     return response.data as {
@@ -500,8 +504,14 @@ export const testCallApi = {
         agent: { prompt: { prompt: string }; firstMessage: string }
         tts: { voiceId: string }
       }
+      dynamic_variables: Record<string, string>
       worker_name: string
+      call_log_id: string
     }
+  },
+  endCall: async (callLogId: string) => {
+    const response = await api.post('/test-call/end', { call_log_id: callLogId })
+    return response.data
   },
 }
 

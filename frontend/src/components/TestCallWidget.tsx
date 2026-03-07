@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useConversation } from '@elevenlabs/react'
+import { useQuery } from '@tanstack/react-query'
 import { Phone, PhoneOff, Mic, MicOff, X, Loader2 } from 'lucide-react'
 import { testCallApi } from '@/lib/api'
 import toast from 'react-hot-toast'
@@ -14,17 +15,32 @@ export function TestCallWidget() {
   const [workerName, setWorkerName] = useState('')
   const [micMuted, setMicMuted] = useState(false)
   const [expanded, setExpanded] = useState(false)
+  const callLogIdRef = useRef<string | null>(null)
+
+  const { data: checkData } = useQuery({
+    queryKey: ['test-call-check'],
+    queryFn: testCallApi.check,
+    staleTime: 60_000,
+  })
 
   const conversation = useConversation({
     micMuted,
     onConnect: () => setPhase('active'),
     onDisconnect: () => {
+      if (callLogIdRef.current) {
+        testCallApi.endCall(callLogIdRef.current).catch(() => {})
+        callLogIdRef.current = null
+      }
       setPhase('idle')
       setExpanded(false)
     },
     onError: (error: any) => {
       console.error('Test call error:', error)
       toast.error('Verbinding verbroken. Probeer het opnieuw.')
+      if (callLogIdRef.current) {
+        testCallApi.endCall(callLogIdRef.current).catch(() => {})
+        callLogIdRef.current = null
+      }
       setPhase('idle')
     },
   } as any)
@@ -38,13 +54,19 @@ export function TestCallWidget() {
 
       const data = await testCallApi.getSignedUrl()
       setWorkerName(data.worker_name)
+      callLogIdRef.current = data.call_log_id
 
       await conversation.startSession({
         signedUrl: data.signed_url,
         overrides: data.overrides,
+        dynamicVariables: data.dynamic_variables,
       })
     } catch (err: any) {
       console.error('Failed to start test call:', err)
+      if (callLogIdRef.current) {
+        testCallApi.endCall(callLogIdRef.current).catch(() => {})
+        callLogIdRef.current = null
+      }
       if (err?.name === 'NotAllowedError') {
         toast.error('Microfoon is geblokkeerd. Sta toegang toe in je browser.')
       } else if (err?.response?.data?.detail) {
@@ -65,31 +87,51 @@ export function TestCallWidget() {
 
   useEffect(() => {
     return () => {
-      if (phase === 'active') {
-        conversation.endSession()
+      if (callLogIdRef.current) {
+        testCallApi.endCall(callLogIdRef.current).catch(() => {})
       }
     }
   }, [])
 
+  const hasWorker = checkData?.available ?? false
+
   if (!expanded) {
     return (
-      <button
-        onClick={startCall}
-        disabled={phase === 'connecting'}
-        className={cn(
-          'fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full px-5 py-3 text-sm font-medium text-white shadow-lg transition-all hover:scale-105 active:scale-95',
-          phase === 'connecting'
-            ? 'bg-gray-400 cursor-wait'
-            : 'bg-primary-600 hover:bg-primary-700'
-        )}
-      >
-        {phase === 'connecting' ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
+      <div className="fixed bottom-6 right-6 z-50">
+        {!hasWorker && phase === 'idle' ? (
+          <div className="relative group">
+            <button
+              disabled
+              className="flex items-center gap-2 rounded-full px-5 py-3 text-sm font-medium text-white bg-gray-300 cursor-not-allowed shadow-lg"
+            >
+              <Phone className="h-4 w-4" />
+              Test uw AI
+            </button>
+            <div className="absolute right-0 bottom-full mb-2 w-56 bg-gray-900 text-white text-xs rounded-lg px-3 py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all pointer-events-none">
+              Maak eerst een AI-medewerker aan om te kunnen testen.
+              <div className="absolute right-6 top-full w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-gray-900" />
+            </div>
+          </div>
         ) : (
-          <Phone className="h-4 w-4" />
+          <button
+            onClick={startCall}
+            disabled={phase === 'connecting'}
+            className={cn(
+              'flex items-center gap-2 rounded-full px-5 py-3 text-sm font-medium text-white shadow-lg transition-all hover:scale-105 active:scale-95',
+              phase === 'connecting'
+                ? 'bg-gray-400 cursor-wait'
+                : 'bg-primary-600 hover:bg-primary-700'
+            )}
+          >
+            {phase === 'connecting' ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Phone className="h-4 w-4" />
+            )}
+            {phase === 'connecting' ? 'Verbinden...' : 'Test uw AI'}
+          </button>
         )}
-        {phase === 'connecting' ? 'Verbinden...' : 'Test uw AI'}
-      </button>
+      </div>
     )
   }
 
@@ -167,7 +209,7 @@ export function TestCallWidget() {
       {/* Footer hint */}
       <div className="px-4 pb-3">
         <p className="text-[10px] text-gray-400 text-center">
-          Dit is een testgesprek — er worden geen notities of afspraken opgeslagen.
+          Dit is een testgesprek. Notities en afspraken worden opgeslagen.
         </p>
       </div>
     </div>
