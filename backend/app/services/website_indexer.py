@@ -156,113 +156,184 @@ class WebsiteCrawler:
         return True
     
     async def fetch_page(self, url: str, client: httpx.AsyncClient) -> Optional[Dict]:
-        """Fetch a single page and extract content."""
+        """Fetch a page. Tries static HTML first, falls back to Jina Reader for JS-rendered sites."""
+        page = await self._fetch_static(url, client)
+        if page:
+            return page
+        return await self._fetch_rendered(url, client)
+
+    async def _fetch_static(self, url: str, client: httpx.AsyncClient) -> Optional[Dict]:
+        """Extract content from raw HTML (fast, works for static / SSR sites)."""
         try:
             response = await client.get(url, follow_redirects=True, timeout=30.0)
-            
+
             if response.status_code != 200:
                 return None
-            
+
             content_type = response.headers.get('content-type', '')
             if 'text/html' not in content_type:
                 return None
-            
+
             html = response.text
             soup = BeautifulSoup(html, 'lxml')
-            
-            # Extract title
+
             title = ""
             title_tag = soup.find('title')
             if title_tag:
                 title = title_tag.get_text().strip()
-            
-            # Remove unwanted elements
-            for element in soup.find_all(['script', 'style', 'nav', 'footer', 
+
+            for element in soup.find_all(['script', 'style', 'nav', 'footer',
                                           'header', 'aside', 'noscript', 'iframe']):
                 element.decompose()
-            
-            # Extract main content
+
             main_content = soup.find('main') or soup.find('article') or soup.find('body')
             if not main_content:
                 return None
-            
-            # Get text content
+
             text = main_content.get_text(separator='\n', strip=True)
-            
-            # Clean up text
             text = self._clean_text(text)
-            
-            if len(text) < 50:  # Skip pages with too little content
+
+            if len(text) < 50:
                 return None
-            
-            # Extract links for further crawling
+
             links = []
             for link in soup.find_all('a', href=True):
                 href = link['href']
                 full_url = urljoin(url, href)
                 if self.is_valid_url(full_url):
                     links.append(self.normalize_url(full_url))
-            
+
             return {
                 'url': url,
                 'title': title,
                 'content': text,
                 'links': links,
             }
-            
+
         except Exception as e:
-            print(f"Error fetching {url}: {e}")
+            logger.debug(f"Static fetch failed for {url}: {e}")
+            return None
+
+    async def _fetch_rendered(self, url: str, client: httpx.AsyncClient) -> Optional[Dict]:
+        """Fallback: render JS-heavy pages via Jina Reader API and extract content."""
+        try:
+            jina_url = f"https://r.jina.ai/{url}"
+            response = await client.get(
+                jina_url,
+                headers={'Accept': 'application/json'},
+                timeout=60.0,
+            )
+
+            if response.status_code != 200:
+                logger.warning(f"Jina Reader returned {response.status_code} for {url}")
+                return None
+
+            data = response.json().get('data', {})
+            title = data.get('title', '')
+            content = data.get('content', '')
+
+            if not content or len(content) < 50:
+                return None
+
+            links = []
+            for match in re.finditer(r'\[.*?\]\((https?://[^\)]+)\)', content):
+                link_url = match.group(1)
+                if self.is_valid_url(link_url):
+                    links.append(self.normalize_url(link_url))
+
+            text = self._clean_markdown(content)
+
+            if len(text) < 50:
+                return None
+
+            logger.info(f"Jina Reader rendered {url} ({len(text)} chars)")
+            return {
+                'url': url,
+                'title': title,
+                'content': text,
+                'links': links,
+            }
+
+        except Exception as e:
+            logger.warning(f"Jina Reader fallback failed for {url}: {e}")
             return None
     
     def _clean_text(self, text: str) -> str:
         """Clean up extracted text."""
-        # Remove excessive whitespace
         text = re.sub(r'\n\s*\n', '\n\n', text)
         text = re.sub(r' +', ' ', text)
-        
-        # Remove very short lines (likely menu items)
+
         lines = text.split('\n')
         cleaned_lines = []
         for line in lines:
             line = line.strip()
             if len(line) > 20 or (cleaned_lines and len(line) > 0):
                 cleaned_lines.append(line)
-        
+
         return '\n'.join(cleaned_lines).strip()
+
+    @staticmethod
+    def _clean_markdown(text: str) -> str:
+        """Convert markdown to clean plain text for embedding."""
+        text = re.sub(r'!\[.*?\]\(.*?\)', '', text)
+        text = re.sub(r'\[(.*?)\]\(.*?\)', r'\1', text)
+        text = re.sub(r'[*_]{1,3}(.*?)[*_]{1,3}', r'\1', text)
+        text = re.sub(r'#{1,6}\s*', '', text)
+        text = re.sub(r'\n\s*\n', '\n\n', text)
+        text = re.sub(r' +', ' ', text)
+        return text.strip()
     
+    async def _discover_sitemap_urls(self, client: httpx.AsyncClient) -> List[str]:
+        """Discover page URLs from sitemap.xml (works for all site types)."""
+        urls: List[str] = []
+        try:
+            sitemap_url = f"{self.base_url}/sitemap.xml"
+            response = await client.get(sitemap_url, timeout=10.0)
+            if response.status_code == 200 and 'xml' in response.headers.get('content-type', ''):
+                for match in re.finditer(r'<loc>(.*?)</loc>', response.text):
+                    url = match.group(1).strip()
+                    if self.is_valid_url(url):
+                        urls.append(self.normalize_url(url))
+                logger.info(f"Sitemap: found {len(urls)} URLs for {self.domain}")
+        except Exception:
+            pass
+        return urls
+
     async def crawl(self) -> List[Dict]:
         """Crawl the website and return all pages."""
         async with httpx.AsyncClient(
             headers={'User-Agent': self.user_agent},
             follow_redirects=True,
         ) as client:
-            # Start with the base URL
-            queue = [(self.base_url, 0)]  # (url, depth)
-            
+            sitemap_urls = await self._discover_sitemap_urls(client)
+
+            queue: List[tuple] = [(self.base_url, 0)]
+            for surl in sitemap_urls:
+                if self.normalize_url(surl) != self.normalize_url(self.base_url):
+                    queue.append((surl, 1))
+
             while queue and len(self.pages) < self.max_pages:
                 url, depth = queue.pop(0)
-                
+
                 normalized = self.normalize_url(url)
                 if normalized in self.visited:
                     continue
-                
+
                 self.visited.add(normalized)
-                
+
                 page = await self.fetch_page(url, client)
-                
+
                 if page:
                     self.pages.append(page)
-                    print(f"Crawled: {url} ({len(self.pages)}/{self.max_pages})")
-                    
-                    # Add new links to queue if within depth limit
+                    logger.info(f"Crawled: {url} ({len(self.pages)}/{self.max_pages})")
+
                     if depth < self.max_depth:
                         for link in page['links']:
                             if link not in self.visited:
                                 queue.append((link, depth + 1))
-                
-                # Be nice to the server
+
                 await asyncio.sleep(0.5)
-        
+
         return self.pages
 
 
