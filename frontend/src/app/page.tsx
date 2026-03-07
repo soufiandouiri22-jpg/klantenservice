@@ -283,7 +283,7 @@ function DemoSection() {
             Probeer het zelf
           </h2>
           <p className="mt-4 text-lg text-gray-600 max-w-2xl mx-auto">
-            Spreek live met onze AI-telefonist. Stel vragen, plan een demo in — ervaar het direct.
+            Spreek live met onze AI-telefonist. Stel vragen, plan een demo in — ervaar het direct. Klik op ▶ en test het gratis.
           </p>
         </FadeUp>
 
