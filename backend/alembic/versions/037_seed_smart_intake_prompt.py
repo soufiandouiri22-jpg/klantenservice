@@ -9,8 +9,8 @@ import sqlalchemy as sa
 from sqlalchemy.sql import text
 import uuid
 
-revision = "037_seed_smart_intake_prompt"
-down_revision = "036_smart_ai_transfer_instructions"
+revision = "037_smart_intake_prompt"
+down_revision = "036_transfer_instructions"
 branch_labels = None
 depends_on = None
 

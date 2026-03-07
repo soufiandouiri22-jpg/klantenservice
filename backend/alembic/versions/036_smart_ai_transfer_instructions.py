@@ -7,7 +7,7 @@ Create Date: 2026-03-02
 from alembic import op
 import sqlalchemy as sa
 
-revision = "036_smart_ai_transfer_instructions"
+revision = "036_transfer_instructions"
 down_revision = "035_sms_confirmation"
 branch_labels = None
 depends_on = None
