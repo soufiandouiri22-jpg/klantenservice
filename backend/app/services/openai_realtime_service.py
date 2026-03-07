@@ -267,11 +267,14 @@ def build_system_instructions(
 
     tool_lines.append(
         "## search_knowledge\n"
-        "Gebruik voor inhoudelijke vragen over het bedrijf "
-        "(prijzen, diensten, openingstijden, locatie, etc.).\n\n"
+        "Zoek ALTIJD in de kennisbank bij vragen over prijzen, producten, diensten, "
+        "openingstijden, locatie of andere bedrijfsinformatie. "
+        "Beantwoord dit NOOIT uit je eigen kennis — gebruik altijd de tool.\n\n"
         "**Wanneer gebruiken:**\n"
-        "- Klant vraagt over prijzen, diensten, openingstijden\n"
-        "- Klant stelt een vraag die je niet direct kunt beantwoorden\n\n"
+        "- Klant vraagt over prijzen, pakketten, kosten\n"
+        "- Klant vraagt over diensten, producten, aanbod\n"
+        "- Klant vraagt over openingstijden, locatie, contact\n"
+        "- Klant stelt een inhoudelijke vraag over het bedrijf\n\n"
         "**Foutafhandeling:**\n"
         'Als de tool faalt: "Dat heb ik even niet bij de hand. '
         'Zal ik een collega vragen om u terug te bellen?"\n'
