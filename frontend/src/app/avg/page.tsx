@@ -194,18 +194,18 @@ export default function AVGPage() {
                 </thead>
                 <tbody className="text-gray-600">
                   <tr className="border-b border-gray-100">
-                    <td className="py-3 px-4">Hetzner</td>
+                    <td className="py-3 px-4">Render</td>
                     <td className="py-3 px-4">Cloud hosting</td>
-                    <td className="py-3 px-4">Duitsland (EU)</td>
+                    <td className="py-3 px-4">Frankfurt, Duitsland (EU)</td>
                   </tr>
                   <tr className="border-b border-gray-100">
-                    <td className="py-3 px-4">OpenAI</td>
-                    <td className="py-3 px-4">AI-verwerking</td>
+                    <td className="py-3 px-4">AI-taalmodel provider</td>
+                    <td className="py-3 px-4">Conversatie-AI</td>
                     <td className="py-3 px-4">EU Data Processing Agreement</td>
                   </tr>
                   <tr className="border-b border-gray-100">
-                    <td className="py-3 px-4">ElevenLabs</td>
-                    <td className="py-3 px-4">Spraak-AI en tekst-naar-spraak</td>
+                    <td className="py-3 px-4">Spraaktechnologie provider</td>
+                    <td className="py-3 px-4">Spraakherkenning en tekst-naar-spraak</td>
                     <td className="py-3 px-4">EU Data Processing Agreement</td>
                   </tr>
                   <tr className="border-b border-gray-100">
