@@ -288,6 +288,7 @@ def build_system_instructions(
             "- Klant wil een afspraak maken\n"
             "- Klant vraagt wanneer er plek is\n\n"
             "Geef een `start_date` mee (ISO-formaat). De tool retourneert beschikbare tijden.\n"
+            "De tool retourneert ook `next_action`. Volg die instructie voor de volgende stap.\n"
             "Bied de klant maximaal 3 opties aan en vraag welk moment het beste uitkomt."
         )
 
@@ -299,7 +300,8 @@ def build_system_instructions(
             "Vereiste parameters: `starts_at`, `ends_at`, `customer_name`.\n"
             "Optioneel: `title`, `customer_email`.\n"
             "Vraag ALTIJD de naam van de klant voordat je boekt.\n"
-            "Bevestig datum, tijd en naam voordat je de tool aanroept."
+            "Bevestig datum, tijd en naam voordat je de tool aanroept.\n"
+            "Als de tool `missing` retourneert: vraag het ontbrekende gegeven en roep de tool opnieuw aan zodra je het hebt."
         )
 
     if worker.can_leave_notes:

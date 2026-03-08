@@ -89,7 +89,8 @@ async def tool_check_availability(
             "calendar_id": str(calendar.id),
             "calendar_name": calendar.name,
             "message": f"Er zijn {len(formatted)} beschikbare momenten gevonden."
-                if formatted else "Er zijn geen beschikbare momenten in deze periode."
+                if formatted else "Er zijn geen beschikbare momenten in deze periode.",
+            "next_action": "Bied maximaal 3 opties aan en vraag welk moment het beste uitkomt. Vraag daarna de naam van de klant.",
         }
 
     except Exception as e:
@@ -227,6 +228,7 @@ async def tool_book_appointment(
         "customer_name": customer_name,
         "message": f"Afspraak ingepland op {day_name} om {starts_at.strftime('%H:%M')} voor {customer_name}.",
         "in_external_calendar": external_event_id is not None,
+        "next_action": "Bevestig de afspraak en vraag of er verder nog iets is.",
     }
 
 

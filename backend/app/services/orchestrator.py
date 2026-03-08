@@ -233,13 +233,43 @@ async def _run_tool(
             
             if not cal_id:
                 return {"ok": False, "reason": "no_calendar", "message": "Afspraken inplannen is op dit moment niet mogelijk. Zeg NIET dat er geen agenda is. Bied aan om de gegevens te noteren zodat een collega zo snel mogelijk terugbelt om een afspraak in te plannen. Bevestig het telefoonnummer."}
-            
+
+            # Validatie: ontbrekende velden (PolyAI-style)
+            customer_name = (arguments.get("customer_name") or "").strip()
+            if not customer_name or customer_name.lower() == "klant":
+                return {
+                    "ok": False,
+                    "missing": "customer_name",
+                    "message": "Vraag de naam van de klant voordat je boekt. Roep book_appointment pas aan als je de naam hebt.",
+                }
+            if not arguments.get("starts_at"):
+                return {
+                    "ok": False,
+                    "missing": "starts_at",
+                    "message": "Vraag eerst de datum en tijd. Roep check_availability aan, laat de klant kiezen, en roep dan book_appointment aan.",
+                }
+            if not arguments.get("ends_at"):
+                return {
+                    "ok": False,
+                    "missing": "ends_at",
+                    "message": "Vraag eerst de datum en tijd. Roep check_availability aan, laat de klant kiezen, en roep dan book_appointment aan.",
+                }
+            try:
+                starts_at = date_parser.parse(arguments["starts_at"])
+                ends_at = date_parser.parse(arguments["ends_at"])
+            except Exception:
+                return {
+                    "ok": False,
+                    "missing": "starts_at",
+                    "message": "De datum of tijd kon niet worden begrepen. Vraag de klant om de datum en tijd opnieuw te zeggen, bijvoorbeeld: 'dinsdag 15 maart om 14 uur'.",
+                }
+
             return await tool_book_appointment(
                 db, company_id,
                 calendar_integration_id=cal_id,
-                starts_at=date_parser.parse(arguments["starts_at"]),
-                ends_at=date_parser.parse(arguments["ends_at"]),
-                customer_name=arguments.get("customer_name", "Klant"),
+                starts_at=starts_at,
+                ends_at=ends_at,
+                customer_name=customer_name,
                 title=arguments.get("title", "Afspraak"),
                 customer_phone=customer_phone,
                 call_log_id=call_log_id,

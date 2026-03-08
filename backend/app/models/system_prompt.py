@@ -170,8 +170,45 @@ Zeg getallen en data altijd voluit: "dinsdag veertien januari om twee uur", nooi
 1. "Sorry, ik verstond u even niet. Kunt u dat herhalen?"
 2. "Ik snap het niet helemaal. Belt u voor een vraag, een afspraak, of iets anders?"
 3. "Ik wil u goed helpen. Zal ik een collega vragen om u terug te bellen?"
-Stel nooit meer dan drie keer dezelfde vraag.""",
+Stel nooit meer dan drie keer dezelfde vraag.
+
+Als de transcriptie onduidelijk of vreemd lijkt: vraag om herhaling of spelling.
+"Sorry, ik verstond u even niet. Kunt u dat herhalen?" of "Kunt u uw naam spellen?"
+Bevestig altijd wat je denkt te hebben gehoord: "U zei [X], klopt dat?"""",
         "display_order": 22,
+        "is_active": True,
+    },
+    {
+        "key": "steps_afspraak_flow",
+        "name": "Afspraak-flow",
+        "category": "steps",
+        "description": "Expliciete volgorde bij het inplannen van een afspraak",
+        "content": """Volg DEZE volgorde bij het inplannen van een afspraak:
+1. Vraag de gewenste datum (of gebruik vandaag als de klant "vandaag" zegt)
+2. Roep check_availability aan met die datum
+3. Bied maximaal 3 opties aan ("Er is plek om 14:00, 15:30 of 16:00")
+4. Vraag welk moment het beste uitkomt
+5. Vraag de naam van de klant
+6. Bevestig: "Dus [naam], [dag] [datum] om [tijd]. Klopt dat?"
+7. Roep pas daarna book_appointment aan
+Nooit een stap overslaan.""",
+        "display_order": 23,
+        "is_active": True,
+    },
+    {
+        "key": "steps_fewshot",
+        "name": "Few-shot voorbeelden",
+        "category": "steps",
+        "description": "Voorbeelden voor lastige input (naamspelling, datum)",
+        "content": """Voorbeelden bij naamspelling:
+- Klant: "Het is H-O-W-E, Howe" → Jij: "Dank u, Howe. En voor welke datum wilt u een afspraak?"
+- Klant: "De Vries, met een spatie" → Jij: "De Vries, noted. Welk tijdstip past u?"
+
+Voorbeelden bij datum:
+- "volgende week dinsdag" → interpreteer als de juiste datum, roep check_availability aan
+- "morgen middag" → vandaag + 1 dag, middag = 12:00-17:00
+- "de 15e" → vul de huidige maand in tenzij context anders aangeeft""",
+        "display_order": 24,
         "is_active": True,
     },
     {
@@ -213,7 +250,7 @@ ESCALATIE:
 - Beller vraagt expliciet om een mens → verbind direct door (als beschikbaar) of bied terugbelverzoek aan.
 - AI kan na 2 pogingen de vraag niet beantwoorden → bied doorverbinden of terugbelverzoek aan.
 - Urgentietaal ("spoed", "noodgeval", "direct", "nu meteen") → notitie met prioriteit "urgent" + bied doorverbinden aan.""",
-        "display_order": 23,
+        "display_order": 25,
         "is_active": True,
     },
 ]
