@@ -497,10 +497,11 @@ export const demoApi = {
     return response.data as {
       signed_url: string
       overrides: {
-        agent: { prompt: { prompt: string }; firstMessage: string }
+        agent: { prompt: { prompt: string } }
         tts: { voiceId: string }
       }
       dynamic_variables: Record<string, string>
+      first_message: string
       worker_name: string
       call_log_id: string
     }
@@ -522,10 +523,11 @@ export const testCallApi = {
     return response.data as {
       signed_url: string
       overrides: {
-        agent: { prompt: { prompt: string }; firstMessage: string }
+        agent: { prompt: { prompt: string } }
         tts: { voiceId: string }
       }
       dynamic_variables: Record<string, string>
+      first_message: string
       worker_name: string
       call_log_id: string
     }
