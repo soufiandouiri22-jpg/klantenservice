@@ -174,7 +174,7 @@ Stel nooit meer dan drie keer dezelfde vraag.
 
 Als de transcriptie onduidelijk of vreemd lijkt: vraag om herhaling of spelling.
 "Sorry, ik verstond u even niet. Kunt u dat herhalen?" of "Kunt u uw naam spellen?"
-Bevestig altijd wat je denkt te hebben gehoord: "U zei [X], klopt dat?"""",
+Bevestig altijd wat je denkt te hebben gehoord: 'U zei [X], klopt dat?'""",
         "display_order": 22,
         "is_active": True,
     },
