@@ -16,7 +16,6 @@ export function TestCallWidget() {
   const [micMuted, setMicMuted] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const callLogIdRef = useRef<string | null>(null)
-  const firstMessageRef = useRef<string>('')
 
   const { data: checkData } = useQuery({
     queryKey: ['test-call-check'],
@@ -56,19 +55,12 @@ export function TestCallWidget() {
       const data = await testCallApi.getSignedUrl()
       setWorkerName(data.worker_name)
       callLogIdRef.current = data.call_log_id
-      firstMessageRef.current = data.first_message || ''
 
       await conversation.startSession({
         signedUrl: data.signed_url,
         overrides: data.overrides,
         dynamicVariables: data.dynamic_variables,
       })
-
-      if (firstMessageRef.current) {
-        conversation.sendContextualUpdate(
-          `Begroet de beller met exact deze tekst: "${firstMessageRef.current}"`
-        )
-      }
     } catch (err: any) {
       console.error('Failed to start test call:', err)
       if (callLogIdRef.current) {
