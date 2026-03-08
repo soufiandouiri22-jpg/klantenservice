@@ -193,7 +193,7 @@ export default function TrainingPage() {
             <textarea
               className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-none transition-colors"
               rows={5}
-              placeholder={'Bijv. "Wij leveren alleen aan bedrijven, niet aan particulieren."\nof "Kinderen onder 4 jaar altijd dezelfde dag inplannen."'}
+              placeholder={'Bijv. "Wij leveren alleen aan bedrijven, niet aan particulieren."'}
               value={instructionsText}
               onChange={(e) => setInstructionsValue(e.target.value)}
               onBlur={() => {
