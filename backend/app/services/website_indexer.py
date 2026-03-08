@@ -105,6 +105,27 @@ class LocalEmbedder:
 
 _embedder = LocalEmbedder()
 
+# Cross-encoder for reranking (lazy-loaded). Use "disabled" sentinel after failed load.
+_reranker = None
+
+
+def _get_reranker():
+    """Lazy-load cross-encoder for reranking. Returns None if unavailable."""
+    global _reranker
+    if _reranker == "disabled":
+        return None
+    if _reranker is not None:
+        return _reranker
+    try:
+        from sentence_transformers import CrossEncoder
+        _reranker = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
+        logger.info("Cross-encoder reranker loaded (ms-marco-MiniLM-L-6-v2)")
+        return _reranker
+    except Exception as e:
+        logger.warning("Cross-encoder not available, skipping reranking: %s", e)
+        _reranker = "disabled"
+        return None
+
 
 class WebsiteCrawler:
     """Crawls websites and extracts content."""
@@ -439,10 +460,24 @@ class VectorStore:
             logger.error(f"Error deleting chunks: {e}")
             db.rollback()
 
-    def search(self, query: str, website_id: str = None, limit: int = 3, db: Session = None) -> List[Dict]:
-        """Search for relevant chunks using cosine similarity."""
-        results = self._search_vector(query, website_id=website_id, limit=limit, db=db)
-        return [chunk for chunk, _ in results]
+    def search(self, query: str, website_id: str = None, limit: int = 8, db: Session = None) -> List[Dict]:
+        """Search for relevant chunks: vector retrieval + cross-encoder reranking."""
+        candidate_limit = min(25, limit * 4)  # Fetch more for reranking
+        results = self._search_vector(query, website_id=website_id, limit=candidate_limit, db=db)
+        chunks = [chunk for chunk, _ in results]
+        if len(chunks) <= limit:
+            return chunks
+        reranker = _get_reranker()
+        if reranker is None:
+            return chunks[:limit]
+        try:
+            pairs = [[query, c.get("content", "")[:512]] for c in chunks]
+            scores = reranker.predict(pairs)
+            ranked = sorted(zip(chunks, scores), key=lambda x: x[1], reverse=True)
+            return [c for c, _ in ranked[:limit]]
+        except Exception as e:
+            logger.warning("Reranking failed, using vector order: %s", e)
+            return chunks[:limit]
 
     def _search_vector(self, query: str, website_id: str = None, limit: int = 50, db: Session = None) -> List[tuple]:
         """Vector similarity search. Returns list of (chunk_dict, rank)."""
