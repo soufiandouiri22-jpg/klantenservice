@@ -234,10 +234,13 @@ def tool_search_knowledge(
     db: Session,
     company_id: str,
     query: str,
-    limit: int = 3,
+    limit: int = 5,
 ) -> Dict[str, Any]:
     """
     Search company knowledge base using RAG (vector similarity).
+
+    Priority: website/landing page content first (vector search),
+    then ExampleAnswers as supplementary detail.
 
     Returns:
         Dict with ok, results (list of content+url), message
@@ -249,13 +252,33 @@ def tool_search_knowledge(
             "message": "Geen zoekopdracht opgegeven."
         }
 
-    results = []
+    logger.info(f"[search_knowledge] query={query!r} company={company_id}")
 
-    # Search verified ExampleAnswers (manual Q&A from Training page)
+    vector_results = []
+    qa_results = []
+
+    # 1. Vector search FIRST — website/landing page is the primary source
+    try:
+        store = VectorStore(company_id, db)
+        chunks = store.search(query, website_id=None, limit=limit, db=db)
+
+        if chunks:
+            vector_results = [
+                {
+                    "content": c.get("content", "")[:500],
+                    "url": c.get("metadata", {}).get("url", ""),
+                    "title": c.get("metadata", {}).get("title", ""),
+                }
+                for c in chunks
+            ]
+    except Exception as e:
+        logger.error(f"Error searching vector store: {e}")
+
+    # 2. ExampleAnswers SECOND — supplementary detail for follow-up depth
     try:
         from app.models.training import ExampleAnswer
         query_lower = query.lower()
-        qa_matches = (
+        qa_all = (
             db.query(ExampleAnswer)
             .filter(
                 ExampleAnswer.company_id == company_id,
@@ -264,11 +287,11 @@ def tool_search_knowledge(
             )
             .all()
         )
-        for qa in qa_matches:
+        for qa in qa_all:
             if query_lower in (qa.question or "").lower() or any(
                 query_lower in (v or "").lower() for v in (qa.question_variations or [])
             ):
-                results.append({
+                qa_results.append({
                     "content": f"Vraag: {qa.question}\nAntwoord: {qa.answer}",
                     "url": "",
                     "title": qa.category or "Voorbeeldantwoord",
@@ -276,21 +299,14 @@ def tool_search_knowledge(
     except Exception:
         logger.warning("Failed to search ExampleAnswers", exc_info=True)
 
-    try:
-        store = VectorStore(company_id, db)
-        chunks = store.search(query, website_id=None, limit=limit, db=db)
+    results = vector_results + qa_results
+    max_results = limit + 3
 
-        if chunks:
-            results.extend([
-                {
-                    "content": c.get("content", "")[:500],
-                    "url": c.get("metadata", {}).get("url", ""),
-                    "title": c.get("metadata", {}).get("title", ""),
-                }
-                for c in chunks
-            ])
-    except Exception as e:
-        logger.error(f"Error searching vector store: {e}")
+    logger.info(
+        f"[search_knowledge] vector={len(vector_results)} "
+        f"qa={len(qa_results)} total={len(results)} "
+        f"(returning max {max_results})"
+    )
 
     if not results:
         return {
@@ -301,7 +317,7 @@ def tool_search_knowledge(
 
     return {
         "ok": True,
-        "results": results[:limit + 2],
+        "results": results[:max_results],
         "message": f"{len(results)} relevante resultaten gevonden."
     }
 
