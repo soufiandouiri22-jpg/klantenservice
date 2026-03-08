@@ -187,9 +187,8 @@ async def get_test_call_signed_url(
         "overrides": {
             "agent": {
                 "prompt": {"prompt": full_instructions},
-                "firstMessage": first_msg,
             },
-            "tts": {"voiceId": voice_id, "model_id": "eleven_v3"},
+            "tts": {"voiceId": voice_id},
         },
         "dynamic_variables": {
             "company_id": str(company.id),
@@ -200,6 +199,7 @@ async def get_test_call_signed_url(
             "call_sid": call_log.twilio_call_sid,
             "calendar_id": calendar_id,
         },
+        "first_message": first_msg,
         "worker_name": worker.name,
         "call_log_id": str(call_log.id),
     }
