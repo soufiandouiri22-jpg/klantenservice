@@ -282,6 +282,28 @@ def build_system_instructions(
         "Neem prijzen, bedragen, getallen en namen EXACT over uit het zoekresultaat. Rond niet af en wijzig geen cijfers."
     )
 
+    if worker.can_make_appointments:
+        tool_lines.append(
+            "## check_availability\n"
+            "Haal beschikbare agenda-slots op voor een datum of periode.\n\n"
+            "**Wanneer gebruiken:**\n"
+            "- Klant wil een afspraak maken\n"
+            "- Klant vraagt wanneer er plek is\n\n"
+            "Geef een `start_date` mee (ISO-formaat). De tool retourneert beschikbare tijden.\n"
+            "Bied de klant maximaal 3 opties aan en vraag welk moment het beste uitkomt."
+        )
+
+        tool_lines.append(
+            "## book_appointment\n"
+            "Plan een afspraak in de agenda.\n\n"
+            "**Wanneer gebruiken:**\n"
+            "- Nadat de klant een tijdstip heeft gekozen uit check_availability\n\n"
+            "Vereiste parameters: `starts_at`, `ends_at`, `customer_name`.\n"
+            "Optioneel: `title`, `customer_email`.\n"
+            "Vraag ALTIJD de naam van de klant voordat je boekt.\n"
+            "Bevestig datum, tijd en naam voordat je de tool aanroept."
+        )
+
     if worker.can_leave_notes:
         tool_lines.append(
             "## create_note\n"
