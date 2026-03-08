@@ -265,7 +265,7 @@ def tool_search_knowledge(
         if chunks:
             vector_results = [
                 {
-                    "content": c.get("content", "")[:500],
+                    "content": c.get("content", "")[:1000],
                     "url": c.get("metadata", {}).get("url", ""),
                     "title": c.get("metadata", {}).get("title", ""),
                 }
