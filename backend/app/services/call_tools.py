@@ -230,42 +230,15 @@ async def tool_book_appointment(
     }
 
 
-# Dutch stop words for keyword matching (common words to ignore)
-_STOP_WORDS = frozenset(
-    "de het een van in op te voor met is dat aan als om bij uit naar over "
-    "welke wat wie waar wanneer hoe waarom hoeveel kan zijn worden heeft "
-    "hebben had zou kunnen moeten willen".split()
-)
-
-
-def _extract_keywords(text: str) -> set:
-    """Extract significant words (min 3 chars, not stop words) for matching."""
-    import re
-    words = re.findall(r"[a-z0-9éèëïöü]+", text.lower())
-    return {w for w in words if len(w) >= 3 and w not in _STOP_WORDS}
-
-
 def _matches_example_answer(query: str, question: str, variations: List[str]) -> bool:
-    """
-    Match query to ExampleAnswer via substring OR keyword overlap.
-    Returns True if query is substring of question/variations, or if 2+ keywords overlap.
-    """
+    """Match query to ExampleAnswer via substring only."""
     query_lower = query.lower()
-    q_text = (question or "").lower()
-    # Exact substring match (original behavior)
-    if query_lower in q_text:
+    if query_lower in (question or "").lower():
         return True
     for v in (variations or []):
         if query_lower in (v or "").lower():
             return True
-    # Keyword overlap: 2+ significant words must appear in question or variations
-    query_kw = _extract_keywords(query)
-    if len(query_kw) < 2:
-        return False
-    combined = q_text + " " + " ".join((v or "").lower() for v in (variations or []))
-    combined_kw = _extract_keywords(combined)
-    overlap = query_kw & combined_kw
-    return len(overlap) >= 2
+    return False
 
 
 def tool_search_knowledge(
@@ -276,15 +249,10 @@ def tool_search_knowledge(
 ) -> Dict[str, Any]:
     """
     Search company knowledge base using RAG (vector similarity).
-
-    Returns knowledge_results (website) and training_results (ExampleAnswers) separately.
-    AI should use knowledge_results first, then training_results if needed.
     """
     if not query.strip():
         return {
             "ok": True,
-            "knowledge_results": [],
-            "training_results": [],
             "results": [],
             "message": "Geen zoekopdracht opgegeven.",
         }
@@ -309,7 +277,7 @@ def tool_search_knowledge(
     except Exception as e:
         logger.error(f"Error searching vector store: {e}")
 
-    # 2. ExampleAnswers — training/voorbeeldantwoorden (keyword overlap + substring)
+    # 2. ExampleAnswers — training/voorbeeldantwoorden (substring match)
     qa_results = []
     try:
         from app.models.training import ExampleAnswer
@@ -336,31 +304,20 @@ def tool_search_knowledge(
     except Exception:
         logger.warning("Failed to search ExampleAnswers", exc_info=True)
 
-    max_qa = limit + 3
-    knowledge_results = vector_results
-    training_results = qa_results[:max_qa]
-    results = knowledge_results + training_results
-
-    logger.info(
-        f"[search_knowledge] knowledge={len(knowledge_results)} "
-        f"training={len(training_results)} total={len(results)}"
-    )
+    results = vector_results + qa_results[:limit + 2]
+    logger.info(f"[search_knowledge] {len(vector_results)} website + {len(qa_results)} training = {len(results)} total")
 
     if not results:
         return {
             "ok": True,
-            "knowledge_results": [],
-            "training_results": [],
             "results": [],
             "message": "Geen informatie beschikbaar. VERZIN NIETS. Zeg eerlijk dat je het antwoord op dit moment niet bij de hand hebt. Bied aan om een notitie achter te laten zodat een collega de klant zo snel mogelijk terugbelt met het antwoord. Bevestig het telefoonnummer.",
         }
 
     return {
         "ok": True,
-        "knowledge_results": knowledge_results,
-        "training_results": training_results,
         "results": results,
-        "message": f"{len(knowledge_results)} kennisbank + {len(training_results)} training resultaten gevonden.",
+        "message": f"{len(results)} relevante resultaten gevonden.",
     }
 
 

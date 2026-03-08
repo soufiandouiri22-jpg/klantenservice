@@ -270,9 +270,8 @@ def build_system_instructions(
         "Zoek ALTIJD in de kennisbank bij ELKE inhoudelijke vraag. "
         "De resultaten bevatten alle bedrijfsinformatie, inclusief opgeslagen Q&A. "
         "Beantwoord nooit uit eigen kennis.\n\n"
-        "**Resultaten:** De tool retourneert `knowledge_results` (website) en `training_results` "
-        "(opgeslagen Q&A). Gebruik EERST knowledge_results. Als die niet genoeg zijn, gebruik dan "
-        "ook training_results.\n\n"
+        "**Resultaten:** De tool retourneert `results` met relevante informatie (website + opgeslagen Q&A). "
+        "Gebruik deze resultaten om de vraag te beantwoorden.\n\n"
         "**Wanneer gebruiken:** Bij elke inhoudelijke vraag over het bedrijf.\n\n"
         "**Foutafhandeling:**\n"
         'Als de tool faalt: "Dat heb ik even niet bij de hand. '

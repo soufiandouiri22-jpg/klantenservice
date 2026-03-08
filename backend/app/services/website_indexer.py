@@ -190,7 +190,7 @@ class WebsiteCrawler:
             if not main_content:
                 return None
 
-            text = self._extract_with_headings(main_content)
+            text = main_content.get_text(separator='\n', strip=True)
             text = self._clean_text(text)
 
             if len(text) < 50:
@@ -258,16 +258,6 @@ class WebsiteCrawler:
             logger.warning(f"Jina Reader fallback failed for {url}: {e}")
             return None
     
-    def _extract_with_headings(self, element) -> str:
-        """Extract text while preserving h1-h6 as markdown headers for topic-based chunking."""
-        from bs4 import NavigableString
-        for h in element.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']):
-            level = int(h.name[1])
-            h_text = h.get_text(separator=' ', strip=True)
-            if h_text:
-                h.replace_with(NavigableString('\n' + '#' * level + ' ' + h_text + '\n\n'))
-        return element.get_text(separator='\n', strip=True)
-
     def _clean_text(self, text: str) -> str:
         """Clean up extracted text."""
         text = re.sub(r'\n\s*\n', '\n\n', text)
@@ -284,11 +274,11 @@ class WebsiteCrawler:
 
     @staticmethod
     def _clean_markdown(text: str) -> str:
-        """Convert markdown to clean plain text for embedding. Preserves ## headers for topic chunking."""
+        """Convert markdown to clean plain text for embedding."""
         text = re.sub(r'!\[.*?\]\(.*?\)', '', text)
         text = re.sub(r'\[(.*?)\]\(.*?\)', r'\1', text)
         text = re.sub(r'[*_]{1,3}(.*?)[*_]{1,3}', r'\1', text)
-        # Keep ## headers for topic-based chunking (do NOT strip #)
+        text = re.sub(r'#{1,6}\s*', '', text)
         text = re.sub(r'\n\s*\n', '\n\n', text)
         text = re.sub(r' +', ' ', text)
         return text.strip()
@@ -348,55 +338,18 @@ class WebsiteCrawler:
 
 
 class TextChunker:
-    """Splits text into chunks for embedding. Uses topic-based chunking when headers are present."""
+    """Splits text into chunks for embedding."""
 
     def __init__(self, chunk_size: int = 1000, chunk_overlap: int = 100):
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
 
     def chunk_text(self, text: str, metadata: Dict = None) -> List[Dict]:
-        """Split text into chunks. Prefers topic-based (header) chunking; falls back to paragraph-based."""
-        sections = self._split_by_headers(text)
-        if sections:
-            return self._chunk_sections(sections, metadata)
+        """Split text into overlapping chunks."""
         return self._chunk_by_paragraphs(text, metadata)
 
-    def _split_by_headers(self, text: str) -> List[str]:
-        """Split text on markdown headers. Returns list of sections (each includes header + its content)."""
-        pattern = re.compile(r'^(#{1,6})\s+(.+)$', re.MULTILINE)
-        matches = list(pattern.finditer(text))
-        if not matches:
-            return []
-        sections = []
-        intro = text[: matches[0].start()].strip()
-        for i, m in enumerate(matches):
-            start = m.start()
-            end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
-            section = text[start:end].strip()
-            if section:
-                if intro and i == 0:
-                    section = intro + '\n\n' + section
-                    intro = ""
-                sections.append(section)
-        if intro and not sections:
-            sections.append(intro)
-        return sections
-
-    def _chunk_sections(self, sections: List[str], metadata: Dict = None) -> List[Dict]:
-        """Each section is a topic. If section exceeds chunk_size, split by paragraphs within it."""
-        chunks = []
-        for section in sections:
-            if len(section) <= self.chunk_size:
-                if section.strip():
-                    chunks.append(self._make_chunk(section.strip(), metadata))
-            else:
-                # Section too long: split by paragraphs within this topic
-                sub_chunks = self._chunk_by_paragraphs(section, metadata)
-                chunks.extend(sub_chunks)
-        return chunks
-
     def _chunk_by_paragraphs(self, text: str, metadata: Dict = None) -> List[Dict]:
-        """Original paragraph-based splitting with overlap."""
+        """Paragraph-based splitting with overlap."""
         chunks = []
         paragraphs = text.split('\n\n')
         current_chunk = ""
@@ -405,22 +358,23 @@ class TextChunker:
             if not paragraph:
                 continue
             if len(current_chunk) + len(paragraph) > self.chunk_size and current_chunk:
-                chunks.append(self._make_chunk(current_chunk.strip(), metadata))
+                chunks.append({
+                    'content': current_chunk.strip(),
+                    'metadata': metadata or {},
+                    'hash': hashlib.sha256(current_chunk.encode()).hexdigest()[:16],
+                })
                 words = current_chunk.split()
                 overlap_words = words[-self.chunk_overlap:] if len(words) > self.chunk_overlap else []
                 current_chunk = ' '.join(overlap_words) + ' ' + paragraph
             else:
                 current_chunk += '\n\n' + paragraph if current_chunk else paragraph
         if current_chunk.strip():
-            chunks.append(self._make_chunk(current_chunk.strip(), metadata))
+            chunks.append({
+                'content': current_chunk.strip(),
+                'metadata': metadata or {},
+                'hash': hashlib.sha256(current_chunk.encode()).hexdigest()[:16],
+            })
         return chunks
-
-    def _make_chunk(self, content: str, metadata: Dict = None) -> Dict:
-        return {
-            'content': content,
-            'metadata': metadata or {},
-            'hash': hashlib.sha256(content.encode()).hexdigest()[:16],
-        }
 
 
 class VectorStore:
@@ -486,8 +440,9 @@ class VectorStore:
             db.rollback()
 
     def search(self, query: str, website_id: str = None, limit: int = 3, db: Session = None) -> List[Dict]:
-        """Hybrid search: combines vector (semantic) + full-text (keyword) with RRF fusion."""
-        return self.search_hybrid(query, website_id=website_id, limit=limit, db=db)
+        """Search for relevant chunks using cosine similarity."""
+        results = self._search_vector(query, website_id=website_id, limit=limit, db=db)
+        return [chunk for chunk, _ in results]
 
     def _search_vector(self, query: str, website_id: str = None, limit: int = 50, db: Session = None) -> List[tuple]:
         """Vector similarity search. Returns list of (chunk_dict, rank)."""
@@ -526,73 +481,6 @@ class VectorStore:
             )
             for rank, row in enumerate(rows, start=1)
         ]
-
-    def _search_fulltext(self, query: str, website_id: str = None, limit: int = 50, db: Session = None) -> List[tuple]:
-        """Full-text (BM25-style) search. Returns list of (chunk_dict, rank)."""
-        db = db or self.db
-        if not db:
-            return []
-
-        where_clause = "kc.company_id = :company_id AND kc.content_tsv @@ plainto_tsquery('simple', :query)"
-        params = {'query': query, 'company_id': self.company_id, 'limit': limit}
-        if website_id:
-            where_clause += " AND kc.website_id = :website_id"
-            params['website_id'] = website_id
-
-        try:
-            sql = text(f"""
-                SELECT kc.id, kc.content, kc.source_url, kc.page_title, kc.chunk_metadata,
-                       ts_rank_cd(kc.content_tsv, plainto_tsquery('simple', :query)) AS rank
-                FROM knowledge_chunks kc
-                WHERE {where_clause}
-                ORDER BY rank DESC
-                LIMIT :limit
-            """)
-            rows = db.execute(sql, params).fetchall()
-            return [
-                (
-                    {
-                        'content': row.content,
-                        'metadata': {'url': row.source_url, 'title': row.page_title, **(row.chunk_metadata or {})},
-                        'distance': 0,
-                    },
-                    rank,
-                )
-                for rank, row in enumerate(rows, start=1)
-            ]
-        except Exception as e:
-            logger.warning("Full-text search failed (content_tsv may not exist): %s", e)
-            return []
-
-    def search_hybrid(self, query: str, website_id: str = None, limit: int = 3, db: Session = None) -> List[Dict]:
-        """Hybrid search: vector + full-text, fused with Reciprocal Rank Fusion (RRF)."""
-        k = 60  # RRF constant
-        fetch_limit = min(limit * 4, 50)  # Fetch more candidates for fusion
-
-        vector_results = self._search_vector(query, website_id=website_id, limit=fetch_limit, db=db)
-        fulltext_results = self._search_fulltext(query, website_id=website_id, limit=fetch_limit, db=db)
-
-        # Build content->chunk map (use content hash as id since we might not have row id in dict)
-        def chunk_key(c: dict) -> str:
-            return (c['metadata'].get('url', ''), c['content'][:200])
-
-        rrf_scores: Dict[str, float] = {}
-        chunk_by_key: Dict[str, dict] = {}
-
-        for chunk_dict, rank in vector_results:
-            key = chunk_key(chunk_dict)
-            rrf_scores[key] = rrf_scores.get(key, 0) + 1 / (k + rank)
-            chunk_by_key[key] = chunk_dict
-
-        for chunk_dict, rank in fulltext_results:
-            key = chunk_key(chunk_dict)
-            rrf_scores[key] = rrf_scores.get(key, 0) + 1 / (k + rank)
-            chunk_by_key[key] = chunk_dict
-
-        # Sort by RRF score descending
-        sorted_keys = sorted(rrf_scores.keys(), key=lambda x: rrf_scores[x], reverse=True)
-        return [chunk_by_key[key] for key in sorted_keys[:limit]]
-
 
 class WebsiteIndexer:
     """Main service that orchestrates website indexing."""
