@@ -267,14 +267,13 @@ def build_system_instructions(
 
     tool_lines.append(
         "## search_knowledge\n"
-        "Zoek ALTIJD in de kennisbank bij vragen over prijzen, producten, diensten, "
-        "openingstijden, locatie of andere bedrijfsinformatie. "
-        "Beantwoord dit NOOIT uit je eigen kennis — gebruik altijd de tool.\n\n"
-        "**Wanneer gebruiken:**\n"
-        "- Klant vraagt over prijzen, pakketten, kosten\n"
-        "- Klant vraagt over diensten, producten, aanbod\n"
-        "- Klant vraagt over openingstijden, locatie, contact\n"
-        "- Klant stelt een inhoudelijke vraag over het bedrijf\n\n"
+        "Zoek ALTIJD in de kennisbank bij ELKE inhoudelijke vraag. "
+        "De resultaten bevatten alle bedrijfsinformatie, inclusief opgeslagen Q&A. "
+        "Beantwoord nooit uit eigen kennis.\n\n"
+        "**Resultaten:** De tool retourneert `knowledge_results` (website) en `training_results` "
+        "(opgeslagen Q&A). Gebruik EERST knowledge_results. Als die niet genoeg zijn, gebruik dan "
+        "ook training_results.\n\n"
+        "**Wanneer gebruiken:** Bij elke inhoudelijke vraag over het bedrijf.\n\n"
         "**Foutafhandeling:**\n"
         'Als de tool faalt: "Dat heb ik even niet bij de hand. '
         'Zal ik een collega vragen om u terug te bellen?"\n'

@@ -230,6 +230,44 @@ async def tool_book_appointment(
     }
 
 
+# Dutch stop words for keyword matching (common words to ignore)
+_STOP_WORDS = frozenset(
+    "de het een van in op te voor met is dat aan als om bij uit naar over "
+    "welke wat wie waar wanneer hoe waarom hoeveel kan zijn worden heeft "
+    "hebben had zou kunnen moeten willen".split()
+)
+
+
+def _extract_keywords(text: str) -> set:
+    """Extract significant words (min 3 chars, not stop words) for matching."""
+    import re
+    words = re.findall(r"[a-z0-9éèëïöü]+", text.lower())
+    return {w for w in words if len(w) >= 3 and w not in _STOP_WORDS}
+
+
+def _matches_example_answer(query: str, question: str, variations: List[str]) -> bool:
+    """
+    Match query to ExampleAnswer via substring OR keyword overlap.
+    Returns True if query is substring of question/variations, or if 2+ keywords overlap.
+    """
+    query_lower = query.lower()
+    q_text = (question or "").lower()
+    # Exact substring match (original behavior)
+    if query_lower in q_text:
+        return True
+    for v in (variations or []):
+        if query_lower in (v or "").lower():
+            return True
+    # Keyword overlap: 2+ significant words must appear in question or variations
+    query_kw = _extract_keywords(query)
+    if len(query_kw) < 2:
+        return False
+    combined = q_text + " " + " ".join((v or "").lower() for v in (variations or []))
+    combined_kw = _extract_keywords(combined)
+    overlap = query_kw & combined_kw
+    return len(overlap) >= 2
+
+
 def tool_search_knowledge(
     db: Session,
     company_id: str,
@@ -239,25 +277,22 @@ def tool_search_knowledge(
     """
     Search company knowledge base using RAG (vector similarity).
 
-    Priority: website/landing page content first (vector search),
-    then ExampleAnswers as supplementary detail.
-
-    Returns:
-        Dict with ok, results (list of content+url), message
+    Returns knowledge_results (website) and training_results (ExampleAnswers) separately.
+    AI should use knowledge_results first, then training_results if needed.
     """
     if not query.strip():
         return {
             "ok": True,
+            "knowledge_results": [],
+            "training_results": [],
             "results": [],
-            "message": "Geen zoekopdracht opgegeven."
+            "message": "Geen zoekopdracht opgegeven.",
         }
 
     logger.info(f"[search_knowledge] query={query!r} company={company_id}")
 
+    # 1. Vector search — website/kennisbank
     vector_results = []
-    qa_results = []
-
-    # 1. Vector search FIRST — website/landing page is the primary source
     try:
         store = VectorStore(company_id, db)
         chunks = store.search(query, website_id=None, limit=limit, db=db)
@@ -274,10 +309,10 @@ def tool_search_knowledge(
     except Exception as e:
         logger.error(f"Error searching vector store: {e}")
 
-    # 2. ExampleAnswers SECOND — supplementary detail for follow-up depth
+    # 2. ExampleAnswers — training/voorbeeldantwoorden (keyword overlap + substring)
+    qa_results = []
     try:
         from app.models.training import ExampleAnswer
-        query_lower = query.lower()
         qa_all = (
             db.query(ExampleAnswer)
             .filter(
@@ -288,8 +323,10 @@ def tool_search_knowledge(
             .all()
         )
         for qa in qa_all:
-            if query_lower in (qa.question or "").lower() or any(
-                query_lower in (v or "").lower() for v in (qa.question_variations or [])
+            if _matches_example_answer(
+                query,
+                qa.question,
+                qa.question_variations or [],
             ):
                 qa_results.append({
                     "content": f"Vraag: {qa.question}\nAntwoord: {qa.answer}",
@@ -299,26 +336,31 @@ def tool_search_knowledge(
     except Exception:
         logger.warning("Failed to search ExampleAnswers", exc_info=True)
 
-    results = vector_results + qa_results
-    max_results = limit + 3
+    max_qa = limit + 3
+    knowledge_results = vector_results
+    training_results = qa_results[:max_qa]
+    results = knowledge_results + training_results
 
     logger.info(
-        f"[search_knowledge] vector={len(vector_results)} "
-        f"qa={len(qa_results)} total={len(results)} "
-        f"(returning max {max_results})"
+        f"[search_knowledge] knowledge={len(knowledge_results)} "
+        f"training={len(training_results)} total={len(results)}"
     )
 
     if not results:
         return {
             "ok": True,
+            "knowledge_results": [],
+            "training_results": [],
             "results": [],
-            "message": "Geen informatie beschikbaar. VERZIN NIETS. Zeg eerlijk dat je het antwoord op dit moment niet bij de hand hebt. Bied aan om een notitie achter te laten zodat een collega de klant zo snel mogelijk terugbelt met het antwoord. Bevestig het telefoonnummer."
+            "message": "Geen informatie beschikbaar. VERZIN NIETS. Zeg eerlijk dat je het antwoord op dit moment niet bij de hand hebt. Bied aan om een notitie achter te laten zodat een collega de klant zo snel mogelijk terugbelt met het antwoord. Bevestig het telefoonnummer.",
         }
 
     return {
         "ok": True,
-        "results": results[:max_results],
-        "message": f"{len(results)} relevante resultaten gevonden."
+        "knowledge_results": knowledge_results,
+        "training_results": training_results,
+        "results": results,
+        "message": f"{len(knowledge_results)} kennisbank + {len(training_results)} training resultaten gevonden.",
     }
 
 
