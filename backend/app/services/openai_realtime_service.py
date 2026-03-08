@@ -304,6 +304,18 @@ def build_system_instructions(
         )
 
     tool_lines.append(
+        "## flag_unknown\n"
+        "Markeer een vraag die je niet kunt beantwoorden.\n\n"
+        "**Wanneer gebruiken:**\n"
+        "- Je hebt search_knowledge gebruikt maar er is geen antwoord gevonden\n"
+        "- De klant stelt een vraag die je echt niet kunt beantwoorden\n\n"
+        "Geef de originele vraag van de klant mee als `question` parameter.\n"
+        "De vraag verschijnt dan als suggestie in het dashboard zodat het bedrijf "
+        "een antwoord kan toevoegen.\n"
+        "Noem deze tool NIET tegen de klant."
+    )
+
+    tool_lines.append(
         "## end_call\n"
         "Gebruik om het gesprek netjes te beëindigen.\n\n"
         "**Wanneer gebruiken:**\n"
