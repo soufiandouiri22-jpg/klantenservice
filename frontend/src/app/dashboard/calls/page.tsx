@@ -351,7 +351,7 @@ export default function CallsPage() {
             )}
 
             {/* Recording */}
-            {callDetail.recording_url && (
+            {(callDetail.recording_url || callDetail.elevenlabs_conversation_id) && (
               <div>
                 <p className="text-sm text-gray-500 mb-2">Opname</p>
                 <audio

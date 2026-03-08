@@ -29,6 +29,7 @@ class CallLogResponse(CallLogBase):
     duration_seconds: int
     queue_wait_seconds: int
     recording_url: Optional[str]
+    elevenlabs_conversation_id: Optional[str] = None
     recording_consent_given: bool
     sentiment: Optional[str]
     topics: List[str]

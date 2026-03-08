@@ -177,16 +177,24 @@ async def get_demo_signed_url(
         f"for company={company.name} worker={worker.name} ip={client_ip}"
     )
 
-    # Get signed URL from ElevenLabs
+    # Get signed URL from ElevenLabs (include_conversation_id for demo call recording)
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(
                 "https://api.elevenlabs.io/v1/convai/conversation/get-signed-url",
-                params={"agent_id": settings.ELEVENLABS_AGENT_ID},
+                params={
+                    "agent_id": settings.ELEVENLABS_AGENT_ID,
+                    "include_conversation_id": "true",
+                },
                 headers={"xi-api-key": settings.ELEVENLABS_API_KEY},
             )
             resp.raise_for_status()
-            signed_url = resp.json().get("signed_url")
+            data = resp.json()
+            signed_url = data.get("signed_url")
+            conversation_id = data.get("conversation_id")
+            if conversation_id:
+                call_log.elevenlabs_conversation_id = conversation_id
+                db.commit()
     except Exception as e:
         logger.error(f"Failed to get ElevenLabs signed URL for demo: {e}", exc_info=True)
         db.delete(call_log)

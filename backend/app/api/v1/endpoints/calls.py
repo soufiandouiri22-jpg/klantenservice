@@ -314,9 +314,26 @@ async def get_call_recording(
 
     if not call:
         raise HTTPException(status_code=404, detail="Gesprek niet gevonden")
-    if not call.recording_url:
+    if not call.recording_url and not call.elevenlabs_conversation_id:
         raise HTTPException(status_code=404, detail="Geen opname beschikbaar")
 
+    # Demo calls: fetch from ElevenLabs
+    if call.elevenlabs_conversation_id:
+        url = f"https://api.elevenlabs.io/v1/convai/conversations/{call.elevenlabs_conversation_id}/audio"
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.get(
+                url,
+                headers={"xi-api-key": settings.ELEVENLABS_API_KEY},
+            )
+            if resp.status_code != 200:
+                raise HTTPException(status_code=502, detail="Kon opname niet ophalen")
+        return StreamingResponse(
+            iter([resp.content]),
+            media_type="audio/mpeg",
+            headers={"Content-Disposition": f"inline; filename=recording-{call_id}.mp3"},
+        )
+
+    # Twilio calls
     audio_url = call.recording_url
     if not audio_url.endswith(".mp3"):
         audio_url += ".mp3"
