@@ -81,9 +81,8 @@ function SettingsContent() {
   // BTW validation state
   const [btwStatus, setBtwStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle')
 
-  // Billing interval toggle — default to subscription's current interval
+  // Billing interval toggle
   const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('monthly')
-  const [billingIntervalInitialized, setBillingIntervalInitialized] = useState(false)
 
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false)
   const [newUserData, setNewUserData] = useState({
@@ -247,14 +246,6 @@ function SettingsContent() {
       toast.error(message)
     },
   })
-
-  // Sync billing interval toggle with subscription data
-  useEffect(() => {
-    if (subscription?.billing_interval && !billingIntervalInitialized) {
-      setBillingInterval(subscription.billing_interval as 'monthly' | 'yearly')
-      setBillingIntervalInitialized(true)
-    }
-  }, [subscription, billingIntervalInitialized])
 
   // Email change cooldown timer
   useEffect(() => {
@@ -1039,45 +1030,25 @@ function SettingsContent() {
                             Website kennis
                           </li>
                         </ul>
-                        {(() => {
-                          const isActive = subscription?.status === 'active' || subscription?.status === 'trialing'
-                          const isSamePlan = isActive && subscription?.plan === 'starter'
-                          const isSameInterval = subscription?.billing_interval === billingInterval
-                          if (isSamePlan && isSameInterval) {
-                            return (
-                              <div className="mt-6 py-2 text-center text-sm font-medium text-primary-600">
-                                Uw huidige plan
-                              </div>
-                            )
-                          }
-                          if (isSamePlan && !isSameInterval) {
-                            return (
-                              <Button
-                                className="mt-6 w-full"
-                                onClick={() => handleUpgrade('starter', billingInterval)}
-                                disabled={checkoutMutation.isPending || portalMutation.isPending}
-                              >
-                                {(checkoutMutation.isPending || portalMutation.isPending) ? 'Laden...' :
-                                  billingInterval === 'yearly' ? 'Overstappen naar jaarlijks' : 'Overstappen naar maandelijks'}
-                              </Button>
-                            )
-                          }
-                          return (
-                            <Button
-                              className="mt-6 w-full"
-                              variant={!isActive ? 'primary' : 'outline'}
-                              onClick={() => handleUpgrade('starter', billingInterval)}
-                              disabled={checkoutMutation.isPending || portalMutation.isPending}
-                            >
-                              {(checkoutMutation.isPending || portalMutation.isPending) ? 'Laden...' :
-                                !isActive
-                                  ? 'Start gratis proefperiode'
-                                  : subscription?.plan === 'business' || subscription?.plan === 'enterprise'
-                                    ? 'Downgraden'
-                                    : 'Kiezen'}
-                            </Button>
-                          )
-                        })()}
+                        {(subscription?.status === 'active' || subscription?.status === 'trialing') && subscription?.plan === 'starter' ? (
+                          <div className="mt-6 py-2 text-center text-sm font-medium text-primary-600">
+                            Uw huidige plan
+                          </div>
+                        ) : (
+                          <Button
+                            className="mt-6 w-full"
+                            variant={subscription?.status !== 'active' && subscription?.status !== 'trialing' ? 'primary' : 'outline'}
+                            onClick={() => handleUpgrade('starter', billingInterval)}
+                            disabled={checkoutMutation.isPending || portalMutation.isPending}
+                          >
+                            {(checkoutMutation.isPending || portalMutation.isPending) ? 'Laden...' :
+                              subscription?.status !== 'active' && subscription?.status !== 'trialing'
+                                ? 'Start gratis proefperiode'
+                                : subscription?.plan === 'business' || subscription?.plan === 'enterprise'
+                                  ? 'Downgraden'
+                                  : 'Kiezen'}
+                          </Button>
+                        )}
                       </div>
 
                       {/* Business Plan */}
@@ -1119,46 +1090,26 @@ function SettingsContent() {
                             Dedicated onboarding
                           </li>
                         </ul>
-                        {(() => {
-                          const isActive = subscription?.status === 'active' || subscription?.status === 'trialing'
-                          const isSamePlan = isActive && subscription?.plan === 'business'
-                          const isSameInterval = subscription?.billing_interval === billingInterval
-                          if (isSamePlan && isSameInterval) {
-                            return (
-                              <div className="mt-6 py-2 text-center text-sm font-medium text-primary-600">
-                                Uw huidige plan
-                              </div>
-                            )
-                          }
-                          if (isSamePlan && !isSameInterval) {
-                            return (
-                              <Button
-                                className="mt-6 w-full"
-                                onClick={() => handleUpgrade('business', billingInterval)}
-                                disabled={checkoutMutation.isPending || portalMutation.isPending}
-                              >
-                                {(checkoutMutation.isPending || portalMutation.isPending) ? 'Laden...' :
-                                  billingInterval === 'yearly' ? 'Overstappen naar jaarlijks' : 'Overstappen naar maandelijks'}
-                              </Button>
-                            )
-                          }
-                          return (
-                            <Button
-                              className="mt-6 w-full"
-                              onClick={() => handleUpgrade('business', billingInterval)}
-                              disabled={checkoutMutation.isPending || portalMutation.isPending}
-                            >
-                              {(checkoutMutation.isPending || portalMutation.isPending) ? 'Laden...' :
-                                !isActive
-                                  ? 'Start gratis proefperiode'
-                                  : subscription?.plan === 'starter'
-                                    ? 'Upgraden'
-                                    : subscription?.plan === 'enterprise'
-                                      ? 'Downgraden'
-                                      : 'Kiezen'}
-                            </Button>
-                          )
-                        })()}
+                        {(subscription?.status === 'active' || subscription?.status === 'trialing') && subscription?.plan === 'business' ? (
+                          <div className="mt-6 py-2 text-center text-sm font-medium text-primary-600">
+                            Uw huidige plan
+                          </div>
+                        ) : (
+                          <Button
+                            className="mt-6 w-full"
+                            onClick={() => handleUpgrade('business', billingInterval)}
+                            disabled={checkoutMutation.isPending || portalMutation.isPending}
+                          >
+                            {(checkoutMutation.isPending || portalMutation.isPending) ? 'Laden...' :
+                              subscription?.status !== 'active' && subscription?.status !== 'trialing'
+                                ? 'Start gratis proefperiode'
+                                : subscription?.plan === 'starter'
+                                  ? 'Upgraden'
+                                  : subscription?.plan === 'enterprise'
+                                    ? 'Downgraden'
+                                    : 'Kiezen'}
+                          </Button>
+                        )}
                       </div>
 
                       {/* Enterprise Plan */}
