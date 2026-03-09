@@ -132,7 +132,7 @@ TOOLS_OPENAI = [
                 "type": "object",
                 "properties": {
                     "query": {"type": "string", "description": "De zoekopdracht"},
-                    "limit": {"type": "integer", "description": "Max aantal resultaten", "default": 5},
+                    "limit": {"type": "integer", "description": "Max aantal resultaten", "default": 20},
                 },
                 "required": ["query"],
             },
@@ -279,7 +279,7 @@ async def _run_tool(
             return tool_search_knowledge(
                 db, company_id,
                 query=arguments.get("query", ""),
-                limit=arguments.get("limit", 8)
+                limit=arguments.get("limit", 20)
             )
         
         if name == "create_note":

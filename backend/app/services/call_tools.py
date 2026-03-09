@@ -247,7 +247,7 @@ def tool_search_knowledge(
     db: Session,
     company_id: str,
     query: str,
-    limit: int = 5,
+    limit: int = 20,
 ) -> Dict[str, Any]:
     """
     Search company knowledge base using RAG (vector similarity).
