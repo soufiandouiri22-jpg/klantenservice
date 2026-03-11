@@ -27,7 +27,7 @@ class CrawlerService:
 
     def __init__(
         self,
-        provider: str = "http",
+        provider: str = "auto",
         max_pages: int = 100,
         max_depth: int = 3,
         blocked_paths: Optional[List[str]] = None,
@@ -47,12 +47,13 @@ class CrawlerService:
 
     @staticmethod
     def _make_provider(name: str) -> CrawlProvider:
-        if name == "cloudflare":
+        if name in ("cloudflare", "auto"):
             cf = CloudflareCrawlProvider()
             if cf.available:
                 logger.info("Using Cloudflare Browser Rendering provider")
                 return cf
-            logger.warning("Cloudflare credentials not set, falling back to HTTP provider")
+            if name == "cloudflare":
+                logger.warning("Cloudflare credentials not set, falling back to HTTP provider")
         return HttpCrawlProvider()
 
     @property

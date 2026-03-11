@@ -45,7 +45,7 @@ class IndexingOrchestrator:
             id=uuid4(),
             site_id=site.id,
             company_id=site.company_id,
-            provider=(site.crawl_config or {}).get("provider", "http"),
+            provider=(site.crawl_config or {}).get("provider", "auto"),
             config=site.crawl_config or {},
             started_at=datetime.utcnow(),
         )
@@ -62,7 +62,7 @@ class IndexingOrchestrator:
 
             config = site.crawl_config or {}
             crawler = CrawlerService(
-                provider=config.get("provider", "http"),
+                provider=config.get("provider", "auto"),
                 max_pages=config.get("max_pages", 100),
                 max_depth=config.get("max_depth", 3),
                 blocked_paths=config.get("blocked_paths", ["/admin", "/login", "/wp-admin"]),
