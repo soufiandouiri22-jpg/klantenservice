@@ -246,8 +246,10 @@ def _matches_example_answer(query: str, question: str, variations: List[str]) ->
 def _run_retrieval(db: Session, company_id: str, query: str, limit: int) -> List[Dict]:
     """Bridge async RetrievalService into sync context safely."""
     import asyncio
+    import time as _time
 
     retrieval = RetrievalService(db)
+    t0 = _time.time()
 
     async def _do():
         return await retrieval.search(company_id, query, limit=limit)
@@ -258,14 +260,15 @@ def _run_retrieval(db: Session, company_id: str, query: str, limit: int) -> List
         loop = None
 
     if loop and loop.is_running():
-        # We're inside an existing event loop (e.g. FastAPI handler).
-        # Create a new loop in a thread to avoid nested-loop issues.
         import concurrent.futures
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
             future = pool.submit(asyncio.run, _do())
-            result = future.result(timeout=30)
+            result = future.result(timeout=15)
     else:
         result = asyncio.run(_do())
+
+    elapsed_ms = int((_time.time() - t0) * 1000)
+    logger.info("[_run_retrieval] completed in %dms, results=%d", elapsed_ms, len(result.get("results", [])) if isinstance(result, dict) else 0)
 
     return result.get("results", []) if isinstance(result, dict) else []
 
@@ -274,16 +277,27 @@ def tool_search_knowledge(
     db: Session,
     company_id: str,
     query: str,
-    limit: int = 10,
+    limit: int = 5,
 ) -> Dict[str, Any]:
     """Search company knowledge base using hybrid retrieval pipeline."""
     if not query.strip():
         return {"ok": True, "results": [], "message": "Geen zoekopdracht opgegeven."}
 
-    logger.info("[search_knowledge] query=%r company=%s", query, company_id)
+    import time as _time
+    t0 = _time.time()
+    logger.info("[search_knowledge] START query=%r company=%s limit=%d", query, company_id, limit)
 
     # 1. Retrieval pipeline (vector + metadata + fulltext + reranking)
     retrieval_results = _run_retrieval(db, company_id, query, limit)
+
+    # Log top retrieval results
+    for i, r in enumerate(retrieval_results[:5]):
+        logger.info(
+            "[search_knowledge] result #%d: score=%.4f type=%s url=%s title=%r preview=%r",
+            i + 1, r.get("score", 0), r.get("chunk_type", "?"),
+            r.get("url", "")[:80], (r.get("title") or "")[:60],
+            r.get("content", "")[:250].replace("\n", " "),
+        )
 
     # 2. ExampleAnswers — training/voorbeeldantwoorden (substring match)
     qa_results = []
@@ -308,7 +322,11 @@ def tool_search_knowledge(
         logger.warning("Failed to search ExampleAnswers", exc_info=True)
 
     results = retrieval_results + qa_results
-    logger.info("[search_knowledge] %d retrieval + %d training = %d total", len(retrieval_results), len(qa_results), len(results))
+    elapsed_ms = int((_time.time() - t0) * 1000)
+    logger.info(
+        "[search_knowledge] DONE in %dms: %d retrieval + %d training = %d total",
+        elapsed_ms, len(retrieval_results), len(qa_results), len(results),
+    )
 
     if not results:
         return {
@@ -317,10 +335,20 @@ def tool_search_knowledge(
             "message": "Geen informatie beschikbaar. VERZIN NIETS. Zeg eerlijk dat je het antwoord op dit moment niet bij de hand hebt. Bied aan om een notitie achter te laten zodat een collega de klant zo snel mogelijk terugbelt met het antwoord. Bevestig het telefoonnummer.",
         }
 
+    # Log the final message that will be sent to the voice agent
+    final_msg = f"{len(results)} relevante resultaten gevonden."
+    logger.info("[search_knowledge] final_message=%r", final_msg)
+    for r in results:
+        logger.info(
+            "[search_knowledge] -> TTS content (%d chars): %r",
+            len(r.get("content", "")),
+            r.get("content", "")[:300].replace("\n", " "),
+        )
+
     return {
         "ok": True,
         "results": results,
-        "message": f"{len(results)} relevante resultaten gevonden.",
+        "message": final_msg,
     }
 
 
@@ -334,7 +362,7 @@ def tool_get_prices(
     if topic and "prijs" not in topic.lower():
         query = f"{topic} prijs tarief kosten"
 
-    result = tool_search_knowledge(db, company_id, query, limit=5)
+    result = tool_search_knowledge(db, company_id, query, limit=3)
     prices = [
         r["content"][:500]
         for r in result.get("results", [])

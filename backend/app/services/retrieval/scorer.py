@@ -1,23 +1,41 @@
 """
-Scoring & confidence – compute final scores with type boosts/penalties.
+Scoring & confidence – compute final scores with type boosts, penalties,
+and content quality filters.
 
-Design goals:
-- Boost chunks whose type matches the query classification.
-- Penalize generic homepage/marketing chunks when query is specific.
-- Penalize near-duplicate chunks.
-- Compute overall confidence from score distribution.
+Filters out junk chunks (JSON dumps, metadata, prompt fragments, etc.)
+before scoring.
 """
-from typing import List, Dict, Optional
+import re
+import logging
+from typing import List, Dict
+
+logger = logging.getLogger(__name__)
+
+TYPE_MATCH_BOOST = 0.20
+GENERIC_PENALTY = -0.12
+LOW_INFO_PENALTY = -0.10
+JUNK_PENALTY = -0.40
+
+# Patterns that indicate junk / non-informational content
+_JUNK_PATTERNS = [
+    re.compile(r"^\s*\{.*\}\s*$", re.DOTALL),  # JSON object
+    re.compile(r"^\s*\[.*\]\s*$", re.DOTALL),  # JSON array
+    re.compile(r"(system_prompt|user_message|assistant_message|<\|im_start\|>)", re.I),
+    re.compile(r"(\"type\":\s*\"|\bschema\b.*\bproperties\b)", re.I),
+    re.compile(r"(charset=|content-type:|<!DOCTYPE|<html|<head>)", re.I),
+    re.compile(r"(__webpack|module\.exports|import\s+\{|require\()", re.I),
+    re.compile(r"(cookie.?policy|privacy.?policy|terms.?of.?service).{0,30}(accept|decline|agree)", re.I),
+]
 
 
-# Boost multiplier when chunk_type matches query_classification
-TYPE_MATCH_BOOST = 0.15
-
-# Penalty for homepage/general chunks when query is specific
-GENERIC_PENALTY = -0.10
-
-# Penalty for chunks with very little information (< 50 tokens)
-LOW_INFO_PENALTY = -0.08
+def _is_junk(content: str) -> bool:
+    """Detect chunks that contain prompt-like text, metadata, JSON, or boilerplate."""
+    if not content or len(content.strip()) < 20:
+        return True
+    for pat in _JUNK_PATTERNS:
+        if pat.search(content[:500]):
+            return True
+    return False
 
 
 def score_candidates(
@@ -25,25 +43,33 @@ def score_candidates(
     query_classification: str,
 ) -> List[Dict]:
     """
-    Score and sort candidates. Each candidate dict should have:
-      - vector_score (float, 0-1, higher = more similar)
-      - chunk_type (str)
-      - page_type (str)
-      - token_count (int)
-      - content (str)
-
-    Adds 'metadata_boost' and 'final_score' to each candidate.
-    Returns candidates sorted by final_score descending.
+    Score and sort candidates. Filters junk, applies type boosts/penalties.
+    Adds 'metadata_boost', 'final_score', and 'is_junk' to each candidate.
     """
+    scored = []
+    junk_count = 0
+
     for c in candidates:
+        content = c.get("content", "")
+        if _is_junk(content):
+            c["is_junk"] = True
+            c["metadata_boost"] = JUNK_PENALTY
+            c["final_score"] = max(0.0, c.get("rerank_score", c.get("vector_score", 0.0)) + JUNK_PENALTY)
+            junk_count += 1
+            continue
+
+        c["is_junk"] = False
         boost = 0.0
-        vs = c.get("vector_score", 0.0)
+        base_score = c.get("rerank_score", c.get("vector_score", 0.0))
 
-        # Type match boost
-        if query_classification != "general" and c.get("chunk_type") == query_classification:
-            boost += TYPE_MATCH_BOOST
+        # Type match boost (stronger for pricing)
+        if query_classification != "general":
+            if c.get("chunk_type") == query_classification:
+                boost += TYPE_MATCH_BOOST
+            elif c.get("page_type") == query_classification:
+                boost += TYPE_MATCH_BOOST * 0.6
 
-        # Generic penalty for homepage chunks on specific queries
+        # Generic homepage penalty on specific queries
         if query_classification != "general":
             if c.get("page_type") == "home" and c.get("chunk_type") == "general":
                 boost += GENERIC_PENALTY
@@ -53,18 +79,20 @@ def score_candidates(
             boost += LOW_INFO_PENALTY
 
         c["metadata_boost"] = round(boost, 4)
-        c["final_score"] = round(vs + boost, 4)
+        c["final_score"] = round(base_score + boost, 4)
+        scored.append(c)
 
-    # Sort descending by final_score
-    candidates.sort(key=lambda x: x["final_score"], reverse=True)
-    return candidates
+    if junk_count:
+        logger.info("[scorer] filtered %d junk chunks out of %d", junk_count, len(candidates))
+
+    scored.sort(key=lambda x: x["final_score"], reverse=True)
+    return scored
 
 
 def compute_confidence(candidates: List[Dict], top_n: int = 5) -> float:
     """
-    Compute a confidence score (0-1) based on the top candidates.
-    High confidence = top scores are high and close together (strong evidence).
-    Low confidence = top scores are low or spread (weak/conflicting evidence).
+    Confidence score (0-1) from top candidates.
+    High = strong evidence, low = weak/conflicting.
     """
     if not candidates:
         return 0.0
@@ -76,11 +104,8 @@ def compute_confidence(candidates: List[Dict], top_n: int = 5) -> float:
     if top_score <= 0.0:
         return 0.0
 
-    # Base confidence from top score (vector similarity + boosts)
-    # vector_score is cosine similarity (0-1), so final_score is roughly in that range
     confidence = min(1.0, max(0.0, top_score))
 
-    # If only 1 candidate, reduce confidence slightly
     if len(scores) == 1:
         confidence *= 0.8
 

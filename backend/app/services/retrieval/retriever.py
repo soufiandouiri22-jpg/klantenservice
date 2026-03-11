@@ -2,11 +2,11 @@
 Retrieval service – hybrid search combining vector similarity, metadata filters,
 and full-text search, followed by reranking, scoring, and context assembly.
 
-This is the main entry point for all knowledge retrieval.
+Tuned for realtime voice: fetch 15, rerank, pass top 5 to context.
 """
 import logging
 import time
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -24,6 +24,11 @@ from .debug_logger import log_retrieval_event
 
 logger = logging.getLogger(__name__)
 
+FETCH_LIMIT = 15
+RERANK_TOP_K = 10
+CONTEXT_MAX_CHUNKS = 5
+CONTEXT_MAX_TOKENS = 2000
+
 
 class RetrievalService:
     """Main retrieval service for searching the knowledge base."""
@@ -35,36 +40,36 @@ class RetrievalService:
         self,
         company_id: str,
         query: str,
-        limit: int = 8,
+        limit: int = 5,
         site_id: Optional[str] = None,
     ) -> Dict:
         """
         Full retrieval pipeline:
         1. Classify query
-        2. Hybrid search (vector + metadata + fulltext)
-        3. Rerank
-        4. Score with boosts/penalties
-        5. Assemble context
+        2. Hybrid search (vector + metadata + fulltext) — fetch 15
+        3. Rerank — keep top 10
+        4. Score with boosts/penalties + junk filter
+        5. Assemble context — top 5
         6. Log for debugging
-
-        Returns dict with keys: ok, results, context, confidence, debug
         """
         start = time.time()
 
         # Step 1: classify query
         query_classification = classify_query(query)
+        logger.info("[retriever] query=%r classification=%s", query, query_classification)
 
         # Step 2: hybrid search
         candidates = await self._hybrid_search(
             company_id=company_id,
             query=query,
             query_classification=query_classification,
-            limit=limit * 4,  # Fetch more for reranking
+            limit=FETCH_LIMIT,
             site_id=site_id,
         )
 
         if not candidates:
             latency_ms = int((time.time() - start) * 1000)
+            logger.info("[retriever] no candidates found, latency=%dms", latency_ms)
             log_retrieval_event(
                 db=self.db, company_id=company_id, query=query,
                 query_classification=query_classification,
@@ -80,21 +85,62 @@ class RetrievalService:
                 "message": "Geen relevante informatie gevonden.",
             }
 
-        # Step 3: rerank
-        reranked = rerank(query, candidates, top_k=limit * 2)
+        logger.info("[retriever] hybrid search returned %d candidates", len(candidates))
 
-        # Step 4: score with boosts/penalties
+        # Log top candidates before reranking
+        for i, c in enumerate(candidates[:5]):
+            logger.info(
+                "[retriever] pre-rerank #%d: score=%.4f type=%s url=%s title=%r preview=%r",
+                i + 1, c.get("vector_score", 0), c.get("chunk_type", "?"),
+                c.get("url", "")[:80], (c.get("page_title") or "")[:60],
+                c.get("content", "")[:250].replace("\n", " "),
+            )
+
+        # Step 3: rerank
+        reranked = rerank(query, candidates, top_k=RERANK_TOP_K)
+
+        # Log top candidates after reranking
+        logger.info("[retriever] post-rerank top %d:", min(5, len(reranked)))
+        for i, c in enumerate(reranked[:5]):
+            logger.info(
+                "[retriever] post-rerank #%d: rerank_score=%.4f vector_score=%.4f "
+                "type=%s url=%s title=%r preview=%r",
+                i + 1, c.get("rerank_score", 0), c.get("vector_score", 0),
+                c.get("chunk_type", "?"), c.get("url", "")[:80],
+                (c.get("page_title") or "")[:60],
+                c.get("content", "")[:250].replace("\n", " "),
+            )
+
+        # Step 4: score with boosts/penalties + junk filter
         scored = score_candidates(reranked, query_classification)
 
-        # Step 5: assemble context
-        context_text, included, context_tokens = assemble_context(scored, max_tokens=3000)
+        # Step 5: assemble context (max 5 chunks)
+        context_text, included, context_tokens = assemble_context(
+            scored,
+            max_tokens=CONTEXT_MAX_TOKENS,
+            max_chunks=CONTEXT_MAX_CHUNKS,
+        )
 
         # Step 6: confidence
         confidence = compute_confidence(included)
 
         latency_ms = int((time.time() - start) * 1000)
 
-        # Step 7: log
+        logger.info(
+            "[retriever] done: %d candidates -> %d reranked -> %d scored -> %d in context, "
+            "confidence=%.3f, latency=%dms",
+            len(candidates), len(reranked), len(scored), len(included),
+            confidence, latency_ms,
+        )
+
+        # Log final context for debugging
+        if context_text:
+            logger.info(
+                "[retriever] final_context (%d chars, %d tokens):\n%s",
+                len(context_text), context_tokens, context_text[:1500],
+            )
+
+        # Step 7: log to DB
         log_retrieval_event(
             db=self.db, company_id=company_id, query=query,
             query_classification=query_classification,
@@ -107,7 +153,6 @@ class RetrievalService:
             reranked=True,
         )
 
-        # Format results for the caller (tool_search_knowledge)
         results = [
             {
                 "content": c["content"],
@@ -132,6 +177,7 @@ class RetrievalService:
                 "query_classification": query_classification,
                 "candidates_found": len(candidates),
                 "reranked": True,
+                "included": len(included),
                 "latency_ms": latency_ms,
             },
         }
@@ -145,38 +191,90 @@ class RetrievalService:
         site_id: Optional[str] = None,
     ) -> List[Dict]:
         """
-        Hybrid search combining:
-        - Vector similarity (pgvector cosine distance)
-        - Metadata filter (chunk_type boost via WHERE)
-        - Full-text search (tsvector matching)
+        Hybrid search: vector similarity + full-text + optional type priority.
+
+        For typed queries (pricing, contact, etc.), fetches type-matched chunks
+        first, then backfills with general results.
         """
-        # Embed query
         query_embedding = await self._embed_query(query)
         if not query_embedding:
             return []
 
         embedding_str = f"[{','.join(map(str, query_embedding))}]"
 
-        # Build WHERE clause
+        # Full-text query
+        ts_query_parts = [w for w in query.lower().split() if len(w) > 2]
+        ts_query = " | ".join(ts_query_parts) if ts_query_parts else query.lower()
+
+        # For specific query types, first fetch type-matched chunks
+        if query_classification not in ("general",):
+            typed_candidates = await self._fetch_candidates(
+                company_id=company_id,
+                embedding_str=embedding_str,
+                ts_query=ts_query,
+                limit=limit,
+                site_id=site_id,
+                chunk_type_filter=query_classification,
+            )
+            if len(typed_candidates) >= 3:
+                # Backfill with general results to get diverse context
+                remaining = limit - len(typed_candidates)
+                if remaining > 0:
+                    general_candidates = await self._fetch_candidates(
+                        company_id=company_id,
+                        embedding_str=embedding_str,
+                        ts_query=ts_query,
+                        limit=remaining,
+                        site_id=site_id,
+                    )
+                    seen_ids = {c["chunk_id"] for c in typed_candidates}
+                    for c in general_candidates:
+                        if c["chunk_id"] not in seen_ids:
+                            typed_candidates.append(c)
+                logger.info(
+                    "[retriever] type-priority fetch: %d %s chunks + backfill = %d total",
+                    len([c for c in typed_candidates if c.get("chunk_type") == query_classification]),
+                    query_classification, len(typed_candidates),
+                )
+                return typed_candidates
+
+        # Default: fetch without type filter
+        return await self._fetch_candidates(
+            company_id=company_id,
+            embedding_str=embedding_str,
+            ts_query=ts_query,
+            limit=limit,
+            site_id=site_id,
+        )
+
+    async def _fetch_candidates(
+        self,
+        company_id: str,
+        embedding_str: str,
+        ts_query: str,
+        limit: int,
+        site_id: Optional[str] = None,
+        chunk_type_filter: Optional[str] = None,
+    ) -> List[Dict]:
+        """Execute the hybrid search SQL query."""
         where_parts = ["c.company_id = :company_id", "c.embedding IS NOT NULL"]
         params: Dict = {
             "company_id": company_id,
             "embedding": embedding_str,
             "limit": limit,
+            "ts_query": ts_query,
         }
 
         if site_id:
             where_parts.append("c.site_id = :site_id")
             params["site_id"] = site_id
 
-        # Full-text query (simple tokenisation for Dutch)
-        ts_query_parts = [w for w in query.lower().split() if len(w) > 2]
-        ts_query = " | ".join(ts_query_parts) if ts_query_parts else query.lower()
-        params["ts_query"] = ts_query
+        if chunk_type_filter:
+            where_parts.append("(c.chunk_type = :chunk_type OR c.page_type = :chunk_type)")
+            params["chunk_type"] = chunk_type_filter
 
         where_clause = " AND ".join(where_parts)
 
-        # Hybrid scoring: combine vector similarity with full-text relevance
         sql = text(f"""
             SELECT
                 c.id,
@@ -207,7 +305,6 @@ class RetrievalService:
 
         candidates = []
         for row in rows:
-            # Combined score: 80% vector + 20% text rank
             vector_sim = float(row.vector_sim) if row.vector_sim else 0.0
             text_rank = float(row.text_rank) if row.text_rank else 0.0
             combined = 0.8 * vector_sim + 0.2 * min(text_rank, 1.0)

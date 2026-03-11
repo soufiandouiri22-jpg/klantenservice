@@ -135,6 +135,13 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("OPENAI_API_KEY not set — embeddings/retrieval will not work")
 
+    # Pre-load cross-encoder reranker to avoid first-request latency
+    try:
+        from app.services.retrieval.reranker import preload as preload_reranker
+        preload_reranker()
+    except Exception as exc:
+        logger.warning("Reranker preload skipped: %s", exc)
+
     # Pre-warm voice previews in the background (non-blocking)
     asyncio.create_task(_prewarm_voice_previews())
     
