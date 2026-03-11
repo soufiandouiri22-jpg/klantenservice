@@ -36,7 +36,7 @@ export default function KnowledgePage() {
     queryFn: websitesApi.list,
     refetchInterval: (query) => {
       const data = query.state.data as any[] | undefined
-      return data?.some((w: any) => w.status === 'indexing') ? 3000 : false
+      return data?.some((w: any) => ['crawling', 'processing', 'pending'].includes(w.status)) ? 3000 : false
     },
   })
 
@@ -128,9 +128,12 @@ export default function KnowledgePage() {
 
   const getStatusBadge = (status: string) => {
     const variants: Record<string, 'success' | 'warning' | 'danger' | 'gray'> = {
+      ready: 'success',
       completed: 'success',
-      indexing: 'warning',
+      crawling: 'warning',
+      processing: 'warning',
       pending: 'gray',
+      outdated: 'gray',
       failed: 'danger',
     }
     return variants[status] || 'gray'
@@ -215,13 +218,13 @@ export default function KnowledgePage() {
                             </a>
                           </div>
                           <div className="mt-1 flex items-center gap-4 text-sm text-gray-500">
-                            <span>{website.pages_indexed} pagina's geïndexeerd</span>
+                            <span>{website.stats?.pages_crawled || 0} pagina's geïndexeerd</span>
                             <span>•</span>
-                            <span>{website.chunks_created} tekstblokken</span>
+                            <span>{website.stats?.chunks_created || 0} tekstblokken</span>
                           </div>
-                          {website.last_indexed_at && (
+                          {website.last_crawled_at && (
                             <p className="mt-1 text-xs text-gray-400">
-                              Laatst geïndexeerd: {formatRelativeTime(website.last_indexed_at)}
+                              Laatst geïndexeerd: {formatRelativeTime(website.last_crawled_at)}
                             </p>
                           )}
                           <p className="mt-1 text-xs text-gray-400">
@@ -231,8 +234,8 @@ export default function KnowledgePage() {
                       </div>
                       <div className="flex-shrink-0 ml-3">
                         <Badge variant={getStatusBadge(website.status)}>
-                          {website.status === 'completed' && <Check className="h-3 w-3 mr-1" />}
-                          {website.status === 'indexing' && <RefreshCw className="h-3 w-3 mr-1 animate-spin" />}
+                          {website.status === 'ready' && <Check className="h-3 w-3 mr-1" />}
+                          {(website.status === 'crawling' || website.status === 'processing') && <RefreshCw className="h-3 w-3 mr-1 animate-spin" />}
                           {website.status === 'failed' && <AlertCircle className="h-3 w-3 mr-1" />}
                           {getStatusLabel(website.status)}
                         </Badge>
@@ -256,7 +259,7 @@ export default function KnowledgePage() {
                           setTestResult(null)
                           setTestQuestion('')
                         }}
-                        disabled={website.status !== 'completed'}
+                        disabled={website.status !== 'ready'}
                       >
                         Testvraag
                       </Button>
@@ -266,7 +269,7 @@ export default function KnowledgePage() {
                           size="sm"
                           leftIcon={<RefreshCw className="h-4 w-4" />}
                           onClick={() => reindexMutation.mutate(website.id)}
-                          disabled={website.status === 'indexing'}
+                          disabled={website.status === 'crawling' || website.status === 'processing'}
                         >
                           Herindexeren
                         </Button>

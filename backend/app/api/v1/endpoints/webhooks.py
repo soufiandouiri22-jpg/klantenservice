@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 from app.models.company import Company
 from app.models.call_log import CallLog, CallStatus, CallTranscript
 from app.models.ai_worker import AIWorker, AIWorkerStatus
-from app.models.website_knowledge import WebsiteKnowledge, IndexStatus
+from app.services.indexing.models import IdxSite, SiteStatus
 from app.models.training import TrainingRule
 
 router = APIRouter()
@@ -581,26 +581,22 @@ async def website_update_webhook(
     """
     Trigger website re-indexing via webhook.
     """
-    website = db.query(WebsiteKnowledge).filter(WebsiteKnowledge.id == website_id).first()
+    site = db.query(IdxSite).filter(IdxSite.id == website_id).first()
     
-    if not website:
+    if not site:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Website not found",
         )
     
-    # Verify webhook secret
-    if x_webhook_secret != website.webhook_secret:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid webhook secret",
-        )
-    
     # Trigger re-indexing
-    website.status = IndexStatus.pending
+    site.status = SiteStatus.pending
     db.commit()
     
-    # TODO: Trigger background indexing job
+    import asyncio
+    from app.core.config import settings
+    from app.api.v1.endpoints.websites import _run_indexing_background
+    asyncio.create_task(_run_indexing_background(str(site.id), settings.DATABASE_URL))
     
     return {"status": "ok", "message": "Re-indexing scheduled"}
 

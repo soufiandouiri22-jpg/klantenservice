@@ -24,7 +24,7 @@ from app.models.calendar_integration import CalendarIntegration, CalendarProvide
 from app.models.appointment import Appointment, AppointmentStatus
 from app.models.internal_note import InternalNote, NotePriority
 from app.models.training import ExampleAnswer
-from app.services.website_indexer import VectorStore
+from app.services.retrieval import RetrievalService
 
 logger = logging.getLogger(__name__)
 
@@ -243,46 +243,51 @@ def _matches_example_answer(query: str, question: str, variations: List[str]) ->
     return False
 
 
+def _run_retrieval(db: Session, company_id: str, query: str, limit: int) -> List[Dict]:
+    """Bridge async RetrievalService into sync context safely."""
+    import asyncio
+
+    retrieval = RetrievalService(db)
+
+    async def _do():
+        return await retrieval.search(company_id, query, limit=limit)
+
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    if loop and loop.is_running():
+        # We're inside an existing event loop (e.g. FastAPI handler).
+        # Create a new loop in a thread to avoid nested-loop issues.
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(asyncio.run, _do())
+            result = future.result(timeout=30)
+    else:
+        result = asyncio.run(_do())
+
+    return result.get("results", []) if isinstance(result, dict) else []
+
+
 def tool_search_knowledge(
     db: Session,
     company_id: str,
     query: str,
-    limit: int = 20,
+    limit: int = 10,
 ) -> Dict[str, Any]:
-    """
-    Search company knowledge base using RAG (vector similarity).
-    """
+    """Search company knowledge base using hybrid retrieval pipeline."""
     if not query.strip():
-        return {
-            "ok": True,
-            "results": [],
-            "message": "Geen zoekopdracht opgegeven.",
-        }
+        return {"ok": True, "results": [], "message": "Geen zoekopdracht opgegeven."}
 
-    logger.info(f"[search_knowledge] query={query!r} company={company_id}")
+    logger.info("[search_knowledge] query=%r company=%s", query, company_id)
 
-    # 1. Vector search — website/kennisbank
-    vector_results = []
-    try:
-        store = VectorStore(company_id, db)
-        chunks = store.search(query, website_id=None, limit=limit, db=db)
-
-        if chunks:
-            vector_results = [
-                {
-                    "content": c.get("content", "")[:1000],
-                    "url": c.get("metadata", {}).get("url", ""),
-                    "title": c.get("metadata", {}).get("title", ""),
-                }
-                for c in chunks
-            ]
-    except Exception as e:
-        logger.error(f"Error searching vector store: {e}")
+    # 1. Retrieval pipeline (vector + metadata + fulltext + reranking)
+    retrieval_results = _run_retrieval(db, company_id, query, limit)
 
     # 2. ExampleAnswers — training/voorbeeldantwoorden (substring match)
     qa_results = []
     try:
-        from app.models.training import ExampleAnswer
         qa_all = (
             db.query(ExampleAnswer)
             .filter(
@@ -293,11 +298,7 @@ def tool_search_knowledge(
             .all()
         )
         for qa in qa_all:
-            if _matches_example_answer(
-                query,
-                qa.question,
-                qa.question_variations or [],
-            ):
+            if _matches_example_answer(query, qa.question, qa.question_variations or []):
                 qa_results.append({
                     "content": f"Vraag: {qa.question}\nAntwoord: {qa.answer}",
                     "url": "",
@@ -306,8 +307,8 @@ def tool_search_knowledge(
     except Exception:
         logger.warning("Failed to search ExampleAnswers", exc_info=True)
 
-    results = vector_results + qa_results[:limit + 2]
-    logger.info(f"[search_knowledge] {len(vector_results)} website + {len(qa_results)} training = {len(results)} total")
+    results = retrieval_results + qa_results
+    logger.info("[search_knowledge] %d retrieval + %d training = %d total", len(retrieval_results), len(qa_results), len(results))
 
     if not results:
         return {
@@ -326,63 +327,28 @@ def tool_search_knowledge(
 def tool_get_prices(
     db: Session,
     company_id: str,
-    topic: Optional[str] = None
+    topic: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """
-    Get price information from knowledge base.
-    
-    Args:
-        db: Database session
-        company_id: Company UUID
-        topic: Specific topic to search for (e.g., "knippen", "behandeling X")
-        
-    Returns:
-        Dict with ok, prices (list of content), message
-    """
-    # Build query for price-related content
+    """Get price information from knowledge base via retrieval pipeline."""
     query = topic or "prijzen tarieven kosten"
     if topic and "prijs" not in topic.lower():
         query = f"{topic} prijs tarief kosten"
-    
-    try:
-        store = VectorStore(company_id, db)
-        chunks = store.search(query, website_id=None, limit=3, db=db)
-        
-        if not chunks:
-            return {
-                "ok": True,
-                "prices": [],
-                "message": "Geen prijsinformatie gevonden. Vraag de klant om contact op te nemen voor prijzen."
-            }
-        
-        # Extract price-related content
-        prices = []
-        for c in chunks:
-            content = c.get("content", "")
-            # Only include if it likely contains price info
-            if any(word in content.lower() for word in ["€", "euro", "prijs", "tarief", "kost"]):
-                prices.append(content[:300])
-        
-        if not prices:
-            return {
-                "ok": True,
-                "prices": [],
-                "message": "Geen specifieke prijsinformatie gevonden voor dit onderwerp."
-            }
-        
+
+    result = tool_search_knowledge(db, company_id, query, limit=5)
+    prices = [
+        r["content"][:500]
+        for r in result.get("results", [])
+        if any(w in r.get("content", "").lower() for w in ("€", "euro", "prijs", "tarief", "kost"))
+    ]
+
+    if not prices:
         return {
             "ok": True,
-            "prices": prices,
-            "message": f"Prijsinformatie gevonden."
-        }
-        
-    except Exception as e:
-        logger.error(f"Error getting prices: {e}")
-        return {
-            "ok": False,
             "prices": [],
-            "message": "Er ging iets mis bij het ophalen van prijsinformatie."
+            "message": "Geen prijsinformatie gevonden. Vraag de klant om contact op te nemen voor prijzen.",
         }
+
+    return {"ok": True, "prices": prices, "message": "Prijsinformatie gevonden."}
 
 
 def tool_create_note(

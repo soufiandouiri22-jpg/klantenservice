@@ -18,6 +18,9 @@ from app.models.latency_log import LatencyLog
 from app.models.context_log import ContextLog
 from app.models.crm_integration import CRMIntegration
 from app.models.notification import Notification
+from app.services.indexing.models import (
+    IdxSite, IdxCrawlJob, IdxPage, IdxChunk, IdxError, RtvEvent, RtvResult,
+)
 
 __all__ = [
     "Company",
@@ -41,4 +44,11 @@ __all__ = [
     "ContextLog",
     "CRMIntegration",
     "Notification",
+    "IdxSite",
+    "IdxCrawlJob",
+    "IdxPage",
+    "IdxChunk",
+    "IdxError",
+    "RtvEvent",
+    "RtvResult",
 ]

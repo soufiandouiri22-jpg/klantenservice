@@ -18,6 +18,7 @@ from app.models.appointment import Appointment, AppointmentStatus
 from app.models.internal_note import InternalNote
 from app.schemas.company import CompanyStats
 from app.api.deps import get_current_user, get_current_company
+from app.services.call_cleanup import cleanup_stale_active_calls
 
 router = APIRouter()
 
@@ -31,6 +32,8 @@ async def get_dashboard_stats(
     """
     Get dashboard statistics for the current company.
     """
+    cleanup_stale_active_calls(db)
+
     now_ams = datetime.now(AMS_TZ)
     today_start = now_ams.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
     today_end = today_start + timedelta(days=1)

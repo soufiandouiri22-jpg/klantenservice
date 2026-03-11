@@ -129,13 +129,11 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("ELEVENLABS_API_KEY not set — voice calls will fail")
     
-    # Pre-load ONNX embedding model so the first search_knowledge call is fast
-    try:
-        from app.services.website_indexer import _embedder
-        _embedder._ensure_loaded()
-        logger.info("ONNX embedding model pre-loaded")
-    except Exception as e:
-        logger.error(f"Failed to pre-load embedding model: {e}")
+    # Indexing pipeline uses OpenAI embeddings (no local model preload needed)
+    if settings.OPENAI_API_KEY:
+        logger.info("Indexing pipeline ready (OpenAI embeddings)")
+    else:
+        logger.warning("OPENAI_API_KEY not set — embeddings/retrieval will not work")
 
     # Pre-warm voice previews in the background (non-blocking)
     asyncio.create_task(_prewarm_voice_previews())

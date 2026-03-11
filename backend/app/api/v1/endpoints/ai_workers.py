@@ -20,7 +20,7 @@ from app.models.company import Company
 from app.models.ai_worker import AIWorker, AIWorkerStatus
 from app.models.call_log import CallLog
 from app.models.phone_number import PhoneNumber
-from app.models.website_knowledge import WebsiteKnowledge
+from app.services.indexing.models import IdxSite
 from app.models.calendar_integration import CalendarIntegration
 from app.models.appointment import Appointment
 from app.schemas.ai_worker import AIWorkerCreate, AIWorkerUpdate, AIWorkerResponse, AIWorkerStats
@@ -143,8 +143,8 @@ async def list_ai_workers(
         } if phone else None
         
         # Find linked website
-        website = db.query(WebsiteKnowledge).filter(
-            WebsiteKnowledge.ai_worker_id == worker.id,
+        website = db.query(IdxSite).filter(
+            IdxSite.ai_worker_id == worker.id,
         ).first()
         worker_dict["linked_website"] = {
             "id": str(website.id),

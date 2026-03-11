@@ -6,7 +6,7 @@ from app.schemas.user import UserCreate, UserUpdate, UserResponse, UserLogin, To
 from app.schemas.ai_worker import AIWorkerCreate, AIWorkerUpdate, AIWorkerResponse
 from app.schemas.phone_number import PhoneNumberCreate, PhoneNumberUpdate, PhoneNumberResponse
 from app.schemas.calendar import CalendarIntegrationCreate, CalendarIntegrationResponse, AvailabilitySlot
-from app.schemas.website import WebsiteKnowledgeCreate, WebsiteKnowledgeResponse, TestQuestionRequest
+from app.services.indexing.schemas import SiteCreate, SiteResponse, TestQuestionRequest
 from app.schemas.training import TrainingRuleUpdate, ExampleAnswerCreate, ExampleAnswerResponse
 from app.schemas.call_log import CallLogResponse, CallTranscriptResponse
 from app.schemas.appointment import AppointmentCreate, AppointmentResponse
@@ -18,7 +18,7 @@ __all__ = [
     "AIWorkerCreate", "AIWorkerUpdate", "AIWorkerResponse",
     "PhoneNumberCreate", "PhoneNumberUpdate", "PhoneNumberResponse",
     "CalendarIntegrationCreate", "CalendarIntegrationResponse", "AvailabilitySlot",
-    "WebsiteKnowledgeCreate", "WebsiteKnowledgeResponse", "TestQuestionRequest",
+    "SiteCreate", "SiteResponse", "TestQuestionRequest",
     "TrainingRuleUpdate", "ExampleAnswerCreate", "ExampleAnswerResponse",
     "CallLogResponse", "CallTranscriptResponse",
     "AppointmentCreate", "AppointmentResponse",

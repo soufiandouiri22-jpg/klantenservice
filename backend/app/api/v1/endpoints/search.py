@@ -15,7 +15,7 @@ from app.models.ai_worker import AIWorker
 from app.models.call_log import CallLog, CallTranscript
 from app.models.appointment import Appointment
 from app.models.internal_note import InternalNote
-from app.models.website_knowledge import WebsiteKnowledge
+from app.services.indexing.models import IdxSite
 from app.models.training import ExampleAnswer
 from app.api.deps import get_current_user, get_current_company
 
@@ -131,16 +131,17 @@ async def global_search(
         ))
 
     # 5. Website Knowledge - search by URL
-    websites = db.query(WebsiteKnowledge).filter(
-        WebsiteKnowledge.company_id == company.id,
-        func.lower(WebsiteKnowledge.base_url).like(search_term),
+    websites = db.query(IdxSite).filter(
+        IdxSite.company_id == company.id,
+        func.lower(IdxSite.base_url).like(search_term),
     ).limit(3).all()
     for w in websites:
+        stats = w.stats or {}
         results.append(SearchResultItem(
             id=str(w.id),
             type="website",
             title=w.base_url,
-            subtitle=f"{w.total_pages or 0} pagina's geïndexeerd",
+            subtitle=f"{stats.get('pages_crawled', 0)} pagina's geïndexeerd",
             url="/dashboard/knowledge",
         ))
 

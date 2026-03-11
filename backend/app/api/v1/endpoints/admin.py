@@ -25,8 +25,10 @@ from app.models.training import ExampleAnswer
 from app.models.system_prompt import SystemPrompt, DEFAULT_SYSTEM_PROMPTS
 from app.models.global_config import GlobalConfig, DEFAULT_CONFIGS
 from app.models.usage_log import UsageLog
+from app.models.notification import Notification
 from app.models.latency_log import LatencyLog
 from app.models.context_log import ContextLog
+from app.services.call_cleanup import cleanup_stale_active_calls
 from app.schemas.system_prompt import (
     SystemPromptCreate,
     SystemPromptUpdate,
@@ -382,6 +384,8 @@ async def get_metrics_overview(
     """
     Get overview metrics for the admin dashboard.
     """
+    cleanup_stale_active_calls(db)
+
     now = datetime.utcnow()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -441,6 +445,19 @@ async def get_metrics_overview(
         unknown_questions_today=unknown_today,
         unknown_rate_today=round(unknown_rate, 2),
     )
+
+
+@router.post("/cleanup-stale-calls")
+async def cleanup_stale_calls(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_superadmin),
+):
+    """
+    Manually clean up all CallLogs stuck in IN_PROGRESS/RINGING.
+    Use max_age_minutes=0 to clean all, or a positive number for the default 30-min threshold.
+    """
+    cleaned = cleanup_stale_active_calls(db, max_age_minutes=0)
+    return {"ok": True, "cleaned": cleaned}
 
 
 @router.get("/metrics/latency", response_model=LatencyMetrics)
@@ -1236,11 +1253,13 @@ async def delete_customer(
     company_email = company.email
     
     # Delete all related data (cascades should handle most, but be explicit)
-    # The database should have CASCADE delete set up, but we log for audit
+    # notifications and usage_logs have no cascade in Company model, so delete them first
     logger.warning(
         f"DELETING CUSTOMER: {company_name} ({company_email}) by {current_user.email}"
     )
     
+    db.query(Notification).filter(Notification.company_id == customer_id).delete()
+    db.query(UsageLog).filter(UsageLog.company_id == customer_id).delete()
     db.delete(company)
     db.commit()
     
