@@ -6,13 +6,13 @@ import re
 
 # keyword -> query_type mapping (checked in order, first match wins)
 _RULES: list[tuple[re.Pattern, str]] = [
-    (re.compile(r"\b(prijs|kost|tarief|pakket|plan|abonnement|euro|€|betaal|goedkoop|duur|budget)\b", re.I), "pricing"),
-    (re.compile(r"\b(openingstijd|bereikbaar|bellen|telefoon|email|e-mail|contact|adres|locatie|route)\b", re.I), "contact"),
-    (re.compile(r"\b(retour|terugsturen|annuleer|annulering|opzeg|garantie|verzend|lever|bezorg)\b", re.I), "policy"),
-    (re.compile(r"\b(faq|veelgesteld|vraag en antwoord)\b", re.I), "faq"),
-    (re.compile(r"\b(locatie|vestiging|filiaal|kantoor|winkel|route|parkeer)\b", re.I), "location"),
-    (re.compile(r"\b(blog|artikel|nieuws)\b", re.I), "blog"),
-    (re.compile(r"\b(product|dienst|service|aanbod|oplossing|feature|functie|mogelijkheid)\b", re.I), "service"),
+    (re.compile(r"\b(prij[sz]\w*|kost\w*|tariev\w*|tarief\w*|pakket\w*|plan\w*|abonnement\w*|euro|€|betaal\w*|goedkoop\w*|duur|budget\w*|belminut\w*)\b", re.I), "pricing"),
+    (re.compile(r"\b(openingstijd\w*|bereikbaar\w*|bellen|telefoon\w*|email\w*|e-mail\w*|contact\w*|adres\w*|locatie\w*|route\w*)\b", re.I), "contact"),
+    (re.compile(r"\b(retour\w*|terugsturen|annuleer\w*|annulering\w*|opzeg\w*|garantie\w*|verzend\w*|lever\w*|bezorg\w*)\b", re.I), "policy"),
+    (re.compile(r"\b(faq|veelgesteld\w*|vraag en antwoord)\b", re.I), "faq"),
+    (re.compile(r"\b(locatie\w*|vestiging\w*|filiaal\w*|kantoor\w*|winkel\w*|route\w*|parkeer\w*)\b", re.I), "location"),
+    (re.compile(r"\b(blog\w*|artikel\w*|nieuws\w*)\b", re.I), "blog"),
+    (re.compile(r"\b(product\w*|dienst\w*|service\w*|aanbod\w*|oplossing\w*|feature\w*|functie\w*|mogelijkheid\w*)\b", re.I), "service"),
 ]
 
 
