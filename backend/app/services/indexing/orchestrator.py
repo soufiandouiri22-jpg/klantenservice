@@ -141,7 +141,7 @@ class IndexingOrchestrator:
                         "token_count": chunk.token_count,
                         "position_on_page": chunk.position_on_page,
                         "content_hash": chunk.content_hash,
-                        "metadata": chunk.metadata,
+                        "extra_meta": chunk.metadata,
                     }
                     all_chunk_dicts.append(chunk_dict)
 
@@ -182,7 +182,7 @@ class IndexingOrchestrator:
                     embedding=cd.get("embedding"),
                     embedding_model=cd.get("embedding_model"),
                     embedding_version=cd.get("embedding_version"),
-                    metadata=cd.get("metadata", {}),
+                    extra_meta=cd.get("extra_meta", {}),
                 )
                 self.db.add(db_chunk)
 

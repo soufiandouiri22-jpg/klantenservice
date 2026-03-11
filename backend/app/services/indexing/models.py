@@ -215,7 +215,7 @@ class IdxChunk(Base):
     embedding_version = Column(String(20), nullable=True)
 
     # Flexible extra metadata (faq_question, price, phone, email, ...)
-    metadata = Column(JSON, default=dict)
+    extra_meta = Column("metadata", JSON, default=dict)
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
