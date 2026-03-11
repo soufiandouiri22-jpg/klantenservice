@@ -28,6 +28,7 @@ from app.services.call_tools import (
     tool_create_note,
     tool_flag_unknown,
     tool_transfer_call,
+    tool_check_policy,
 )
 from app.models.context_log import ContextLog
 from app.models.usage_log import UsageLog
@@ -184,6 +185,27 @@ TOOLS_OPENAI = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "check_policy",
+            "description": "Controleer of een actie mag worden uitgevoerd (bijv. ophangen, escaleren). VERPLICHT vóór end_call en transfer_call.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "trigger_reason": {
+                        "type": "string",
+                        "description": "Reden: ending_call, escalation, low_confidence, repeated_failure, off_topic, silence",
+                    },
+                    "customer_message": {
+                        "type": "string",
+                        "description": "Wat de klant het laatst heeft gezegd",
+                    },
+                },
+                "required": ["trigger_reason", "customer_message"],
+            },
+        },
+    },
 ]
 
 
@@ -309,7 +331,17 @@ async def _run_tool(
                 call_sid=call_sid,
                 reason=arguments.get("reason", ""),
             )
-        
+
+        if name == "check_policy":
+            call_sid = context.get("call_sid") or ""
+            return tool_check_policy(
+                db, company_id,
+                call_sid=call_sid,
+                call_log_id=call_log_id,
+                trigger_reason=arguments.get("trigger_reason", "ending_call"),
+                customer_message=arguments.get("customer_message", ""),
+            )
+
         return {"ok": False, "reason": "unknown_tool", "message": f"Onbekende tool: {name}"}
         
     except Exception as e:

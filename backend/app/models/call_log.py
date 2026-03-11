@@ -78,6 +78,12 @@ class CallLog(Base):
     
     # Technical info
     error_message = Column(Text, nullable=True)
+
+    # Policy engine enrichment (set during/after call)
+    hangup_reason = Column(String(50), nullable=True)
+    goodbye_handshake_ok = Column(Boolean, nullable=True)
+    ended_by = Column(String(20), nullable=True)
+    policy_violations_count = Column(Integer, default=0)
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)

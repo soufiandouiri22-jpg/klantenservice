@@ -28,6 +28,7 @@ from app.models.usage_log import UsageLog
 from app.models.notification import Notification
 from app.models.latency_log import LatencyLog
 from app.models.context_log import ContextLog
+from app.models.voice_session import VoiceSession, PolicyDecisionLog
 from app.services.call_cleanup import cleanup_stale_active_calls
 from app.schemas.system_prompt import (
     SystemPromptCreate,
@@ -1594,3 +1595,205 @@ async def get_call_trace(
         total_tool_calls=total_tool_calls,
         error_message=call.error_message,
     )
+
+
+# ════════════════════════════════════════════════════════════════════
+# VOICE SESSIONS & POLICY DECISIONS — /admin/voice
+# ════════════════════════════════════════════════════════════════════
+
+@router.get("/voice/sessions")
+async def list_voice_sessions(
+    call_id: Optional[UUID] = None,
+    company_id: Optional[UUID] = None,
+    limit: int = 50,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """List voice sessions with filters."""
+    if not current_user.is_superadmin:
+        raise HTTPException(status_code=403, detail="Superadmin required")
+
+    query = db.query(VoiceSession).order_by(VoiceSession.created_at.desc())
+    if call_id:
+        query = query.filter(VoiceSession.call_log_id == call_id)
+    if company_id:
+        query = query.filter(VoiceSession.company_id == company_id)
+
+    total = query.count()
+    sessions = query.offset(offset).limit(limit).all()
+
+    return {
+        "total": total,
+        "sessions": [
+            {
+                "id": str(s.id),
+                "call_log_id": str(s.call_log_id) if s.call_log_id else None,
+                "call_sid": s.call_sid,
+                "company_id": str(s.company_id) if s.company_id else None,
+                "phase": s.phase,
+                "turn_count": s.turn_count,
+                "last_customer_intent": s.last_customer_intent,
+                "goodbye_said_by_agent": s.goodbye_said_by_agent,
+                "goodbye_said_by_customer": s.goodbye_said_by_customer,
+                "goodbye_handshake_ok": s.goodbye_handshake_ok,
+                "escalation_requested": s.escalation_requested,
+                "transfer_executed": s.transfer_executed,
+                "low_confidence_count": s.low_confidence_count,
+                "repeat_topic_count": s.repeat_topic_count,
+                "hangup_reason": s.hangup_reason,
+                "ended_by": s.ended_by,
+                "created_at": s.created_at.isoformat() if s.created_at else None,
+                "updated_at": s.updated_at.isoformat() if s.updated_at else None,
+            }
+            for s in sessions
+        ],
+    }
+
+
+@router.get("/voice/sessions/{session_id}")
+async def get_voice_session_detail(
+    session_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get voice session detail with all policy decisions."""
+    if not current_user.is_superadmin:
+        raise HTTPException(status_code=403, detail="Superadmin required")
+
+    session = db.query(VoiceSession).filter(VoiceSession.id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Voice session not found")
+
+    decisions = (
+        db.query(PolicyDecisionLog)
+        .filter(PolicyDecisionLog.voice_session_id == session_id)
+        .order_by(PolicyDecisionLog.turn_number, PolicyDecisionLog.created_at)
+        .all()
+    )
+
+    return {
+        "session": {
+            "id": str(session.id),
+            "call_log_id": str(session.call_log_id) if session.call_log_id else None,
+            "call_sid": session.call_sid,
+            "company_id": str(session.company_id) if session.company_id else None,
+            "phase": session.phase,
+            "turn_count": session.turn_count,
+            "last_customer_intent": session.last_customer_intent,
+            "last_customer_utterance": session.last_customer_utterance,
+            "goodbye_said_by_agent": session.goodbye_said_by_agent,
+            "goodbye_said_by_customer": session.goodbye_said_by_customer,
+            "goodbye_handshake_ok": session.goodbye_handshake_ok,
+            "escalation_requested": session.escalation_requested,
+            "transfer_executed": session.transfer_executed,
+            "low_confidence_count": session.low_confidence_count,
+            "repeat_topic_count": session.repeat_topic_count,
+            "retrieval_count": session.retrieval_count,
+            "end_call_attempts": session.end_call_attempts,
+            "hangup_reason": session.hangup_reason,
+            "ended_by": session.ended_by,
+            "created_at": session.created_at.isoformat() if session.created_at else None,
+            "updated_at": session.updated_at.isoformat() if session.updated_at else None,
+        },
+        "policy_decisions": [
+            {
+                "id": str(d.id),
+                "turn_number": d.turn_number,
+                "trigger_tool": d.trigger_tool,
+                "trigger_reason": d.trigger_reason,
+                "phase_before": d.phase_before,
+                "phase_after": d.phase_after,
+                "detected_intent": d.detected_intent,
+                "intent_confidence": d.intent_confidence,
+                "policy_name": d.policy_name,
+                "allowed": d.allowed,
+                "required_action": d.required_action,
+                "reason_code": d.reason_code,
+                "instruction_nl": d.instruction_nl,
+                "model_complied": d.model_complied,
+                "violation": d.violation,
+                "violation_type": d.violation_type,
+                "created_at": d.created_at.isoformat() if d.created_at else None,
+            }
+            for d in decisions
+        ],
+    }
+
+
+@router.get("/voice/calls/{call_id}/policy-trace")
+async def get_call_policy_trace(
+    call_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Full policy trace for a call: voice session + all policy decisions.
+    Combines with context logs to give a turn-by-turn view.
+    """
+    if not current_user.is_superadmin:
+        raise HTTPException(status_code=403, detail="Superadmin required")
+
+    session = db.query(VoiceSession).filter(
+        VoiceSession.call_log_id == call_id
+    ).first()
+
+    decisions = (
+        db.query(PolicyDecisionLog)
+        .filter(PolicyDecisionLog.call_log_id == call_id)
+        .order_by(PolicyDecisionLog.turn_number, PolicyDecisionLog.created_at)
+        .all()
+    )
+
+    call = db.query(CallLog).filter(CallLog.id == call_id).first()
+    if not call:
+        raise HTTPException(status_code=404, detail="Call not found")
+
+    violations = [d for d in decisions if d.violation]
+
+    return {
+        "call_id": str(call_id),
+        "call_sid": session.call_sid if session else None,
+        "call_status": call.status.value if call.status else None,
+        "call_outcome": call.outcome.value if call.outcome else None,
+        "hangup_reason": call.hangup_reason,
+        "goodbye_handshake_ok": call.goodbye_handshake_ok,
+        "ended_by": call.ended_by,
+        "policy_violations_count": call.policy_violations_count,
+        "session": {
+            "phase": session.phase if session else None,
+            "turn_count": session.turn_count if session else 0,
+            "goodbye_said_by_agent": session.goodbye_said_by_agent if session else None,
+            "goodbye_said_by_customer": session.goodbye_said_by_customer if session else None,
+            "escalation_requested": session.escalation_requested if session else None,
+        } if session else None,
+        "decisions": [
+            {
+                "turn": d.turn_number,
+                "tool": d.trigger_tool,
+                "reason": d.trigger_reason,
+                "intent": d.detected_intent,
+                "confidence": d.intent_confidence,
+                "policy": d.policy_name,
+                "allowed": d.allowed,
+                "action": d.required_action,
+                "code": d.reason_code,
+                "instruction": d.instruction_nl,
+                "violation": d.violation,
+                "phase": f"{d.phase_before} → {d.phase_after}",
+                "at": d.created_at.isoformat() if d.created_at else None,
+            }
+            for d in decisions
+        ],
+        "violations": [
+            {
+                "turn": v.turn_number,
+                "policy": v.policy_name,
+                "type": v.violation_type,
+                "at": v.created_at.isoformat() if v.created_at else None,
+            }
+            for v in violations
+        ],
+        "total_decisions": len(decisions),
+        "total_violations": len(violations),
+    }

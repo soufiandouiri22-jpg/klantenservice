@@ -338,12 +338,37 @@ def build_system_instructions(
     )
 
     tool_lines.append(
+        "## check_policy\n"
+        "Vraag het backend of een actie is toegestaan. VERPLICHT voor gated acties.\n\n"
+        "**Verplicht vóór:**\n"
+        "- Het beëindigen van het gesprek (trigger_reason: `ending_call`)\n"
+        "- Het doorverbinden naar een mens (trigger_reason: `escalation`)\n\n"
+        "**Optioneel bij:**\n"
+        "- Lage zoekresultaten (trigger_reason: `low_confidence`)\n"
+        "- Herhaalde mislukte beantwoording (trigger_reason: `repeated_failure`)\n"
+        "- Off-topic verzoeken (trigger_reason: `off_topic`)\n"
+        "- Stilte (trigger_reason: `silence`)\n\n"
+        "**Parameters:**\n"
+        "- `trigger_reason` (string): reden waarom je de policy checkt\n"
+        "- `customer_message` (string): het laatst gehoorde van de klant\n\n"
+        "**Resultaat:**\n"
+        "- `allowed`: true/false — mag de actie doorgaan?\n"
+        "- `instruction_nl`: instructie in het Nederlands — volg deze LETTERLIJK\n"
+        "- `required_action`: wat je moet doen (proceed, wait, escalate, clarify, reprompt, block)\n\n"
+        "**Afsluiting van het gesprek:**\n"
+        "1. Neem afscheid (bijv. 'Fijne dag!')\n"
+        "2. Roep check_policy aan met trigger_reason='ending_call' en customer_message=<wat de klant zei>\n"
+        "3. Als allowed=false → volg instruction_nl (wacht op klant) en probeer later opnieuw\n"
+        "4. Als allowed=true → gebruik end_call"
+    )
+
+    tool_lines.append(
         "## end_call\n"
         "Gebruik om het gesprek netjes te beëindigen.\n\n"
         "**Wanneer gebruiken:**\n"
-        "- Nadat het afscheid is afgerond (klant en jij hebben gedag gezegd)\n"
-        "- NOOIT direct na jouw eigen afscheid — altijd wachten op de klant\n"
-        "- Bij 5+ seconden stilte na je afscheid mag je end_call gebruiken"
+        "- ALLEEN nadat check_policy met trigger_reason='ending_call' allowed=true retourneert\n"
+        "- NOOIT direct na jouw eigen afscheid — altijd eerst check_policy\n"
+        "- Bij 5+ seconden stilte na je afscheid: roep check_policy aan"
     )
 
     sections.append("# Tools\n\n" + "\n\n".join(tool_lines))

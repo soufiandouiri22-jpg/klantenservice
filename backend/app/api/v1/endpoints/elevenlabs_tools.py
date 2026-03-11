@@ -9,8 +9,9 @@ Dynamic variables (company_id, ai_worker_id, etc.) are injected as
 top-level fields in the body when configured with the `dynamic_variable`
 property in each tool's parameter schema on the ElevenLabs dashboard.
 
-We execute the tool using the existing _run_tool infrastructure and
-return the result as JSON.
+Every tool invocation runs the policy engine's auto-checks (escalation,
+off-topic, silence, repeated failure). If a policy blocks the action,
+the override is returned instead of the normal tool result.
 """
 import logging
 from typing import Any, Dict, Optional
@@ -21,12 +22,12 @@ from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
 from app.services.orchestrator import _run_tool
+from app.services.call_tools import run_auto_policies
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Field names that are context (dynamic variables), not tool arguments
 CONTEXT_FIELDS = {
     "company_id",
     "ai_worker_id",
@@ -37,22 +38,16 @@ CONTEXT_FIELDS = {
     "call_sid",
 }
 
+# Tools that skip auto-policy (check_policy handles its own logic)
+_SKIP_AUTO_POLICY = {"check_policy"}
+
 
 def _get_db() -> Session:
-    """Create a database session for tool execution."""
     return SessionLocal()
 
 
 def _extract_company_context(data: dict) -> Dict[str, Any]:
-    """
-    Extract company context from ElevenLabs tool request body.
-
-    ElevenLabs injects dynamic variables as top-level fields in the
-    request body when each tool parameter has `dynamic_variable` set
-    in its JSON schema.  We also check the legacy `dynamic_variables`
-    nested object as a fallback.
-    """
-    # Primary: top-level fields (set via dynamic_variable parameter property)
+    """Extract company context from ElevenLabs tool request body."""
     company_id = data.get("company_id", "")
     ai_worker_id = data.get("ai_worker_id")
     call_log_id = data.get("call_log_id")
@@ -60,7 +55,6 @@ def _extract_company_context(data: dict) -> Dict[str, Any]:
     calendar_id = data.get("calendar_id")
     call_sid = data.get("call_sid")
 
-    # Fallback: legacy nested dynamic_variables object
     if not company_id:
         dv = data.get("dynamic_variables", {})
         if isinstance(dv, dict):
@@ -85,16 +79,19 @@ async def _handle_tool(request: Request, tool_name: str) -> JSONResponse:
     """
     Generic handler for all ElevenLabs server tool calls.
 
-    Extracts parameters from the request, builds context,
-    executes the tool, and returns the result.
+    1. Extracts context + arguments
+    2. Runs auto-policy checks (unless the tool is check_policy itself)
+    3. If a policy blocks, returns the override immediately
+    4. Otherwise executes the tool normally
     """
     db = _get_db()
     try:
         data = await request.json()
-        logger.info(f"[ElevenLabs Tool] {tool_name} incoming keys={list(data.keys())}")
+        logger.info("[ElevenLabs Tool] %s incoming keys=%s", tool_name, list(data.keys()))
 
         ctx = _extract_company_context(data)
-        logger.info(f"[ElevenLabs Tool] {tool_name} company={ctx['company_id']}")
+        logger.info("[ElevenLabs Tool] %s company=%s call_sid=%s",
+                     tool_name, ctx["company_id"], ctx.get("call_sid"))
 
         context = {
             "db": db,
@@ -112,13 +109,30 @@ async def _handle_tool(request: Request, tool_name: str) -> JSONResponse:
             if k not in CONTEXT_FIELDS and k != "dynamic_variables"
         }
 
+        # ── Auto-policy check on every tool call ──
+        if tool_name not in _SKIP_AUTO_POLICY and ctx.get("call_sid"):
+            customer_msg = arguments.get("query", "") or arguments.get("customer_message", "")
+            override = run_auto_policies(
+                db=db,
+                company_id=ctx["company_id"],
+                call_sid=ctx["call_sid"],
+                call_log_id=ctx.get("call_log_id"),
+                tool_name=tool_name,
+                customer_message=customer_msg,
+            )
+            if override:
+                logger.info("[ElevenLabs Tool] %s POLICY OVERRIDE: %s",
+                            tool_name, override.get("reason_code"))
+                return JSONResponse(content=override)
+
+        # ── Normal tool execution ──
         result = await _run_tool(tool_name, arguments, context)
 
-        logger.info(f"[ElevenLabs Tool] {tool_name} ok={result.get('ok')}")
+        logger.info("[ElevenLabs Tool] %s ok=%s", tool_name, result.get("ok"))
         return JSONResponse(content=result)
 
     except Exception as e:
-        logger.error(f"[ElevenLabs Tool] {tool_name} error: {e}", exc_info=True)
+        logger.error("[ElevenLabs Tool] %s error: %s", tool_name, e, exc_info=True)
         return JSONResponse(
             content={"ok": False, "message": f"Tool error: {str(e)}"},
             status_code=500,
@@ -127,43 +141,47 @@ async def _handle_tool(request: Request, tool_name: str) -> JSONResponse:
         db.close()
 
 
+# ── Endpoints ──────────────────────────────────────────────────────
+
 @router.post("/search_knowledge")
-async def tool_search_knowledge(request: Request):
-    """ElevenLabs server tool: Search company knowledge base."""
+async def ep_search_knowledge(request: Request):
     return await _handle_tool(request, "search_knowledge")
 
 
 @router.post("/check_availability")
-async def tool_check_availability(request: Request):
-    """ElevenLabs server tool: Check calendar availability."""
+async def ep_check_availability(request: Request):
     return await _handle_tool(request, "check_availability")
 
 
 @router.post("/book_appointment")
-async def tool_book_appointment(request: Request):
-    """ElevenLabs server tool: Book an appointment."""
+async def ep_book_appointment(request: Request):
     return await _handle_tool(request, "book_appointment")
 
 
 @router.post("/get_prices")
-async def tool_get_prices(request: Request):
-    """Legacy endpoint — redirects to search_knowledge."""
+async def ep_get_prices(request: Request):
     return await _handle_tool(request, "search_knowledge")
 
 
 @router.post("/create_note")
-async def tool_create_note(request: Request):
-    """ElevenLabs server tool: Create an internal note."""
+async def ep_create_note(request: Request):
     return await _handle_tool(request, "create_note")
 
 
 @router.post("/flag_unknown")
-async def tool_flag_unknown(request: Request):
-    """ElevenLabs server tool: Flag an unanswered question."""
+async def ep_flag_unknown(request: Request):
     return await _handle_tool(request, "flag_unknown")
 
 
 @router.post("/transfer_call")
-async def tool_transfer_call(request: Request):
-    """ElevenLabs server tool: Transfer call to a human agent."""
+async def ep_transfer_call(request: Request):
     return await _handle_tool(request, "transfer_call")
+
+
+@router.post("/check_policy")
+async def ep_check_policy(request: Request):
+    """
+    Policy engine tool — called by the AI before gated actions
+    (ending call, escalation, etc.).
+    """
+    return await _handle_tool(request, "check_policy")

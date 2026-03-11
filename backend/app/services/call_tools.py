@@ -12,6 +12,7 @@ Tools:
 - get_prices: Search for price information (via RAG)
 - create_note: Create internal note for dashboard
 - flag_unknown: Flag question that couldn't be answered (realtime to dashboard)
+- check_policy: Policy engine — checks whether an action is allowed
 """
 import logging
 from datetime import datetime, timedelta
@@ -25,6 +26,9 @@ from app.models.appointment import Appointment, AppointmentStatus
 from app.models.internal_note import InternalNote, NotePriority
 from app.models.training import ExampleAnswer
 from app.services.retrieval import RetrievalService
+from app.services.voice.intent_classifier import classify_intent, CallerIntent
+from app.services.voice.conversation_state import ConversationStateManager
+from app.services.voice.policy_engine import PolicyEngine, PolicyResult
 
 logger = logging.getLogger(__name__)
 
@@ -591,6 +595,121 @@ def tool_flag_unknown(
             "action": "error",
             "message": "Kon vraag niet opslaan."
         }
+
+
+def tool_check_policy(
+    db: Session,
+    company_id: str,
+    call_sid: str,
+    call_log_id: Optional[str] = None,
+    trigger_reason: str = "ending_call",
+    customer_message: str = "",
+) -> Dict[str, Any]:
+    """
+    Policy engine checkpoint — called by the AI before taking gated actions.
+
+    trigger_reason options:
+      ending_call, escalation, low_confidence, repeated_failure,
+      off_topic, silence
+
+    Returns machine-readable policy result:
+      allowed, policy_name, required_action, reason_code, instruction_nl
+    """
+    if not call_sid:
+        return {
+            "ok": False,
+            "allowed": True,
+            "policy_name": "none",
+            "required_action": "proceed",
+            "reason_code": "no_call_sid",
+            "instruction_nl": "",
+        }
+
+    mgr = ConversationStateManager(db)
+    session = mgr.get_or_create(
+        call_sid=call_sid,
+        call_log_id=call_log_id,
+        company_id=company_id,
+    )
+
+    intent, confidence = classify_intent(customer_message)
+    logger.info(
+        "[check_policy] call=%s reason=%s intent=%s(%.2f) msg=%r",
+        call_sid, trigger_reason, intent.value, confidence,
+        customer_message[:80],
+    )
+
+    mgr.record_turn(session, intent, customer_message, "check_policy", confidence)
+
+    engine = PolicyEngine(db)
+    result = engine.evaluate(
+        session=session,
+        intent=intent,
+        trigger_tool="check_policy",
+        trigger_reason=trigger_reason,
+        intent_confidence=confidence,
+    )
+
+    if trigger_reason == "ending_call" and result.allowed:
+        mgr.mark_ended(session, ended_by="agent", hangup_reason="normal")
+
+    db.commit()
+
+    return {
+        "ok": True,
+        **result.to_dict(),
+    }
+
+
+def run_auto_policies(
+    db: Session,
+    company_id: str,
+    call_sid: str,
+    call_log_id: Optional[str],
+    tool_name: str,
+    customer_message: str = "",
+) -> Optional[Dict[str, Any]]:
+    """
+    Run automatic policy checks on every tool invocation.
+
+    Returns a policy override dict if a policy blocks/redirects,
+    or None if all policies pass.
+    """
+    if not call_sid:
+        return None
+
+    mgr = ConversationStateManager(db)
+    session = mgr.get_or_create(
+        call_sid=call_sid,
+        call_log_id=call_log_id,
+        company_id=company_id,
+    )
+
+    intent, confidence = classify_intent(customer_message)
+    mgr.record_turn(session, intent, customer_message, tool_name, confidence)
+
+    engine = PolicyEngine(db)
+    override = engine.evaluate_all(
+        session=session,
+        intent=intent,
+        trigger_tool=tool_name,
+        intent_confidence=confidence,
+    )
+
+    db.commit()
+
+    if override and not override.allowed:
+        logger.info(
+            "[auto_policy] OVERRIDE on tool=%s policy=%s action=%s",
+            tool_name, override.policy_name, override.required_action,
+        )
+        return {
+            "ok": True,
+            "policy_override": True,
+            **override.to_dict(),
+        }
+
+    return None
 
 
 def tool_transfer_call(

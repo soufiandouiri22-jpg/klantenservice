@@ -16,6 +16,7 @@ from app.models.global_config import GlobalConfig
 from app.models.usage_log import UsageLog
 from app.models.latency_log import LatencyLog
 from app.models.context_log import ContextLog
+from app.models.voice_session import VoiceSession, PolicyDecisionLog, CallPhase
 from app.models.crm_integration import CRMIntegration
 from app.models.notification import Notification
 from app.services.indexing.models import (
@@ -42,6 +43,9 @@ __all__ = [
     "UsageLog",
     "LatencyLog",
     "ContextLog",
+    "VoiceSession",
+    "PolicyDecisionLog",
+    "CallPhase",
     "CRMIntegration",
     "Notification",
     "IdxSite",
