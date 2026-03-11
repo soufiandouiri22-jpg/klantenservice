@@ -221,11 +221,43 @@ def _policy_repeated_failure(
     intent: CallerIntent,
 ) -> PolicyResult:
     """
-    Rule: If the same topic keeps failing, escalate or reframe.
+    Rule: If the same topic keeps failing or the customer expresses frustration,
+    escalate or reframe.
     """
     repeats = session.repeat_topic_count or 0
+    frustration = session.frustration_count or 0
 
-    if repeats < 2:
+    # Frustration counts as a strong signal — treat 1 frustration = 2 repeats
+    effective_repeats = repeats + frustration
+
+    if intent == CallerIntent.FRUSTRATION:
+        if effective_repeats >= 2:
+            return PolicyResult(
+                allowed=True,
+                policy_name="repeated_failure",
+                required_action="escalate",
+                reason_code="frustration_plus_repeats",
+                instruction_nl=(
+                    "De klant is gefrustreerd en je hebt het probleem niet kunnen oplossen. "
+                    "Zeg: 'Het spijt me dat ik u niet goed kan helpen. "
+                    "Zal ik een collega vragen om u terug te bellen met een beter antwoord?'"
+                ),
+                phase_after=CallPhase.ESCALATING.value,
+            )
+
+        return PolicyResult(
+            allowed=False,
+            policy_name="repeated_failure",
+            required_action="clarify",
+            reason_code="frustration_detected",
+            instruction_nl=(
+                "De klant geeft aan dat je antwoord niet klopt of niet helpt. "
+                "Vraag specifiek: 'Excuses, ik begrijp dat ik uw vraag nog niet goed "
+                "beantwoord heb. Kunt u precies vertellen wat u wilt weten?'"
+            ),
+        )
+
+    if effective_repeats < 2:
         return PolicyResult(
             allowed=True,
             policy_name="repeated_failure",
@@ -233,7 +265,7 @@ def _policy_repeated_failure(
             reason_code="within_threshold",
         )
 
-    if repeats < 4:
+    if effective_repeats < 4:
         return PolicyResult(
             allowed=False,
             policy_name="repeated_failure",
@@ -494,6 +526,10 @@ class PolicyEngine:
         intent: CallerIntent,
         intent_confidence: float,
         result: PolicyResult,
+        retrieval_confidence: Optional[float] = None,
+        retrieval_used: Optional[bool] = None,
+        guardrail_passed: Optional[bool] = None,
+        guardrail_violations: Optional[str] = None,
     ) -> None:
         try:
             log = PolicyDecisionLog(
@@ -512,6 +548,10 @@ class PolicyEngine:
                 required_action=result.required_action,
                 reason_code=result.reason_code,
                 instruction_nl=result.instruction_nl or None,
+                retrieval_confidence=retrieval_confidence,
+                retrieval_used=retrieval_used,
+                guardrail_passed=guardrail_passed,
+                guardrail_violations=guardrail_violations,
             )
             self.db.add(log)
             self.db.flush()

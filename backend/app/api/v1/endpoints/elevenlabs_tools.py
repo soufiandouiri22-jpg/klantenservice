@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
 from app.services.orchestrator import _run_tool
-from app.services.call_tools import run_auto_policies
+from app.services.call_tools import run_auto_policies, apply_output_guardrails
 
 logger = logging.getLogger(__name__)
 
@@ -109,9 +109,10 @@ async def _handle_tool(request: Request, tool_name: str) -> JSONResponse:
             if k not in CONTEXT_FIELDS and k != "dynamic_variables"
         }
 
+        customer_msg = arguments.get("query", "") or arguments.get("customer_message", "")
+
         # ── Auto-policy check on every tool call ──
         if tool_name not in _SKIP_AUTO_POLICY and ctx.get("call_sid"):
-            customer_msg = arguments.get("query", "") or arguments.get("customer_message", "")
             override = run_auto_policies(
                 db=db,
                 company_id=ctx["company_id"],
@@ -127,6 +128,35 @@ async def _handle_tool(request: Request, tool_name: str) -> JSONResponse:
 
         # ── Normal tool execution ──
         result = await _run_tool(tool_name, arguments, context)
+
+        # ── Post-retrieval low-confidence policy check ──
+        top_score = result.get("top_retrieval_score")
+        if (
+            top_score is not None
+            and ctx.get("call_sid")
+            and tool_name in ("search_knowledge", "get_prices")
+        ):
+            lc_override = run_auto_policies(
+                db=db,
+                company_id=ctx["company_id"],
+                call_sid=ctx["call_sid"],
+                call_log_id=ctx.get("call_log_id"),
+                tool_name=f"{tool_name}_confidence",
+                customer_message=customer_msg,
+                retrieval_confidence=float(top_score),
+            )
+            if lc_override:
+                result["low_confidence_override"] = lc_override
+                result["low_confidence_detected"] = True
+
+        # ── Output guardrails ──
+        result = apply_output_guardrails(
+            db=db,
+            call_sid=ctx.get("call_sid"),
+            call_log_id=ctx.get("call_log_id"),
+            company_id=ctx.get("company_id"),
+            tool_result=result,
+        )
 
         logger.info("[ElevenLabs Tool] %s ok=%s", tool_name, result.get("ok"))
         return JSONResponse(content=result)

@@ -1645,6 +1645,12 @@ async def list_voice_sessions(
                 "transfer_executed": s.transfer_executed,
                 "low_confidence_count": s.low_confidence_count,
                 "repeat_topic_count": s.repeat_topic_count,
+                "frustration_count": getattr(s, "frustration_count", 0) or 0,
+                "off_topic_block_count": getattr(s, "off_topic_block_count", 0) or 0,
+                "output_guardrail_block_count": getattr(s, "output_guardrail_block_count", 0) or 0,
+                "language_violation_count": getattr(s, "language_violation_count", 0) or 0,
+                "retrieval_skip_count": getattr(s, "retrieval_skip_count", 0) or 0,
+                "last_retrieval_score": getattr(s, "last_retrieval_score", None),
                 "hangup_reason": s.hangup_reason,
                 "ended_by": s.ended_by,
                 "created_at": s.created_at.isoformat() if s.created_at else None,
@@ -1693,7 +1699,13 @@ async def get_voice_session_detail(
             "transfer_executed": session.transfer_executed,
             "low_confidence_count": session.low_confidence_count,
             "repeat_topic_count": session.repeat_topic_count,
+            "frustration_count": getattr(session, "frustration_count", 0) or 0,
+            "off_topic_block_count": getattr(session, "off_topic_block_count", 0) or 0,
+            "output_guardrail_block_count": getattr(session, "output_guardrail_block_count", 0) or 0,
+            "language_violation_count": getattr(session, "language_violation_count", 0) or 0,
             "retrieval_count": session.retrieval_count,
+            "retrieval_skip_count": getattr(session, "retrieval_skip_count", 0) or 0,
+            "last_retrieval_score": getattr(session, "last_retrieval_score", None),
             "end_call_attempts": session.end_call_attempts,
             "hangup_reason": session.hangup_reason,
             "ended_by": session.ended_by,
@@ -1718,6 +1730,10 @@ async def get_voice_session_detail(
                 "model_complied": d.model_complied,
                 "violation": d.violation,
                 "violation_type": d.violation_type,
+                "retrieval_confidence": getattr(d, "retrieval_confidence", None),
+                "retrieval_used": getattr(d, "retrieval_used", None),
+                "guardrail_passed": getattr(d, "guardrail_passed", None),
+                "guardrail_violations": getattr(d, "guardrail_violations", None),
                 "created_at": d.created_at.isoformat() if d.created_at else None,
             }
             for d in decisions
@@ -1755,6 +1771,22 @@ async def get_call_policy_trace(
 
     violations = [d for d in decisions if d.violation]
 
+    # Summary counters (computed from decisions)
+    off_topic_blocks = sum(1 for d in decisions if d.policy_name == "scope_guard" and not d.allowed)
+    low_confidence_blocks = sum(1 for d in decisions if d.policy_name == "low_confidence" and not d.allowed)
+    repeated_failure_triggers = sum(
+        1 for d in decisions
+        if d.policy_name == "repeated_failure" and d.required_action in ("clarify", "escalate")
+    )
+    guardrail_blocks = sum(
+        1 for d in decisions if getattr(d, "guardrail_passed", None) is False
+    )
+    language_violations = sum(
+        1 for d in decisions
+        if getattr(d, "guardrail_violations", None) and "language_violation" in (d.guardrail_violations or "")
+    )
+    frustration_count = getattr(session, "frustration_count", 0) if session else 0
+
     return {
         "call_id": str(call_id),
         "call_sid": session.call_sid if session else None,
@@ -1770,7 +1802,27 @@ async def get_call_policy_trace(
             "goodbye_said_by_agent": session.goodbye_said_by_agent if session else None,
             "goodbye_said_by_customer": session.goodbye_said_by_customer if session else None,
             "escalation_requested": session.escalation_requested if session else None,
+            "low_confidence_count": session.low_confidence_count if session else 0,
+            "repeat_topic_count": session.repeat_topic_count if session else 0,
+            "frustration_count": getattr(session, "frustration_count", 0) or 0,
+            "off_topic_block_count": getattr(session, "off_topic_block_count", 0) or 0,
+            "output_guardrail_block_count": getattr(session, "output_guardrail_block_count", 0) or 0,
+            "language_violation_count": getattr(session, "language_violation_count", 0) or 0,
+            "retrieval_skip_count": getattr(session, "retrieval_skip_count", 0) or 0,
+            "last_retrieval_score": getattr(session, "last_retrieval_score", None),
         } if session else None,
+        "summary_counters": {
+            "off_topic_blocks": off_topic_blocks,
+            "low_confidence_blocks": low_confidence_blocks,
+            "repeated_failure_triggers": repeated_failure_triggers,
+            "output_guardrail_blocks": guardrail_blocks,
+            "language_violations": language_violations,
+            "frustration_signals": frustration_count or 0,
+            "total_safeguard_interventions": (
+                off_topic_blocks + low_confidence_blocks +
+                repeated_failure_triggers + guardrail_blocks
+            ),
+        },
         "decisions": [
             {
                 "turn": d.turn_number,
@@ -1785,6 +1837,10 @@ async def get_call_policy_trace(
                 "instruction": d.instruction_nl,
                 "violation": d.violation,
                 "phase": f"{d.phase_before} → {d.phase_after}",
+                "retrieval_confidence": getattr(d, "retrieval_confidence", None),
+                "retrieval_used": getattr(d, "retrieval_used", None),
+                "guardrail_passed": getattr(d, "guardrail_passed", None),
+                "guardrail_violations": getattr(d, "guardrail_violations", None),
                 "at": d.created_at.isoformat() if d.created_at else None,
             }
             for d in decisions

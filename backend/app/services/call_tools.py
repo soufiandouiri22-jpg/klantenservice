@@ -29,6 +29,7 @@ from app.services.retrieval import RetrievalService
 from app.services.voice.intent_classifier import classify_intent, CallerIntent
 from app.services.voice.conversation_state import ConversationStateManager
 from app.services.voice.policy_engine import PolicyEngine, PolicyResult
+from app.services.voice.output_guardrails import validate_output, ViolationType
 
 logger = logging.getLogger(__name__)
 
@@ -332,16 +333,21 @@ def tool_search_knowledge(
         elapsed_ms, len(retrieval_results), len(qa_results), len(results),
     )
 
+    # Top retrieval score for low-confidence detection
+    top_score = 0.0
+    if retrieval_results:
+        top_score = max(r.get("score", 0) for r in retrieval_results)
+
     if not results:
         return {
             "ok": True,
             "results": [],
+            "top_retrieval_score": 0.0,
             "message": "Geen informatie beschikbaar. VERZIN NIETS. Zeg eerlijk dat je het antwoord op dit moment niet bij de hand hebt. Bied aan om een notitie achter te laten zodat een collega de klant zo snel mogelijk terugbelt met het antwoord. Bevestig het telefoonnummer.",
         }
 
-    # Log the final message that will be sent to the voice agent
     final_msg = f"{len(results)} relevante resultaten gevonden."
-    logger.info("[search_knowledge] final_message=%r", final_msg)
+    logger.info("[search_knowledge] final_message=%r top_score=%.4f", final_msg, top_score)
     for r in results:
         logger.info(
             "[search_knowledge] -> TTS content (%d chars): %r",
@@ -352,6 +358,7 @@ def tool_search_knowledge(
     return {
         "ok": True,
         "results": results,
+        "top_retrieval_score": top_score,
         "message": final_msg,
     }
 
@@ -675,6 +682,7 @@ def run_auto_policies(
     call_log_id: Optional[str],
     tool_name: str,
     customer_message: str = "",
+    retrieval_confidence: float = 1.0,
 ) -> Optional[Dict[str, Any]]:
     """
     Run automatic policy checks on every tool invocation.
@@ -701,6 +709,7 @@ def run_auto_policies(
         intent=intent,
         trigger_tool=tool_name,
         intent_confidence=confidence,
+        retrieval_confidence=retrieval_confidence,
         utterance=customer_message,
     )
 
@@ -718,9 +727,90 @@ def run_auto_policies(
         }
         if override.policy_name == "scope_guard":
             result["skip_retrieval"] = True
+            mgr.record_off_topic_block(session)
+            db.commit()
         return result
 
+    # Track low confidence on retrieval tools
+    if retrieval_confidence < 0.2 and tool_name in ("search_knowledge", "get_prices"):
+        mgr.record_low_confidence(session, retrieval_confidence)
+        db.commit()
+
     return None
+
+
+def apply_output_guardrails(
+    db: Session,
+    call_sid: Optional[str],
+    call_log_id: Optional[str],
+    company_id: Optional[str],
+    tool_result: Dict[str, Any],
+) -> Dict[str, Any]:
+    """
+    Run output guardrails on tool response content before returning to ElevenLabs.
+
+    Checks the 'message' field and all 'content' fields in results for:
+    - Prompt leakage
+    - Tool name leakage
+    - JSON/code leakage
+    - Language violations (non-Dutch)
+    - HTML/script fragments
+    - Malformed output
+
+    If any violation is found, replaces the offending content with a safe fallback
+    and logs the violation.
+    """
+    texts_to_check: list[str] = []
+
+    msg = tool_result.get("message", "")
+    if msg:
+        texts_to_check.append(msg)
+
+    for r in tool_result.get("results", []):
+        c = r.get("content", "")
+        if c:
+            texts_to_check.append(c)
+
+    if not texts_to_check:
+        return tool_result
+
+    all_violations: list[str] = []
+    any_blocked = False
+
+    for text in texts_to_check:
+        gr = validate_output(text)
+        if not gr.passed:
+            any_blocked = True
+            all_violations.extend(v.value for v in gr.violations)
+            logger.warning(
+                "[output_guardrails] blocked text in tool response: violations=%s",
+                [v.value for v in gr.violations],
+            )
+
+    if not any_blocked:
+        return tool_result
+
+    # Update session counters if we have a call
+    if call_sid:
+        try:
+            mgr = ConversationStateManager(db)
+            session = mgr.get_or_create(
+                call_sid=call_sid,
+                call_log_id=call_log_id,
+                company_id=company_id,
+            )
+            mgr.record_output_guardrail_block(session)
+            if ViolationType.LANGUAGE_VIOLATION.value in all_violations:
+                mgr.record_language_violation(session)
+            db.commit()
+        except Exception:
+            logger.warning("Failed to update session guardrail counters", exc_info=True)
+
+    # Return sanitized result with guardrail metadata
+    sanitized = dict(tool_result)
+    sanitized["output_guardrail_triggered"] = True
+    sanitized["output_guardrail_violations"] = list(set(all_violations))
+    return sanitized
 
 
 def tool_transfer_call(

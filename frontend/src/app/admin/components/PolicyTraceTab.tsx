@@ -22,6 +22,11 @@ import {
   Lock,
   Unlock,
   MessageSquare,
+  Languages,
+  Search,
+  RefreshCw,
+  Ban,
+  FileWarning,
 } from 'lucide-react'
 import { Card, CardBody, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -45,6 +50,12 @@ interface VoiceSession {
   transfer_executed: boolean
   low_confidence_count: number
   repeat_topic_count: number
+  frustration_count: number
+  off_topic_block_count: number
+  output_guardrail_block_count: number
+  language_violation_count: number
+  retrieval_skip_count: number
+  last_retrieval_score: number | null
   hangup_reason: string | null
   ended_by: string | null
   created_at: string | null
@@ -52,23 +63,33 @@ interface VoiceSession {
 }
 
 interface PolicyDecision {
-  id: string
-  turn_number: number
-  trigger_tool: string
-  trigger_reason: string
-  phase_before: string
-  phase_after: string
-  detected_intent: string | null
-  intent_confidence: number | null
-  policy_name: string
+  turn: number
+  tool: string
+  reason: string
+  intent: string | null
+  confidence: number | null
+  policy: string
   allowed: boolean
-  required_action: string
-  reason_code: string
-  instruction_nl: string | null
-  model_complied: boolean | null
+  action: string
+  code: string
+  instruction: string | null
   violation: boolean
-  violation_type: string | null
-  created_at: string | null
+  phase: string
+  retrieval_confidence: number | null
+  retrieval_used: boolean | null
+  guardrail_passed: boolean | null
+  guardrail_violations: string | null
+  at: string | null
+}
+
+interface SummaryCounters {
+  off_topic_blocks: number
+  low_confidence_blocks: number
+  repeated_failure_triggers: number
+  output_guardrail_blocks: number
+  language_violations: number
+  frustration_signals: number
+  total_safeguard_interventions: number
 }
 
 interface PolicyTrace {
@@ -86,22 +107,17 @@ interface PolicyTrace {
     goodbye_said_by_agent: boolean | null
     goodbye_said_by_customer: boolean | null
     escalation_requested: boolean | null
+    low_confidence_count: number
+    repeat_topic_count: number
+    frustration_count: number
+    off_topic_block_count: number
+    output_guardrail_block_count: number
+    language_violation_count: number
+    retrieval_skip_count: number
+    last_retrieval_score: number | null
   } | null
-  decisions: Array<{
-    turn: number
-    tool: string
-    reason: string
-    intent: string | null
-    confidence: number | null
-    policy: string
-    allowed: boolean
-    action: string
-    code: string
-    instruction: string | null
-    violation: boolean
-    phase: string
-    at: string | null
-  }>
+  summary_counters: SummaryCounters | null
+  decisions: PolicyDecision[]
   violations: Array<{
     turn: number
     policy: string
@@ -139,7 +155,7 @@ const RULES: RuleEntry[] = [
   },
   {
     name: 'Off-topic blokkade',
-    description: 'Weiger vragen die niet over het bedrijf gaan',
+    description: 'Weiger vragen die niet over het bedrijf gaan. Twee lagen: intent + utterance scope check',
     enforcement: 'backend',
     policyName: 'scope_guard',
     status: 'active',
@@ -153,16 +169,37 @@ const RULES: RuleEntry[] = [
   },
   {
     name: 'Lage betrouwbaarheid',
-    description: 'Niet raden bij laag zoekvertrouwen — eerlijk zeggen',
+    description: 'Niet raden bij laag zoekvertrouwen — eerlijk zeggen. Blokkeert onder 0.2 score',
     enforcement: 'backend',
     policyName: 'low_confidence',
     status: 'active',
   },
   {
     name: 'Herhaalde mislukkingen',
-    description: 'Escaleer na meerdere keren dezelfde vraag niet beantwoorden',
+    description: 'Escaleer na meerdere keren dezelfde vraag of frustratie-signalen',
     enforcement: 'backend',
     policyName: 'repeated_failure',
+    status: 'active',
+  },
+  {
+    name: 'Frustratie-detectie',
+    description: 'Detecteert "dat bedoel ik niet", "je begrijpt me niet" en vergelijkbare signalen',
+    enforcement: 'backend',
+    policyName: 'repeated_failure',
+    status: 'active',
+  },
+  {
+    name: 'Output Guardrails',
+    description: 'Blokkeert prompt leakage, tool namen, JSON, HTML en niet-Nederlands in tool responses',
+    enforcement: 'backend',
+    policyName: null,
+    status: 'active',
+  },
+  {
+    name: 'Taal-guardrail (Nederlands)',
+    description: 'Detecteert Engels/gemengde taal in output. Valt terug op veilig Nederlands',
+    enforcement: 'backend',
+    policyName: null,
     status: 'active',
   },
   {
@@ -194,15 +231,8 @@ const RULES: RuleEntry[] = [
     status: 'active',
   },
   {
-    name: 'Maximaal 1-2 zinnen per beurt',
-    description: 'Korte antwoorden, natuurlijk spreektempo',
-    enforcement: 'prompt',
-    policyName: null,
-    status: 'active',
-  },
-  {
     name: 'STT / Spraakherkenning',
-    description: 'Transcriptie-kwaliteit, spelling patience, taalinstelling',
+    description: 'Transcriptie-kwaliteit, taalinstelling',
     enforcement: 'provider',
     policyName: null,
     status: 'active',
@@ -244,6 +274,7 @@ function intentBadgeColor(intent: string | null): 'primary' | 'success' | 'dange
   switch (intent) {
     case 'goodbye': return 'success'
     case 'anger': return 'danger'
+    case 'frustration': return 'danger'
     case 'transfer_request': return 'danger'
     case 'complaint': return 'warning'
     case 'off_topic': return 'warning'
@@ -271,6 +302,49 @@ function enforcementBadge(type: string) {
 function formatTime(iso: string | null) {
   if (!iso) return '-'
   return new Date(iso).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+}
+
+// Badge for specific safeguard types on turn rows
+function safeguardBadges(d: PolicyDecision) {
+  const badges = []
+
+  if (d.code?.startsWith('off_topic')) {
+    badges.push(
+      <Badge key="ot" variant="warning">
+        <Ban className="h-3 w-3 mr-1" />Off-topic
+      </Badge>
+    )
+  }
+  if (d.code === 'confidence_too_low') {
+    badges.push(
+      <Badge key="lc" variant="warning">
+        <Search className="h-3 w-3 mr-1" />Laag vertrouwen
+      </Badge>
+    )
+  }
+  if (d.code?.startsWith('frustration') || d.code === 'topic_repeated' || d.code === 'topic_loop_detected') {
+    badges.push(
+      <Badge key="rf" variant="warning">
+        <RefreshCw className="h-3 w-3 mr-1" />Herhaling
+      </Badge>
+    )
+  }
+  if (d.guardrail_passed === false) {
+    badges.push(
+      <Badge key="gr" variant="danger">
+        <FileWarning className="h-3 w-3 mr-1" />Guardrail
+      </Badge>
+    )
+  }
+  if (d.guardrail_violations?.includes('language_violation')) {
+    badges.push(
+      <Badge key="lang" variant="danger">
+        <Languages className="h-3 w-3 mr-1" />Taal
+      </Badge>
+    )
+  }
+
+  return badges
 }
 
 // ── Component ───────────────────────────────────────────────────
@@ -301,36 +375,26 @@ export function PolicyTraceTab() {
     setExpandedTurns(next)
   }
 
-  // ── Violation flags ─────────────────────────────────────────
-
   function getCallFlags(trace: PolicyTrace | null) {
     if (!trace) return []
     const flags: Array<{ label: string; severity: 'danger' | 'warning' }> = []
 
-    if (trace.goodbye_handshake_ok === false) {
+    if (trace.goodbye_handshake_ok === false)
       flags.push({ label: 'Goodbye handshake mislukt', severity: 'danger' })
-    }
 
-    const deniedButProceeded = trace.decisions.filter(
-      d => !d.allowed && d.action !== 'proceed'
-    )
-    if (deniedButProceeded.length > 0) {
-      const hasViolation = trace.decisions.some(d => d.violation)
-      if (hasViolation) {
-        flags.push({ label: 'Policy overtreden door model', severity: 'danger' })
-      }
-    }
+    if (trace.decisions.some(d => d.violation))
+      flags.push({ label: 'Policy overtreden door model', severity: 'danger' })
 
-    if (trace.session?.escalation_requested && !trace.decisions.some(d => d.action === 'escalate')) {
+    if (trace.session?.escalation_requested && !trace.decisions.some(d => d.action === 'escalate'))
       flags.push({ label: 'Escalatie had moeten plaatsvinden', severity: 'warning' })
-    }
 
-    if ((trace.policy_violations_count || 0) > 0) {
+    if ((trace.policy_violations_count || 0) > 0)
       flags.push({ label: `${trace.policy_violations_count} policy violation(s)`, severity: 'danger' })
-    }
 
     return flags
   }
+
+  const sc = policyTrace?.summary_counters
 
   return (
     <div className="space-y-6">
@@ -339,7 +403,7 @@ export function PolicyTraceTab() {
         <div>
           <h2 className="text-lg font-semibold text-gray-900">Policy Engine & Call Control</h2>
           <p className="text-sm text-gray-500">
-            Bekijk gespreksstatus, intents, policy-beslissingen en violations per beurt.
+            Gespreksstatus, intents, policy-beslissingen, guardrails en violations per beurt.
           </p>
         </div>
         <div className="flex gap-2">
@@ -455,51 +519,62 @@ export function PolicyTraceTab() {
                   </div>
                 ) : (
                   <div className="divide-y divide-gray-100">
-                    {sessions.map((s) => (
-                      <button
-                        key={s.id}
-                        onClick={() => {
-                          setSelectedCallId(s.call_log_id)
-                          setExpandedTurns(new Set())
-                        }}
-                        className={`w-full text-left p-4 hover:bg-gray-50 transition-colors ${
-                          selectedCallId === s.call_log_id
-                            ? 'bg-primary-50 border-l-2 border-primary-500'
-                            : ''
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <Badge variant={phaseBadgeColor(s.phase)}>{s.phase}</Badge>
-                          <span className="text-xs text-gray-400">
-                            {s.turn_count} turns
-                          </span>
-                        </div>
-                        <div className="mt-1 text-xs text-gray-500 truncate">
-                          {s.call_sid || s.id.substring(0, 12)}
-                        </div>
-                        <div className="flex items-center gap-2 mt-2 flex-wrap">
-                          {s.goodbye_handshake_ok === false && (
-                            <Badge variant="danger">
-                              <XCircle className="h-3 w-3 mr-1" />Handshake fail
-                            </Badge>
-                          )}
-                          {s.goodbye_handshake_ok === true && (
-                            <Badge variant="success">
-                              <CheckCircle className="h-3 w-3 mr-1" />Handshake OK
-                            </Badge>
-                          )}
-                          {s.escalation_requested && (
-                            <Badge variant="danger">Escalatie</Badge>
-                          )}
-                          {s.ended_by && (
-                            <Badge variant="gray">{s.ended_by}</Badge>
-                          )}
-                        </div>
-                        <div className="text-xs text-gray-400 mt-1">
-                          {s.created_at ? formatTime(s.created_at) : ''}
-                        </div>
-                      </button>
-                    ))}
+                    {sessions.map((s) => {
+                      const hasIssues = (
+                        s.goodbye_handshake_ok === false ||
+                        (s.off_topic_block_count || 0) > 0 ||
+                        (s.output_guardrail_block_count || 0) > 0 ||
+                        (s.language_violation_count || 0) > 0 ||
+                        (s.frustration_count || 0) > 0
+                      )
+                      return (
+                        <button
+                          key={s.id}
+                          onClick={() => {
+                            setSelectedCallId(s.call_log_id)
+                            setExpandedTurns(new Set())
+                          }}
+                          className={`w-full text-left p-4 hover:bg-gray-50 transition-colors ${
+                            selectedCallId === s.call_log_id
+                              ? 'bg-primary-50 border-l-2 border-primary-500'
+                              : ''
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <Badge variant={phaseBadgeColor(s.phase)}>{s.phase}</Badge>
+                            <span className="text-xs text-gray-400">{s.turn_count} turns</span>
+                          </div>
+                          <div className="mt-1 text-xs text-gray-500 truncate">
+                            {s.call_sid || s.id.substring(0, 12)}
+                          </div>
+                          <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                            {s.goodbye_handshake_ok === false && (
+                              <Badge variant="danger"><XCircle className="h-3 w-3 mr-0.5" />HShake</Badge>
+                            )}
+                            {s.goodbye_handshake_ok === true && (
+                              <Badge variant="success"><CheckCircle className="h-3 w-3 mr-0.5" />OK</Badge>
+                            )}
+                            {s.escalation_requested && <Badge variant="danger">Escalatie</Badge>}
+                            {(s.off_topic_block_count || 0) > 0 && (
+                              <Badge variant="warning"><Ban className="h-3 w-3 mr-0.5" />{s.off_topic_block_count}</Badge>
+                            )}
+                            {(s.output_guardrail_block_count || 0) > 0 && (
+                              <Badge variant="danger"><FileWarning className="h-3 w-3 mr-0.5" />{s.output_guardrail_block_count}</Badge>
+                            )}
+                            {(s.language_violation_count || 0) > 0 && (
+                              <Badge variant="danger"><Languages className="h-3 w-3 mr-0.5" />{s.language_violation_count}</Badge>
+                            )}
+                            {(s.frustration_count || 0) > 0 && (
+                              <Badge variant="warning"><RefreshCw className="h-3 w-3 mr-0.5" />{s.frustration_count}x</Badge>
+                            )}
+                            {s.ended_by && <Badge variant="gray">{s.ended_by}</Badge>}
+                          </div>
+                          <div className="text-xs text-gray-400 mt-1">
+                            {s.created_at ? formatTime(s.created_at) : ''}
+                          </div>
+                        </button>
+                      )
+                    })}
                   </div>
                 )}
               </CardBody>
@@ -550,7 +625,6 @@ export function PolicyTraceTab() {
                       </div>
                     </div>
 
-                    {/* Session state */}
                     {policyTrace.session && (
                       <div className="mt-4 grid grid-cols-2 md:grid-cols-5 gap-3 text-xs">
                         <div className="bg-gray-50 rounded p-2">
@@ -601,7 +675,6 @@ export function PolicyTraceTab() {
                       )
                     })()}
 
-                    {/* Stats bar */}
                     <div className="mt-4 flex gap-4 text-xs text-gray-500">
                       <span>{policyTrace.total_decisions} policy beslissingen</span>
                       <span>·</span>
@@ -611,6 +684,76 @@ export function PolicyTraceTab() {
                     </div>
                   </CardBody>
                 </Card>
+
+                {/* ── Violations & Safeguards Summary ─────────────── */}
+                {sc && sc.total_safeguard_interventions > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>
+                        <ShieldCheck className="h-5 w-5 inline mr-2 text-amber-600" />
+                        Violations & Safeguards
+                      </CardTitle>
+                      <CardDescription>
+                        Overzicht van alle beveiligingsinterventies tijdens dit gesprek
+                      </CardDescription>
+                    </CardHeader>
+                    <CardBody>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {sc.off_topic_blocks > 0 && (
+                          <div className="bg-orange-50 rounded-lg p-3 text-center">
+                            <Ban className="h-5 w-5 text-orange-500 mx-auto mb-1" />
+                            <p className="text-2xl font-bold text-orange-700">{sc.off_topic_blocks}</p>
+                            <p className="text-xs text-orange-600">Off-topic geblokkeerd</p>
+                          </div>
+                        )}
+                        {sc.low_confidence_blocks > 0 && (
+                          <div className="bg-amber-50 rounded-lg p-3 text-center">
+                            <Search className="h-5 w-5 text-amber-500 mx-auto mb-1" />
+                            <p className="text-2xl font-bold text-amber-700">{sc.low_confidence_blocks}</p>
+                            <p className="text-xs text-amber-600">Laag vertrouwen</p>
+                          </div>
+                        )}
+                        {sc.repeated_failure_triggers > 0 && (
+                          <div className="bg-yellow-50 rounded-lg p-3 text-center">
+                            <RefreshCw className="h-5 w-5 text-yellow-600 mx-auto mb-1" />
+                            <p className="text-2xl font-bold text-yellow-700">{sc.repeated_failure_triggers}</p>
+                            <p className="text-xs text-yellow-600">Herhaling / frustratie</p>
+                          </div>
+                        )}
+                        {sc.output_guardrail_blocks > 0 && (
+                          <div className="bg-red-50 rounded-lg p-3 text-center">
+                            <FileWarning className="h-5 w-5 text-red-500 mx-auto mb-1" />
+                            <p className="text-2xl font-bold text-red-700">{sc.output_guardrail_blocks}</p>
+                            <p className="text-xs text-red-600">Output guardrail</p>
+                          </div>
+                        )}
+                        {sc.language_violations > 0 && (
+                          <div className="bg-red-50 rounded-lg p-3 text-center">
+                            <Languages className="h-5 w-5 text-red-500 mx-auto mb-1" />
+                            <p className="text-2xl font-bold text-red-700">{sc.language_violations}</p>
+                            <p className="text-xs text-red-600">Taal-violations</p>
+                          </div>
+                        )}
+                        {sc.frustration_signals > 0 && (
+                          <div className="bg-yellow-50 rounded-lg p-3 text-center">
+                            <AlertTriangle className="h-5 w-5 text-yellow-600 mx-auto mb-1" />
+                            <p className="text-2xl font-bold text-yellow-700">{sc.frustration_signals}</p>
+                            <p className="text-xs text-yellow-600">Frustratie-signalen</p>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="mt-4 text-sm text-gray-500 bg-gray-50 rounded p-3">
+                        <p className="font-medium text-gray-700 mb-1">Totaal: {sc.total_safeguard_interventions} safeguard-interventies</p>
+                        <p>
+                          Elke interventie heeft voorkomen dat de AI iets deed wat niet mocht:
+                          off-topic beantwoorden, onzeker antwoord geven, in herhaling vallen,
+                          of onveilige output naar spraak sturen.
+                        </p>
+                      </div>
+                    </CardBody>
+                  </Card>
+                )}
 
                 {/* Turn-by-turn Policy Decisions */}
                 <Card>
@@ -626,13 +769,14 @@ export function PolicyTraceTab() {
                       <div className="divide-y divide-gray-100">
                         {policyTrace.decisions.map((d, i) => {
                           const isExpanded = expandedTurns.has(i)
+                          const badges = safeguardBadges(d)
                           return (
                             <div key={i} className={`${d.violation ? 'bg-red-50' : ''}`}>
                               <button
                                 onClick={() => toggleTurn(i)}
                                 className="w-full flex items-center justify-between text-left p-4 hover:bg-gray-50/50"
                               >
-                                <div className="flex items-center gap-3 flex-wrap">
+                                <div className="flex items-center gap-2 flex-wrap">
                                   {isExpanded ? (
                                     <ChevronDown className="h-4 w-4 text-gray-400 flex-shrink-0" />
                                   ) : (
@@ -652,11 +796,7 @@ export function PolicyTraceTab() {
                                     )}
                                   </Badge>
                                   <span className="text-xs text-gray-400 font-mono">{d.policy}</span>
-                                  {d.code?.startsWith('off_topic') && (
-                                    <Badge variant="warning">
-                                      <ShieldX className="h-3 w-3 mr-1" />Off-topic blocked
-                                    </Badge>
-                                  )}
+                                  {badges}
                                   {d.violation && (
                                     <Badge variant="danger">
                                       <ShieldAlert className="h-3 w-3 mr-1" />VIOLATION
@@ -687,21 +827,24 @@ export function PolicyTraceTab() {
                                     </div>
                                   </div>
 
-                                  <div className="flex items-center gap-2 text-xs">
-                                    <span className="text-gray-500">Phase:</span>
-                                    <span className="font-mono">{d.phase}</span>
+                                  <div className="flex items-center gap-4 text-xs">
+                                    <span className="text-gray-500">Phase: <span className="font-mono">{d.phase}</span></span>
+                                    {d.confidence !== null && (
+                                      <span className="text-gray-500">
+                                        Confidence: {((d.confidence || 0) * 100).toFixed(0)}%
+                                      </span>
+                                    )}
+                                    {d.retrieval_confidence !== null && d.retrieval_confidence !== undefined && (
+                                      <span className="text-gray-500">
+                                        Retrieval score: {(d.retrieval_confidence * 100).toFixed(0)}%
+                                      </span>
+                                    )}
                                   </div>
-
-                                  {d.confidence !== null && (
-                                    <div className="text-xs text-gray-500">
-                                      Intent confidence: {((d.confidence || 0) * 100).toFixed(0)}%
-                                    </div>
-                                  )}
 
                                   {d.code?.startsWith('off_topic') && (
                                     <div className="bg-orange-50 rounded p-3 text-sm text-orange-800">
                                       <p className="text-xs font-medium text-orange-600 mb-1">
-                                        <ShieldX className="h-3 w-3 inline mr-1" />
+                                        <Ban className="h-3 w-3 inline mr-1" />
                                         Off-topic: retrieval overgeslagen
                                       </p>
                                       <p>
@@ -709,6 +852,45 @@ export function PolicyTraceTab() {
                                           ? 'Intent classifier detecteerde off-topic → scope_guard blokkeerde direct'
                                           : 'Secundaire scope check op de utterance → scope_guard blokkeerde'}
                                       </p>
+                                    </div>
+                                  )}
+
+                                  {d.code === 'confidence_too_low' && (
+                                    <div className="bg-amber-50 rounded p-3 text-sm text-amber-800">
+                                      <p className="text-xs font-medium text-amber-600 mb-1">
+                                        <Search className="h-3 w-3 inline mr-1" />
+                                        Laag vertrouwen: veilig antwoord gebruikt
+                                      </p>
+                                      <p>
+                                        De retrieval score was te laag om een betrouwbaar antwoord te geven.
+                                        De AI is gevraagd om eerlijk te zijn en een terugbelverzoek aan te bieden.
+                                      </p>
+                                    </div>
+                                  )}
+
+                                  {(d.code?.startsWith('frustration') || d.code === 'topic_repeated' || d.code === 'topic_loop_detected') && (
+                                    <div className="bg-yellow-50 rounded p-3 text-sm text-yellow-800">
+                                      <p className="text-xs font-medium text-yellow-600 mb-1">
+                                        <RefreshCw className="h-3 w-3 inline mr-1" />
+                                        {d.code === 'frustration_detected' ? 'Frustratie gedetecteerd'
+                                          : d.code === 'frustration_plus_repeats' ? 'Frustratie + herhaling → escalatie'
+                                          : d.code === 'topic_repeated' ? 'Onderwerp herhaald'
+                                          : 'Herhalingslus gedetecteerd → escalatie'}
+                                      </p>
+                                    </div>
+                                  )}
+
+                                  {d.guardrail_passed === false && (
+                                    <div className="bg-red-50 rounded p-3 text-sm text-red-800">
+                                      <p className="text-xs font-medium text-red-600 mb-1">
+                                        <FileWarning className="h-3 w-3 inline mr-1" />
+                                        Output guardrail geactiveerd
+                                      </p>
+                                      {d.guardrail_violations && (
+                                        <p className="font-mono text-xs mt-1">
+                                          Violations: {d.guardrail_violations}
+                                        </p>
+                                      )}
                                     </div>
                                   )}
 

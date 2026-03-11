@@ -50,8 +50,14 @@ class VoiceSession(Base):
 
     low_confidence_count = Column(Integer, default=0)
     repeat_topic_count = Column(Integer, default=0)
+    frustration_count = Column(Integer, default=0)
+    off_topic_block_count = Column(Integer, default=0)
+    output_guardrail_block_count = Column(Integer, default=0)
+    language_violation_count = Column(Integer, default=0)
     retrieval_count = Column(Integer, default=0)
+    retrieval_skip_count = Column(Integer, default=0)
     end_call_attempts = Column(Integer, default=0)
+    last_retrieval_score = Column(Float, nullable=True)
 
     goodbye_handshake_ok = Column(Boolean, nullable=True)
     hangup_reason = Column(String(50), nullable=True)
@@ -86,9 +92,17 @@ class PolicyDecisionLog(Base):
     reason_code = Column(String(50))
     instruction_nl = Column(Text, nullable=True)
 
+    retrieval_confidence = Column(Float, nullable=True)
+    retrieval_used = Column(Boolean, nullable=True)
+
     model_complied = Column(Boolean, nullable=True)
     violation = Column(Boolean, default=False)
     violation_type = Column(String(50), nullable=True)
+
+    guardrail_passed = Column(Boolean, nullable=True)
+    guardrail_violations = Column(Text, nullable=True)
+    guardrail_safe_text = Column(Text, nullable=True)
+    guardrail_original_text = Column(Text, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
 

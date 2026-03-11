@@ -23,6 +23,7 @@ class CallerIntent(str, Enum):
     APPOINTMENT = "appointment"
     COMPLAINT = "complaint"
     ANGER = "anger"
+    FRUSTRATION = "frustration"
     TRANSFER_REQUEST = "transfer_request"
     CONFIRMATION = "confirmation"
     DENIAL = "denial"
@@ -115,6 +116,23 @@ _RULES: list[tuple[re.Pattern, CallerIntent, float]] = [
         r"dit\s+kan\s+niet|dit\s+pik\s+ik\s+niet|ik\s+ben\s+het\s+zat)\b",
         re.I,
     ), CallerIntent.ANGER, 0.90),
+
+    # Frustration — repeated-failure signals (softer than anger)
+    (re.compile(
+        r"\b("
+        r"(?:dat\s+)?bedoel\s+ik\s+niet|dat\s+is\s+niet\s+wat\s+ik\s+(?:vroeg|bedoel|zei)|"
+        r"je\s+begrijpt\s+(?:me|mij)\s+niet|u\s+begrijpt\s+(?:me|mij)\s+niet|"
+        r"nog\s+steeds\s+niet|dat\s+heb\s+ik\s+al\s+(?:gezegd|gevraagd|uitgelegd)|"
+        r"ik\s+heb\s+(?:dit|dat)\s+al\s+(?:gezegd|gevraagd|uitgelegd)|"
+        r"luister\s+(?:je|u)\s+(?:wel|eigenlijk)|"
+        r"dat\s+zei\s+ik\s+(?:al|net|toch)|"
+        r"nee\s+(?:dat\s+)?(?:bedoel|klopt|snap)\s+ik\s+niet|"
+        r"ik\s+(?:snap|begrijp)\s+(?:er|het)\s+(?:niks|niets|geen)\s+(?:van|meer)|"
+        r"dat\s+(?:klopt|helpt)\s+(?:niet|helemaal\s+niet)|"
+        r"we\s+draaien\s+in\s+(?:rondjes|cirkels|kringetjes)"
+        r")\b",
+        re.I,
+    ), CallerIntent.FRUSTRATION, 0.88),
 
     # Complaint — softer frustration
     (re.compile(
