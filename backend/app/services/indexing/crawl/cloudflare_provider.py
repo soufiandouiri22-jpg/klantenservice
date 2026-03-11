@@ -1,9 +1,10 @@
 """
-Cloudflare Browser Rendering crawl provider.
+Cloudflare Browser Rendering provider.
 
-Uses the /crawl endpoint to render JS-heavy pages.
+Uses the /content endpoint to get fully-rendered HTML (JS executed).
 Activate by setting CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID env vars.
 """
+import json
 import logging
 import os
 from typing import List
@@ -51,7 +52,7 @@ class CloudflareCrawlProvider(CrawlProvider):
 
         api_url = (
             f"https://api.cloudflare.com/client/v4/accounts/"
-            f"{self._account_id}/browser-rendering/crawl"
+            f"{self._account_id}/browser-rendering/content"
         )
 
         try:
@@ -63,7 +64,8 @@ class CloudflareCrawlProvider(CrawlProvider):
                 },
                 json={
                     "url": url,
-                    "waitUntil": "networkIdle",
+                    "gotoOptions": {"waitUntil": "networkidle0"},
+                    "rejectResourceTypes": ["image", "font", "media"],
                 },
             )
 
@@ -71,17 +73,23 @@ class CloudflareCrawlProvider(CrawlProvider):
                 return CrawledPage(
                     url=url, final_url=url,
                     status_code=resp.status_code,
-                    error=f"Cloudflare API error: {resp.status_code}",
+                    error=f"Cloudflare API error: {resp.status_code} {resp.text[:200]}",
                 )
 
-            data = resp.json()
-            html = data.get("html", "")
+            # /content returns JSON: {"success": true, "result": "<html>..."}
+            try:
+                data = resp.json()
+                html = data.get("result", "") if data.get("success") else ""
+            except (json.JSONDecodeError, ValueError):
+                html = resp.text
+
             if not html:
                 return CrawledPage(
                     url=url, final_url=url, status_code=200,
                     error="Cloudflare returned empty HTML",
                 )
 
+            logger.info("Cloudflare rendered %s: %d bytes", url, len(html))
             soup = BeautifulSoup(html, "lxml")
 
             title = (soup.title.get_text(strip=True) if soup.title else "")
@@ -102,7 +110,7 @@ class CloudflareCrawlProvider(CrawlProvider):
 
             return CrawledPage(
                 url=url,
-                final_url=data.get("url", url),
+                final_url=url,
                 status_code=200,
                 html=html,
                 title=title,
