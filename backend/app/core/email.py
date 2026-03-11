@@ -336,6 +336,147 @@ def send_welcome_email(
         return False
 
 
+def send_usage_warning_email(
+    to_email: str,
+    company_name: str,
+    percentage: float,
+    minutes_used: int,
+    minutes_limit: int,
+) -> bool:
+    """Send a warning email when usage reaches 80% of the plan limit."""
+    if not settings.RESEND_API_KEY:
+        print(f"[DEV] Would send usage warning to {to_email} ({percentage}%)")
+        return True
+
+    try:
+        init_resend()
+
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background-color: #f59e0b; padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
+                <h1 style="color: white; margin: 0; font-size: 24px;">Belminuten bijna op</h1>
+            </div>
+
+            <div style="background-color: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
+                <p style="font-size: 16px; margin-bottom: 20px;">
+                    Beste {company_name},
+                </p>
+
+                <p style="font-size: 16px; margin-bottom: 20px;">
+                    U heeft <strong>{minutes_used}</strong> van uw <strong>{minutes_limit}</strong> belminuten gebruikt deze maand ({percentage:.0f}%).
+                </p>
+
+                <div style="background: #fffbeb; border: 1px solid #f59e0b; border-radius: 8px; padding: 16px; margin: 20px 0;">
+                    <p style="margin: 0; font-size: 14px; color: #92400e;">
+                        Na het bereiken van uw limiet worden extra minuten automatisch gefactureerd tegen <strong>&euro;0,25 per minuut</strong>. Uw gesprekken worden niet onderbroken.
+                    </p>
+                </div>
+
+                <p style="font-size: 14px; color: #6b7280;">
+                    U kunt uw verbruik bekijken in het <a href="{settings.FRONTEND_URL}/dashboard/settings?tab=subscription" style="color: #2563eb;">dashboard</a>.
+                </p>
+
+                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+
+                <p style="font-size: 12px; color: #9ca3af; text-align: center;">
+                    Dit is een automatische email van klantenservice.ai.
+                </p>
+            </div>
+        </body>
+        </html>
+        """
+
+        params = {
+            "from": f"klantenservice.ai <{settings.RESEND_FROM_EMAIL}>",
+            "to": [to_email],
+            "subject": f"Belminuten bijna op ({percentage:.0f}%) - {company_name}",
+            "html": html_content,
+        }
+
+        resend.Emails.send(params)
+        return True
+
+    except Exception as e:
+        print(f"Error sending usage warning email: {e}")
+        return False
+
+
+def send_usage_exceeded_email(
+    to_email: str,
+    company_name: str,
+    minutes_used: int,
+    minutes_limit: int,
+) -> bool:
+    """Send an email when usage exceeds 100% of the plan limit."""
+    if not settings.RESEND_API_KEY:
+        print(f"[DEV] Would send usage exceeded to {to_email}")
+        return True
+
+    try:
+        init_resend()
+
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background-color: #ef4444; padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
+                <h1 style="color: white; margin: 0; font-size: 24px;">Belminuten limiet bereikt</h1>
+            </div>
+
+            <div style="background-color: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
+                <p style="font-size: 16px; margin-bottom: 20px;">
+                    Beste {company_name},
+                </p>
+
+                <p style="font-size: 16px; margin-bottom: 20px;">
+                    U heeft uw maandelijkse limiet van <strong>{minutes_limit}</strong> belminuten bereikt. U heeft tot nu toe <strong>{minutes_used}</strong> minuten gebruikt.
+                </p>
+
+                <div style="background: #fef2f2; border: 1px solid #ef4444; border-radius: 8px; padding: 16px; margin: 20px 0;">
+                    <p style="margin: 0; font-size: 14px; color: #991b1b;">
+                        Vanaf nu worden extra minuten automatisch gefactureerd tegen <strong>&euro;0,25 per minuut</strong>. Uw gesprekken worden niet onderbroken.
+                    </p>
+                </div>
+
+                <p style="font-size: 14px; color: #6b7280;">
+                    Overweeg een upgrade naar een hoger abonnement voor meer belminuten. Bekijk de opties in uw <a href="{settings.FRONTEND_URL}/dashboard/settings?tab=subscription" style="color: #2563eb;">dashboard</a>.
+                </p>
+
+                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+
+                <p style="font-size: 12px; color: #9ca3af; text-align: center;">
+                    Dit is een automatische email van klantenservice.ai.
+                </p>
+            </div>
+        </body>
+        </html>
+        """
+
+        params = {
+            "from": f"klantenservice.ai <{settings.RESEND_FROM_EMAIL}>",
+            "to": [to_email],
+            "subject": f"Belminuten limiet bereikt - {company_name}",
+            "html": html_content,
+        }
+
+        resend.Emails.send(params)
+        return True
+
+    except Exception as e:
+        print(f"Error sending usage exceeded email: {e}")
+        return False
+
+
 def send_contact_form_email(
     sender_name: str,
     sender_email: str,

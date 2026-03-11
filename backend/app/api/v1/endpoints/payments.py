@@ -44,6 +44,9 @@ PLAN_MINUTES = {
     "enterprise": None,  # Onbeperkt
 }
 
+# Overage pricing (EUR per extra minute beyond plan limit)
+OVERAGE_PRICE_PER_MINUTE = 0.25
+
 
 class CheckoutRequest(BaseModel):
     plan: str  # starter, business, enterprise
@@ -238,7 +241,7 @@ async def get_usage(
     """
     from datetime import datetime
     from sqlalchemy import func
-    from app.models.call_log import CallLog
+    from app.models.call_log import CallLog, CallStatus
 
     company = current_user.company
     if not company:
@@ -250,12 +253,19 @@ async def get_usage(
     total_seconds = db.query(func.coalesce(func.sum(CallLog.duration_seconds), 0)).filter(
         CallLog.company_id == company.id,
         CallLog.started_at >= month_start,
+        CallLog.status == CallStatus.COMPLETED,
         CallLog.duration_seconds > 0,
     ).scalar()
 
     minutes_used = round(total_seconds / 60, 1)
     plan = company.subscription_plan.value
     minutes_limit = PLAN_MINUTES.get(plan)
+
+    overage_minutes = 0.0
+    overage_cost = 0.0
+    if minutes_limit and minutes_used > minutes_limit:
+        overage_minutes = round(minutes_used - minutes_limit, 1)
+        overage_cost = round(overage_minutes * OVERAGE_PRICE_PER_MINUTE, 2)
 
     return {
         "minutes_used": minutes_used,
@@ -264,6 +274,9 @@ async def get_usage(
         "is_unlimited": minutes_limit is None,
         "percentage": round((minutes_used / minutes_limit) * 100, 1) if minutes_limit else 0,
         "period_start": month_start.isoformat(),
+        "overage_minutes": overage_minutes,
+        "overage_cost": overage_cost,
+        "overage_price_per_minute": OVERAGE_PRICE_PER_MINUTE,
     }
 
 
@@ -320,6 +333,9 @@ async def stripe_webhook(
     
     elif event_type == "invoice.payment_failed":
         await handle_payment_failed(data, db)
+    
+    elif event_type == "invoice.created":
+        await handle_invoice_created(data, db)
     
     elif event_type == "customer.tax_id.created":
         await handle_tax_id_created(data, db)
@@ -578,6 +594,83 @@ async def handle_payment_failed(invoice: dict, db: Session):
         company.subscription_status = "past_due"
         db.commit()
         logger.warning(f"Payment failed for company {company.name}")
+
+
+async def handle_invoice_created(invoice: dict, db: Session):
+    """
+    Add overage line item when Stripe creates the next invoice.
+    
+    Stripe fires invoice.created ~1 hour before finalizing.
+    We calculate overage minutes for the previous billing period
+    and attach an InvoiceItem so it appears on the invoice.
+    """
+    subscription_id = invoice.get("subscription")
+    customer_id = invoice.get("customer")
+    invoice_id = invoice.get("id")
+
+    if not subscription_id or not customer_id:
+        return
+
+    company = db.query(Company).filter(
+        Company.stripe_subscription_id == subscription_id
+    ).first()
+
+    if not company:
+        company = db.query(Company).filter(
+            Company.stripe_customer_id == customer_id
+        ).first()
+
+    if not company:
+        logger.warning(f"[OVERAGE] Company not found for invoice {invoice_id}")
+        return
+
+    plan = company.subscription_plan.value
+    limit = PLAN_MINUTES.get(plan)
+
+    if limit is None:
+        return
+
+    from datetime import datetime
+    from sqlalchemy import func
+    from app.models.call_log import CallLog, CallStatus
+
+    now = datetime.utcnow()
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    total_seconds = db.query(func.coalesce(func.sum(CallLog.duration_seconds), 0)).filter(
+        CallLog.company_id == company.id,
+        CallLog.started_at >= month_start,
+        CallLog.status == CallStatus.COMPLETED,
+        CallLog.duration_seconds > 0,
+    ).scalar()
+
+    minutes_used = total_seconds / 60
+    overage = minutes_used - limit
+
+    if overage <= 0:
+        logger.info(f"[OVERAGE] No overage for {company.name} ({minutes_used:.0f}/{limit})")
+        return
+
+    overage_rounded = round(overage, 1)
+    amount_cents = int(round(overage_rounded * OVERAGE_PRICE_PER_MINUTE * 100))
+
+    if amount_cents <= 0:
+        return
+
+    try:
+        stripe.InvoiceItem.create(
+            customer=customer_id,
+            invoice=invoice_id,
+            amount=amount_cents,
+            currency="eur",
+            description=f"{overage_rounded} extra belminuten a €{OVERAGE_PRICE_PER_MINUTE:.2f}/min",
+        )
+        logger.info(
+            f"[OVERAGE] Added €{amount_cents/100:.2f} overage charge for {company.name} "
+            f"({overage_rounded} min over limit)"
+        )
+    except stripe.error.StripeError as e:
+        logger.error(f"[OVERAGE] Failed to add InvoiceItem for {company.name}: {e}")
 
 
 def _build_stripe_address(company) -> dict | None:

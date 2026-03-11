@@ -83,6 +83,7 @@ function SettingsContent() {
 
   // Billing interval toggle
   const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('monthly')
+  const [loadingPlan, setLoadingPlan] = useState<string | null>(null)
 
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false)
   const [newUserData, setNewUserData] = useState({
@@ -228,6 +229,7 @@ function SettingsContent() {
       }
     },
     onError: (error: any) => {
+      setLoadingPlan(null)
       const message = error.response?.data?.detail || 'Er ging iets mis bij het starten van de betaling'
       toast.error(message)
     },
@@ -236,12 +238,12 @@ function SettingsContent() {
   const portalMutation = useMutation({
     mutationFn: () => paymentsApi.createPortalSession(),
     onSuccess: (data) => {
-      // Redirect to Stripe Customer Portal
       if (data.portal_url) {
         window.location.href = data.portal_url
       }
     },
     onError: (error: any) => {
+      setLoadingPlan(null)
       const message = error.response?.data?.detail || 'Er ging iets mis bij het openen van het klantportaal'
       toast.error(message)
     },
@@ -448,6 +450,7 @@ function SettingsContent() {
   }, [])
 
   const handleUpgrade = (plan: string, interval: 'monthly' | 'yearly' = 'monthly') => {
+    setLoadingPlan(plan)
     const hasActiveSubscription =
       subscription?.has_stripe &&
       (subscription?.status === 'active' || subscription?.status === 'trialing')
@@ -949,10 +952,23 @@ function SettingsContent() {
                             />
                           </div>
                         )}
-                        {!usage.is_unlimited && usage.percentage >= 90 && (
+                        {!usage.is_unlimited && usage.percentage >= 100 && (
                           <p className="text-sm text-red-600">
-                            U nadert uw limiet. Na het bereiken worden inkomende gesprekken geweigerd.
+                            U heeft uw limiet bereikt. Extra minuten worden gefactureerd a €0,25 per minuut.
                           </p>
+                        )}
+                        {!usage.is_unlimited && usage.percentage >= 80 && usage.percentage < 100 && (
+                          <p className="text-sm text-amber-600">
+                            U nadert uw limiet. Na het bereiken worden extra minuten gefactureerd a €0,25 per minuut.
+                          </p>
+                        )}
+                        {usage.overage_minutes > 0 && (
+                          <div className="flex justify-between text-sm mt-2 pt-2 border-t border-red-200">
+                            <span className="text-red-600 font-medium">Extra minuten</span>
+                            <span className="text-red-600 font-medium">
+                              {usage.overage_minutes} min (€{usage.overage_cost?.toFixed(2)})
+                            </span>
+                          </div>
                         )}
                       </div>
                     </CardBody>
@@ -1041,7 +1057,7 @@ function SettingsContent() {
                             onClick={() => handleUpgrade('starter', billingInterval)}
                             disabled={checkoutMutation.isPending || portalMutation.isPending}
                           >
-                            {(checkoutMutation.isPending || portalMutation.isPending) ? 'Laden...' :
+                            {(checkoutMutation.isPending || portalMutation.isPending) && loadingPlan === 'starter' ? 'Laden...' :
                               subscription?.status !== 'active' && subscription?.status !== 'trialing'
                                 ? 'Start gratis proefperiode'
                                 : subscription?.plan === 'business' || subscription?.plan === 'enterprise'
@@ -1100,7 +1116,7 @@ function SettingsContent() {
                             onClick={() => handleUpgrade('business', billingInterval)}
                             disabled={checkoutMutation.isPending || portalMutation.isPending}
                           >
-                            {(checkoutMutation.isPending || portalMutation.isPending) ? 'Laden...' :
+                            {(checkoutMutation.isPending || portalMutation.isPending) && loadingPlan === 'business' ? 'Laden...' :
                               subscription?.status !== 'active' && subscription?.status !== 'trialing'
                                 ? 'Start gratis proefperiode'
                                 : subscription?.plan === 'starter'

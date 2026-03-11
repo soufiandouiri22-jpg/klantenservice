@@ -491,9 +491,14 @@ export default function DashboardPage() {
                           />
                         </div>
                       )}
-                      {!usage.is_unlimited && usage.percentage >= 90 && (
+                      {!usage.is_unlimited && usage.percentage >= 100 && (
                         <p className="text-sm text-red-600 mt-2">
-                          U nadert uw limiet. Na het bereiken worden gesprekken geweigerd.
+                          U heeft uw limiet bereikt. Extra minuten worden gefactureerd a €0,25 per minuut.
+                        </p>
+                      )}
+                      {!usage.is_unlimited && usage.percentage >= 80 && usage.percentage < 100 && (
+                        <p className="text-sm text-amber-600 mt-2">
+                          U nadert uw limiet. Na het bereiken worden extra minuten gefactureerd a €0,25 per minuut.
                         </p>
                       )}
                     </div>
@@ -522,6 +527,14 @@ export default function DashboardPage() {
                           <span className="text-gray-500">Resterend</span>
                           <span className="font-medium text-gray-900">
                             {Math.max(0, usage.minutes_limit - Math.round(usage.minutes_used))} min
+                          </span>
+                        </div>
+                      )}
+                      {usage.overage_minutes > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-red-600">Extra minuten</span>
+                          <span className="font-medium text-red-600">
+                            {usage.overage_minutes} min (€{usage.overage_cost?.toFixed(2)})
                           </span>
                         </div>
                       )}

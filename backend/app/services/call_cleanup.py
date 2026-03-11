@@ -40,10 +40,7 @@ def cleanup_stale_active_calls(
     for call in stale:
         call.status = CallStatus.ABANDONED
         call.ended_at = datetime.utcnow()
-        if call.started_at:
-            call.duration_seconds = int(
-                (datetime.utcnow() - call.started_at).total_seconds()
-            )
+        call.duration_seconds = 0
 
     db.commit()
     logger.info(f"Cleaned up {len(stale)} stale active call(s)")

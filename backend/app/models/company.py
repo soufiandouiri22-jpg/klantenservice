@@ -91,6 +91,10 @@ class Company(Base):
     # Custom AI instructions (shown on Training page)
     custom_instructions = Column(Text, nullable=True)
 
+    # Usage alert tracking (reset implicitly each month via date comparison)
+    usage_warning_sent_at = Column(DateTime, nullable=True)
+    usage_exceeded_sent_at = Column(DateTime, nullable=True)
+
     # Status
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)

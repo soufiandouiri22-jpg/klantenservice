@@ -147,7 +147,7 @@ async def twilio_voice_webhook(
         twiml = _tts_twiml("Dit nummer is momenteel niet bereikbaar. Probeert u het later nog eens.")
         return Response(content=twiml, media_type="text/xml")
 
-    # Check call minutes limit
+    # Log call minutes usage (overage calls are allowed but billed extra)
     if company:
         from app.api.v1.endpoints.payments import PLAN_MINUTES
         from sqlalchemy import func as sqlfunc
@@ -160,16 +160,15 @@ async def twilio_voice_webhook(
             total_seconds = db.query(sqlfunc.coalesce(sqlfunc.sum(CallLog.duration_seconds), 0)).filter(
                 CallLog.company_id == company.id,
                 CallLog.started_at >= month_start,
+                CallLog.status == CallStatus.COMPLETED,
                 CallLog.duration_seconds > 0,
             ).scalar()
             minutes_used = total_seconds / 60
             if minutes_used >= limit:
-                logger.warning(
-                    f"Call rejected: minutes limit reached ({minutes_used:.0f}/{limit}) "
-                    f"for {company.name} (call_sid={call_sid})"
+                logger.info(
+                    f"[OVERAGE] Company {company.name} over limit ({minutes_used:.0f}/{limit}), "
+                    f"allowing call with overage billing (call_sid={call_sid})"
                 )
-                twiml = _tts_twiml("Het belbudget voor deze maand is bereikt. Probeert u het later nog eens.")
-                return Response(content=twiml, media_type="text/xml")
 
     # Check if within business hours
     if not phone.is_within_business_hours():
@@ -409,6 +408,59 @@ async def twilio_voice_webhook(
         return Response(content=twiml, media_type="text/xml")
 
 
+def _check_usage_alerts(db: Session, company_id):
+    """Send email alerts when usage hits 80% or 100% (once per month per threshold)."""
+    from app.api.v1.endpoints.payments import PLAN_MINUTES, OVERAGE_PRICE_PER_MINUTE
+    from sqlalchemy import func as sqlfunc
+
+    company = db.query(Company).filter(Company.id == company_id).first()
+    if not company:
+        return
+
+    plan = company.subscription_plan.value
+    limit = PLAN_MINUTES.get(plan)
+    if limit is None:
+        return
+
+    now = datetime.utcnow()
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    total_seconds = db.query(sqlfunc.coalesce(sqlfunc.sum(CallLog.duration_seconds), 0)).filter(
+        CallLog.company_id == company.id,
+        CallLog.started_at >= month_start,
+        CallLog.status == CallStatus.COMPLETED,
+        CallLog.duration_seconds > 0,
+    ).scalar()
+    minutes_used = total_seconds / 60
+    percentage = (minutes_used / limit) * 100
+
+    from app.core.email import send_usage_warning_email, send_usage_exceeded_email
+
+    if percentage >= 100:
+        if not company.usage_exceeded_sent_at or company.usage_exceeded_sent_at < month_start:
+            send_usage_exceeded_email(
+                to_email=company.email,
+                company_name=company.name,
+                minutes_used=int(minutes_used),
+                minutes_limit=limit,
+            )
+            company.usage_exceeded_sent_at = now
+            db.commit()
+            logger.info(f"[USAGE ALERT] Sent 100% exceeded email to {company.name}")
+    elif percentage >= 80:
+        if not company.usage_warning_sent_at or company.usage_warning_sent_at < month_start:
+            send_usage_warning_email(
+                to_email=company.email,
+                company_name=company.name,
+                percentage=percentage,
+                minutes_used=int(minutes_used),
+                minutes_limit=limit,
+            )
+            company.usage_warning_sent_at = now
+            db.commit()
+            logger.info(f"[USAGE ALERT] Sent 80% warning email to {company.name}")
+
+
 @router.post("/twilio/status")
 async def twilio_status_webhook(
     request: Request,
@@ -539,6 +591,14 @@ async def twilio_status_webhook(
                         logger.info(f"CRM note created for contact {contact['id']}")
             except Exception as crm_err:
                 logger.warning(f"CRM post-call note failed (non-blocking): {crm_err}")
+
+        # Usage alert emails (80% and 100% thresholds)
+        if call_status == "completed" and call_log.company_id:
+            try:
+                _check_usage_alerts(db, call_log.company_id)
+            except Exception:
+                logger.warning("Usage alert check failed (non-blocking)", exc_info=True)
+
     elif call_status == "in-progress":
         logger.info(f"[STATUS CALLBACK] Call in-progress: call_sid={call_sid} (recording started from voice webhook)")
     else:
