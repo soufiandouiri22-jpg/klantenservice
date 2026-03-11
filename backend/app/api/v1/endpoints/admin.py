@@ -1594,6 +1594,10 @@ async def get_call_trace(
         total_turns=len(context_logs),
         total_tool_calls=total_tool_calls,
         error_message=call.error_message,
+        hangup_reason=getattr(call, "hangup_reason", None),
+        goodbye_handshake_ok=getattr(call, "goodbye_handshake_ok", None),
+        ended_by=getattr(call, "ended_by", None),
+        policy_violations_count=getattr(call, "policy_violations_count", 0) or 0,
     )
 
 

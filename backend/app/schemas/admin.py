@@ -336,6 +336,12 @@ class CallTraceResponse(BaseModel):
     total_tool_calls: int
     error_message: Optional[str]
 
+    # Policy enrichment
+    hangup_reason: Optional[str] = None
+    goodbye_handshake_ok: Optional[bool] = None
+    ended_by: Optional[str] = None
+    policy_violations_count: int = 0
+
     class Config:
         from_attributes = True
 

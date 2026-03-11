@@ -38,7 +38,8 @@ _RULES: list[tuple[re.Pattern, CallerIntent, float]] = [
         r"\b(doei|tot\s*ziens|tot\s*snel|tot\s*de\s+volgende|"
         r"fijne\s+dag|fijne\s+avond|prettige\s+dag|prettige\s+avond|"
         r"goedenacht|lekker\s+weekend|"
-        r"dag!?$|daag!?$|bye|goodbye|tot\s+later)\b",
+        r"bye|goodbye|tot\s+later)\b|"
+        r"^\s*da+g!?\s*$",
         re.I,
     ), CallerIntent.GOODBYE, 0.95),
 
@@ -48,7 +49,7 @@ _RULES: list[tuple[re.Pattern, CallerIntent, float]] = [
         r"klacht\s*indienen|klacht|aanklacht|advocaat|rechter|juridisch|"
         r"fuck|shit|godverdomme|kut|kanker|tyfus|tering|"
         r"rotzooi|waardeloos|verschrikkelijk|vreselijk|"
-        r"nooit\s+meer|oplichter|oplichting|zwendel|bedrog|"
+        r"nooit\s+meer|oplichter\w*|oplichting|zwendel|bedrog|"
         r"dit\s+kan\s+niet|dit\s+pik\s+ik\s+niet|ik\s+ben\s+het\s+zat)\b",
         re.I,
     ), CallerIntent.ANGER, 0.90),

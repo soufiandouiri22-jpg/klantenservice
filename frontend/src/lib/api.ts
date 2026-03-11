@@ -999,6 +999,22 @@ export const adminApi = {
     const response = await api.get(`/admin/calls/${callId}/trace`)
     return response.data
   },
+
+  // Voice Sessions & Policy
+  getVoiceSessions: async (params?: { call_id?: string; company_id?: string; limit?: number; offset?: number }) => {
+    const response = await api.get('/admin/voice/sessions', { params })
+    return response.data
+  },
+
+  getVoiceSessionDetail: async (sessionId: string) => {
+    const response = await api.get(`/admin/voice/sessions/${sessionId}`)
+    return response.data
+  },
+
+  getCallPolicyTrace: async (callId: string) => {
+    const response = await api.get(`/admin/voice/calls/${callId}/policy-trace`)
+    return response.data
+  },
 }
 
 // Payments API (Stripe)

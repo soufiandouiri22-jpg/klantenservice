@@ -77,6 +77,11 @@ interface CallTrace {
   total_turns: number
   total_tool_calls: number
   error_message: string | null
+  // Policy enrichment (from call_logs columns)
+  hangup_reason?: string | null
+  goodbye_handshake_ok?: boolean | null
+  ended_by?: string | null
+  policy_violations_count?: number
 }
 
 export function LogsTab() {
@@ -233,6 +238,32 @@ export function LogsTab() {
                       </p>
                     </div>
                   </div>
+                  {/* Policy flags */}
+                  {(callTrace.goodbye_handshake_ok === false ||
+                    (callTrace.policy_violations_count || 0) > 0) && (
+                    <div className="mt-4 flex gap-2 flex-wrap">
+                      {callTrace.goodbye_handshake_ok === false && (
+                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-red-50 text-red-700 text-xs rounded-full">
+                          <AlertTriangle className="h-3 w-3" /> Goodbye handshake mislukt
+                        </span>
+                      )}
+                      {(callTrace.policy_violations_count || 0) > 0 && (
+                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-red-50 text-red-700 text-xs rounded-full">
+                          <AlertTriangle className="h-3 w-3" /> {callTrace.policy_violations_count} policy violation(s)
+                        </span>
+                      )}
+                      {callTrace.ended_by && (
+                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
+                          Ended by: {callTrace.ended_by}
+                        </span>
+                      )}
+                      {callTrace.hangup_reason && (
+                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
+                          Reason: {callTrace.hangup_reason}
+                        </span>
+                      )}
+                    </div>
+                  )}
                   {callTrace.error_message && (
                     <div className="mt-4 p-3 bg-red-50 rounded-lg text-sm text-red-700">
                       <strong>Error:</strong> {callTrace.error_message}

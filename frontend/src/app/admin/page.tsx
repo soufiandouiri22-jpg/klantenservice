@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   Users,
   Shield, 
+  ShieldCheck,
   Mic,
   FileText,
   BarChart3
@@ -21,12 +22,14 @@ import { CustomersTab } from './components/CustomersTab'
 import { PoliciesTab } from './components/PoliciesTab'
 import { VoiceTab } from './components/VoiceTab'
 import { LogsTab } from './components/LogsTab'
+import { PolicyTraceTab } from './components/PolicyTraceTab'
 
 const tabs = [
   { id: 'overview', name: 'Overzicht', icon: LayoutDashboard },
   { id: 'analytics', name: 'Analytics', icon: BarChart3 },
   { id: 'customers', name: 'Klanten', icon: Users },
   { id: 'policies', name: 'Policies', icon: Shield },
+  { id: 'policy-trace', name: 'Call Control', icon: ShieldCheck },
   { id: 'voice', name: 'Realtime Voice', icon: Mic },
   { id: 'logs', name: 'Logs & Debug', icon: FileText },
 ]
@@ -67,6 +70,8 @@ export default function AdminPage() {
         return <CustomersTab />
       case 'policies':
         return <PoliciesTab />
+      case 'policy-trace':
+        return <PolicyTraceTab />
       case 'voice':
         return <VoiceTab />
       case 'logs':
