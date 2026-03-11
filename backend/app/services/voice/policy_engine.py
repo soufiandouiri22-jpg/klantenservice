@@ -15,7 +15,7 @@ from uuid import uuid4
 from sqlalchemy.orm import Session
 
 from app.models.voice_session import VoiceSession, PolicyDecisionLog, CallPhase
-from .intent_classifier import CallerIntent
+from .intent_classifier import CallerIntent, is_off_topic
 
 logger = logging.getLogger(__name__)
 
@@ -259,31 +259,49 @@ def _policy_repeated_failure(
     )
 
 
+_OFF_TOPIC_RESPONSE = (
+    "Daar kan ik u niet mee helpen. Ik kan alleen helpen met vragen "
+    "over ons bedrijf, onze diensten en onze klantenservice."
+)
+
+
 def _policy_off_topic(
     session: VoiceSession,
     intent: CallerIntent,
+    utterance: str = "",
 ) -> PolicyResult:
     """
     Rule: Block off-topic requests. Redirect to company scope.
+
+    Two-layer check:
+    1. If the intent classifier already tagged it as off_topic → block
+    2. Even if intent is something else (e.g. "question"), run is_off_topic()
+       on the raw utterance as a secondary scope check → block
     """
-    if intent != CallerIntent.OFF_TOPIC:
+    if intent == CallerIntent.OFF_TOPIC:
         return PolicyResult(
-            allowed=True,
+            allowed=False,
             policy_name="scope_guard",
-            required_action="proceed",
-            reason_code="on_topic",
+            required_action="block",
+            reason_code="off_topic_intent",
+            instruction_nl=_OFF_TOPIC_RESPONSE,
+        )
+
+    # Secondary scope check on raw utterance
+    if utterance and is_off_topic(utterance):
+        return PolicyResult(
+            allowed=False,
+            policy_name="scope_guard",
+            required_action="block",
+            reason_code="off_topic_utterance",
+            instruction_nl=_OFF_TOPIC_RESPONSE,
         )
 
     return PolicyResult(
-        allowed=False,
+        allowed=True,
         policy_name="scope_guard",
-        required_action="block",
-        reason_code="off_topic",
-        instruction_nl=(
-            "Dit onderwerp valt buiten je werkgebied. "
-            "Zeg vriendelijk: 'Daar kan ik u helaas niet mee helpen, "
-            "maar ik help u graag met vragen over onze diensten!'"
-        ),
+        required_action="proceed",
+        reason_code="on_topic",
     )
 
 
@@ -353,6 +371,7 @@ class PolicyEngine:
         trigger_reason: str,
         intent_confidence: float = 0.0,
         retrieval_confidence: float = 1.0,
+        utterance: str = "",
     ) -> PolicyResult:
         """
         Run all policies for the given reason. Return the most restrictive result.
@@ -361,7 +380,7 @@ class PolicyEngine:
 
         if not policies:
             return self._evaluate_auto(session, intent, trigger_tool,
-                                       retrieval_confidence)
+                                       retrieval_confidence, utterance)
 
         phase_before = session.phase
 
@@ -369,6 +388,8 @@ class PolicyEngine:
         for policy_fn in policies:
             if policy_fn == _policy_low_confidence:
                 result = policy_fn(session, intent, retrieval_confidence)
+            elif policy_fn == _policy_off_topic:
+                result = policy_fn(session, intent, utterance)
             else:
                 result = policy_fn(session, intent)
             results.append(result)
@@ -400,13 +421,14 @@ class PolicyEngine:
         trigger_tool: str,
         intent_confidence: float = 0.0,
         retrieval_confidence: float = 1.0,
+        utterance: str = "",
     ) -> Optional[PolicyResult]:
         """
         Run all applicable auto-triggered policies (called on every tool invocation).
         Returns the most restrictive result, or None if all pass.
         """
         return self._evaluate_auto(
-            session, intent, trigger_tool, retrieval_confidence,
+            session, intent, trigger_tool, retrieval_confidence, utterance,
         )
 
     def _evaluate_auto(
@@ -415,6 +437,7 @@ class PolicyEngine:
         intent: CallerIntent,
         trigger_tool: str,
         retrieval_confidence: float,
+        utterance: str = "",
     ) -> Optional[PolicyResult]:
         """
         Auto-triggered policies that run on every tool call regardless of reason.
@@ -427,8 +450,8 @@ class PolicyEngine:
         if esc.required_action == "escalate":
             checks.append(esc)
 
-        # Always check off-topic
-        ot = _policy_off_topic(session, intent)
+        # Always check off-topic (with secondary utterance scope check)
+        ot = _policy_off_topic(session, intent, utterance)
         if not ot.allowed:
             checks.append(ot)
 

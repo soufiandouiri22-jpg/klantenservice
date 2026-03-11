@@ -652,6 +652,11 @@ export function PolicyTraceTab() {
                                     )}
                                   </Badge>
                                   <span className="text-xs text-gray-400 font-mono">{d.policy}</span>
+                                  {d.code?.startsWith('off_topic') && (
+                                    <Badge variant="warning">
+                                      <ShieldX className="h-3 w-3 mr-1" />Off-topic blocked
+                                    </Badge>
+                                  )}
                                   {d.violation && (
                                     <Badge variant="danger">
                                       <ShieldAlert className="h-3 w-3 mr-1" />VIOLATION
@@ -690,6 +695,20 @@ export function PolicyTraceTab() {
                                   {d.confidence !== null && (
                                     <div className="text-xs text-gray-500">
                                       Intent confidence: {((d.confidence || 0) * 100).toFixed(0)}%
+                                    </div>
+                                  )}
+
+                                  {d.code?.startsWith('off_topic') && (
+                                    <div className="bg-orange-50 rounded p-3 text-sm text-orange-800">
+                                      <p className="text-xs font-medium text-orange-600 mb-1">
+                                        <ShieldX className="h-3 w-3 inline mr-1" />
+                                        Off-topic: retrieval overgeslagen
+                                      </p>
+                                      <p>
+                                        {d.code === 'off_topic_intent'
+                                          ? 'Intent classifier detecteerde off-topic → scope_guard blokkeerde direct'
+                                          : 'Secundaire scope check op de utterance → scope_guard blokkeerde'}
+                                      </p>
                                     </div>
                                   )}
 

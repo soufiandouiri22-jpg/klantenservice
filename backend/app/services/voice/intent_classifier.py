@@ -4,6 +4,9 @@ utterances for the voice pipeline.
 
 Runs on every server tool call to classify the latest customer message.
 Designed for Dutch; patterns cover common phrasings and variations.
+
+Off-topic detection runs BEFORE the generic question catch-all so that
+"Kun je een pizza bestellen?" is classified as off_topic, not question.
 """
 import re
 from enum import Enum
@@ -28,6 +31,65 @@ class CallerIntent(str, Enum):
     SILENCE = "silence"
     OFF_TOPIC = "off_topic"
 
+
+# ── Off-topic keyword pattern (broad coverage) ────────────────────
+# This must be checked BEFORE the generic question catch-all.
+
+_OFF_TOPIC_RE = re.compile(
+    r"\b("
+    # Food / restaurants
+    r"pizza|hamburger|sushi|friet|patat|bezorg\w*\s+eten|uber\s*eats|thuisbezorgd|"
+    r"recept\w*|kook\w*|bak\w*\s+(?:taart|cake|brood)|"
+    # Weather
+    r"weer\s+(?:vandaag|morgen|overmorgen|deze\s+week)|weerbericht|weersvoorspelling|"
+    r"weer\s+voor\s+(?:morgen|overmorgen|vandaag)|"
+    r"regent\s+het|zon\w*\s+schijn|temperatuur\s+(?:vandaag|morgen|buiten)|"
+    # Sports
+    r"voetbal\w*|ajax|feyenoord|psv|eredivisie|champions\s*league|"
+    r"formule\s*1|f1|olympi\w*|wedstrijd\w*\s+(?:vandaag|morgen)|"
+    # Entertainment / media
+    r"spotify|netflix|disney\s*plus|youtube|tiktok|instagram|"
+    r"film\w*\s+(?:kijken|aanraden|tip)|serie\w*\s+(?:kijken|aanraden|tip)|"
+    r"grap\w*|mop\w*|vertel\s+(?:een|me)\s+(?:grap|mop|verhaal)|"
+    r"zing\s+(?:een|voor\s+me)|"
+    # General knowledge / trivia
+    r"hoofdstad\s+van|president\s+van|wie\s+(?:is|was)\s+de\s+(?:president|koning|premier)|"
+    r"hoeveel\s+inwoners|wanneer\s+is\s+(?:kerst|pasen|koningsdag)|"
+    r"wat\s+is\s+de\s+(?:hoofdstad|bevolking|oppervlakte)|"
+    # School / homework
+    r"huiswerk\w*|wiskunde|som\w*\s+(?:maken|oplossen|uitrekenen)|"
+    r"werkstuk|spreekbeurt|examen\w*\s+(?:tip|hulp|oefenen)|"
+    r"bereken\s+(?:de|het)|uitleg\w*\s+(?:over|van)\s+(?:wiskunde|natuurkunde|scheikunde)|"
+    # Finance / crypto (unrelated to company)
+    r"bitcoin|crypto\w*|beurs|aandel\w*|belegg\w*|"
+    r"koers\s+van|wat\s+kost\s+(?:een\s+)?bitcoin|"
+    # Travel (unrelated to company)
+    r"vlieg\w*\s+naar|vlucht\s+(?:naar|boeken)|hotel\s+(?:in|boeken)|"
+    r"vakantie\s+(?:naar|boeken|tip)|"
+    # Other clearly off-topic
+    r"wie\s+wint\s+(?:het|de)|"
+    r"lotto\w*|loterij|postcode\s*loterij|"
+    r"vertaal\s+(?:dit|het|naar)|"
+    r"schrijf\s+(?:een\s+)?(?:gedicht|lied|brief\s+naar|email\s+naar)|"
+    r"doe\s+(?:een\s+)?(?:spelletje|quiz|raadsel)"
+    r")\b",
+    re.I,
+)
+
+# Structural off-topic: "Kun je X voor me Y?" where X is non-business
+_OFF_TOPIC_ACTION_RE = re.compile(
+    r"\b(?:kun\s+je|kan\s+je|wil\s+je|zou\s+je|kunt\s+u|kunt\s+je)\s+"
+    r"(?:een\s+|me\s+|mij\s+|voor\s+(?:me|mij)\s+)?"
+    r"(?:pizza|eten|taxi|hotel|vlucht|vliegticket|"
+    r"huiswerk|som|grap|mop|lied|gedicht|verhaal|"
+    r"(?:het\s+)?weer|weerbericht|recept|"
+    r"spelletje|quiz|raadsel|"
+    r"vertaling|vertalen|"
+    r"film|serie)\b",
+    re.I,
+)
+
+# ── Main rules (ordered by priority; first match wins) ────────────
 
 _RULES: list[tuple[re.Pattern, CallerIntent, float]] = [
     # Silence / empty
@@ -112,12 +174,17 @@ _RULES: list[tuple[re.Pattern, CallerIntent, float]] = [
     # Appointment
     (re.compile(
         r"\b(afspraak\w*|inplann\w*|boek\w*|reserv\w*|"
-        r"agenda|beschikbaar\w*|wanneer\s+kan|vrij\w*\s+slot|"
-        r"morgen|overmorgen|volgende\s+week|deze\s+week)\b",
+        r"agenda|beschikbaar\w*|wanneer\s+kan|vrij\w*\s+slot)\b",
         re.I,
     ), CallerIntent.APPOINTMENT, 0.80),
 
-    # General question (broad catch)
+    # ── OFF-TOPIC (before generic question!) ──────────────────────
+    # Keyword-based off-topic detection
+    (_OFF_TOPIC_RE, CallerIntent.OFF_TOPIC, 0.90),
+    # Structural pattern: "Kun je [non-business-thing] voor me?"
+    (_OFF_TOPIC_ACTION_RE, CallerIntent.OFF_TOPIC, 0.88),
+
+    # General question (broad catch-all — LAST specific intent)
     (re.compile(
         r"\b(wat|wie|waar|wanneer|waarom|hoe|welke?|hoeveel|"
         r"kunt?\s+(?:u|je)|kun\s+je|weet\s+(?:u|je)|"
@@ -127,15 +194,6 @@ _RULES: list[tuple[re.Pattern, CallerIntent, float]] = [
     ), CallerIntent.QUESTION, 0.60),
 ]
 
-# Off-topic signals (checked separately — only when no other intent matched)
-_OFF_TOPIC_RE = re.compile(
-    r"\b(pizza|weer\s+vandaag|voetbal|ajax|feyenoord|psv|"
-    r"wie\s+is\s+de\s+president|recepten?|spotify|netflix|"
-    r"grap|mop|vertel\s+een|zing\s+een|"
-    r"bitcoin|crypto|beurs)\b",
-    re.I,
-)
-
 
 def classify_intent(utterance: str) -> Tuple[CallerIntent, float]:
     """
@@ -143,13 +201,13 @@ def classify_intent(utterance: str) -> Tuple[CallerIntent, float]:
 
     Returns (CallerIntent, confidence) where confidence is 0.0-1.0.
     Deterministic, regex-based. First match wins (rules ordered by priority).
+    Off-topic detection runs before the generic question catch-all.
     """
     if not utterance or not utterance.strip():
         return CallerIntent.SILENCE, 0.99
 
     text = utterance.strip()
 
-    # Check cache
     cache_key = text.lower()[:200]
     if cache_key in _cache:
         return CallerIntent(_cache[cache_key][0]), _cache[cache_key][1]
@@ -159,11 +217,6 @@ def classify_intent(utterance: str) -> Tuple[CallerIntent, float]:
             _cache[cache_key] = (intent.value, confidence)
             return intent, confidence
 
-    # Off-topic check
-    if _OFF_TOPIC_RE.search(text):
-        _cache[cache_key] = (CallerIntent.OFF_TOPIC.value, 0.75)
-        return CallerIntent.OFF_TOPIC, 0.75
-
     # Fallback
     if len(text.split()) <= 2:
         _cache[cache_key] = (CallerIntent.UNCLEAR.value, 0.40)
@@ -171,3 +224,17 @@ def classify_intent(utterance: str) -> Tuple[CallerIntent, float]:
 
     _cache[cache_key] = (CallerIntent.QUESTION.value, 0.40)
     return CallerIntent.QUESTION, 0.40
+
+
+def is_off_topic(utterance: str) -> bool:
+    """
+    Secondary scope check — can be called even if classify_intent
+    returned something other than OFF_TOPIC.
+
+    Returns True if the utterance contains clear off-topic signals,
+    regardless of what other patterns may have also matched.
+    """
+    if not utterance or not utterance.strip():
+        return False
+    text = utterance.strip()
+    return bool(_OFF_TOPIC_RE.search(text) or _OFF_TOPIC_ACTION_RE.search(text))

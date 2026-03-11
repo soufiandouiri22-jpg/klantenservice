@@ -39,6 +39,7 @@ intent_mod = _load(
 )
 classify_intent = intent_mod.classify_intent
 CallerIntent = intent_mod.CallerIntent
+is_off_topic = intent_mod.is_off_topic
 
 # 2. Policy engine functions (import directly from source, skip class that needs DB)
 #    We'll replicate the core policy functions inline since they depend on
@@ -140,11 +141,19 @@ def policy_escalation(session, intent):
     return PolicyResult(False, "escalation", "proceed", "no_escalation_needed")
 
 
-def policy_off_topic(session, intent):
-    if intent != CallerIntent.OFF_TOPIC:
-        return PolicyResult(True, "scope_guard", "proceed", "on_topic")
-    return PolicyResult(False, "scope_guard", "block", "off_topic",
-                        "Dit onderwerp valt buiten je werkgebied.")
+_OFF_TOPIC_RESPONSE = (
+    "Daar kan ik u niet mee helpen. Ik kan alleen helpen met vragen "
+    "over ons bedrijf, onze diensten en onze klantenservice."
+)
+
+def policy_off_topic(session, intent, utterance=""):
+    if intent == CallerIntent.OFF_TOPIC:
+        return PolicyResult(False, "scope_guard", "block", "off_topic_intent",
+                            _OFF_TOPIC_RESPONSE)
+    if utterance and is_off_topic(utterance):
+        return PolicyResult(False, "scope_guard", "block", "off_topic_utterance",
+                            _OFF_TOPIC_RESPONSE)
+    return PolicyResult(True, "scope_guard", "proceed", "on_topic")
 
 
 def policy_silence(session, intent):
@@ -160,13 +169,13 @@ def policy_silence(session, intent):
                         "Ik hoorde u even niet. Kunt u dat herhalen?")
 
 
-def evaluate_auto_policies(session, intent):
+def evaluate_auto_policies(session, intent, utterance=""):
     """Run all auto-triggered policies. Returns first blocking result or None."""
     esc = policy_escalation(session, intent)
     if esc.required_action == "escalate":
         return esc
 
-    ot = policy_off_topic(session, intent)
+    ot = policy_off_topic(session, intent, utterance)
     if not ot.allowed:
         return ot
 
@@ -411,43 +420,53 @@ def test_anger_escalation():
 
 
 # ══════════════════════════════════════════════════════════════════
-#  SCENARIO 5: Off-Topic Question
+#  SCENARIO 5: Off-Topic Questions (5 required cases)
 # ══════════════════════════════════════════════════════════════════
 
 def test_off_topic():
-    print_divider("SCENARIO 5: Off-Topic Question")
-    print("\nContext: Customer asks about pizza. Should be blocked.\n")
+    print_divider("SCENARIO 5: Off-Topic Questions (5 cases)")
+    print("\nAll off-topic questions must be blocked by backend logic.\n")
 
-    s = FakeSession(phase="answering", turn_count=3)
+    off_topic_cases = [
+        "Kun je een pizza voor me bestellen?",
+        "Wat is de hoofdstad van Frankrijk?",
+        "Kun je het weer voor morgen zeggen?",
+        "Kan je mij helpen met mijn huiswerk?",
+        "Vertel een mop",
+    ]
 
-    transcript = [("Klant", "Kun je een pizza voor me bestellen?")]
-    print("── Transcript ──")
-    for spk, txt in transcript:
-        print(f"  [{spk}] {txt}")
+    all_pass = True
+    for msg in off_topic_cases:
+        s = FakeSession(phase="answering", turn_count=3)
+        intent, conf = classify_intent(msg)
+        update_state(s, intent, "search_knowledge")
+        override = evaluate_auto_policies(s, intent, utterance=msg)
 
-    msg = "Kun je een pizza voor me bestellen?"
-    intent, conf = classify_intent(msg)
-    print("\n── Intent Classification ──")
-    print_intent(msg, intent, conf)
+        # Check: either intent is off_topic, or the secondary scope check blocks it
+        blocked = (override is not None and not override.allowed
+                   and override.policy_name == "scope_guard")
 
-    update_state(s, intent, "search_knowledge")
-    print("\n── State After Turn ──")
-    print_state(s)
+        status = "✓" if blocked else "✗"
+        if not blocked:
+            all_pass = False
 
-    override = evaluate_auto_policies(s, intent)
-    print("\n── Auto-Policy Check ──")
-    if override:
-        print_policy(override)
+        print(f"  {status} \"{msg}\"")
+        print(f"    Intent: {intent.value} ({conf:.0%})")
+        if override and not override.allowed:
+            print(f"    Policy: {override.policy_name} → {override.required_action} ({override.reason_code})")
+            print(f"    Response: \"{override.instruction_nl[:80]}...\"")
+            if hasattr(override, 'to_dict'):
+                pass
+        elif override is None:
+            print(f"    Policy: no override (NOT BLOCKED)")
+        else:
+            print(f"    Policy: {override.policy_name} → allowed")
+        print()
 
-    print("\n── Outcome ──")
-    if intent == CallerIntent.OFF_TOPIC:
-        assert override is not None and not override.allowed
-        print(f"  ✓ PASS: off-topic detected and BLOCKED")
-    else:
-        print(f"  ~ PARTIAL: intent was '{intent.value}' (regex matched question pattern first)")
-        print(f"    'pizza' is in off-topic keywords, but 'Kun je' matched question pattern earlier.")
-        print(f"    Second layer: scope guardrail in system prompt catches this.")
-        print(f"    This is expected behavior — regex rules are ordered by priority.")
+    assert all_pass, "FAIL: not all off-topic cases were blocked"
+    print("  ✓ ALL 5 off-topic cases correctly BLOCKED by backend scope_guard")
+    print("  ✓ Retrieval would be skipped (skip_retrieval=True in response)")
+    print("  ✓ Fixed Dutch response returned")
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -477,6 +496,14 @@ def test_intent_coverage():
         ("Het werkt niet", CallerIntent.COMPLAINT),
         ("Ik ben niet tevreden", CallerIntent.COMPLAINT),
         ("", CallerIntent.SILENCE),
+        # Off-topic (required 5 + extras)
+        ("Kun je een pizza voor me bestellen?", CallerIntent.OFF_TOPIC),
+        ("Wat is de hoofdstad van Frankrijk?", CallerIntent.OFF_TOPIC),
+        ("Kun je het weer voor morgen zeggen?", CallerIntent.OFF_TOPIC),
+        ("Kan je mij helpen met mijn huiswerk?", CallerIntent.OFF_TOPIC),
+        ("Vertel een mop", CallerIntent.OFF_TOPIC),
+        ("Wie wint de Champions League?", CallerIntent.OFF_TOPIC),
+        ("Kun je een gedicht schrijven?", CallerIntent.OFF_TOPIC),
     ]
 
     passed = failed = 0

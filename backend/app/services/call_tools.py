@@ -648,6 +648,7 @@ def tool_check_policy(
         trigger_tool="check_policy",
         trigger_reason=trigger_reason,
         intent_confidence=confidence,
+        utterance=customer_message,
     )
 
     if trigger_reason == "ending_call" and result.allowed:
@@ -655,10 +656,16 @@ def tool_check_policy(
 
     db.commit()
 
-    return {
+    response: Dict[str, Any] = {
         "ok": True,
         **result.to_dict(),
     }
+
+    # Flag that retrieval should be skipped on off-topic blocks
+    if not result.allowed and result.policy_name == "scope_guard":
+        response["skip_retrieval"] = True
+
+    return response
 
 
 def run_auto_policies(
@@ -694,6 +701,7 @@ def run_auto_policies(
         intent=intent,
         trigger_tool=tool_name,
         intent_confidence=confidence,
+        utterance=customer_message,
     )
 
     db.commit()
@@ -703,11 +711,14 @@ def run_auto_policies(
             "[auto_policy] OVERRIDE on tool=%s policy=%s action=%s",
             tool_name, override.policy_name, override.required_action,
         )
-        return {
+        result: Dict[str, Any] = {
             "ok": True,
             "policy_override": True,
             **override.to_dict(),
         }
+        if override.policy_name == "scope_guard":
+            result["skip_retrieval"] = True
+        return result
 
     return None
 
