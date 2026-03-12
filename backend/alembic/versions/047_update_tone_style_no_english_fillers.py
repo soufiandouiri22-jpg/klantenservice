@@ -44,8 +44,7 @@ def upgrade() -> None:
         sa.text(
             "UPDATE system_prompts SET content = :content, updated_at = NOW() "
             "WHERE key = 'tone_style'"
-        ),
-        {"content": NEW_CONTENT},
+        ).bindparams(content=NEW_CONTENT)
     )
 
 
