@@ -118,7 +118,8 @@ def score_candidates(candidates, query_classification):
 # Helpers: build fake candidate dicts
 # ---------------------------------------------------------------------------
 
-def _chunk(content, chunk_type="general", page_type="unknown", vector_score=0.6, rerank_score=None, url=""):
+def _chunk(content, chunk_type="general", page_type="unknown", vector_score=0.6, url=""):
+    """Build a fake candidate dict.  rerank_score = vector_score (reranker disabled)."""
     return {
         "chunk_id": f"fake-{hash(content) % 10000}",
         "content": content,
@@ -132,7 +133,7 @@ def _chunk(content, chunk_type="general", page_type="unknown", vector_score=0.6,
         "content_hash": str(hash(content)),
         "metadata": {},
         "vector_score": vector_score,
-        "rerank_score": rerank_score if rerank_score is not None else vector_score,
+        "rerank_score": vector_score,
     }
 
 
@@ -181,34 +182,34 @@ class TestPricingVsPolicy:
         """
         Simulate real-world scenario: 2 pricing chunks from homepage,
         2 policy chunks from terms page that contain pricing-related words.
-        Policy chunks have slightly higher rerank scores (they literally
-        contain the query keywords).
+        Policy chunks have slightly higher vector scores because they
+        literally contain the query keywords ("tarieven", "prijzen").
         """
         return [
             _chunk(
                 "Starter\n€149\n/maand\n14 dagen gratis\n- 1 AI-medewerker\n- 500 belminuten/maand",
                 chunk_type="pricing", page_type="home",
-                vector_score=0.55, rerank_score=0.50,
+                vector_score=0.35,
                 url="https://example.com",
             ),
             _chunk(
                 "Business\n€299\n/maand\n14 dagen gratis\n- 3 AI-medewerkers\n- 2000 belminuten/maand",
                 chunk_type="pricing", page_type="home",
-                vector_score=0.53, rerank_score=0.48,
+                vector_score=0.33,
                 url="https://example.com",
             ),
             _chunk(
                 "Artikel 7 - Tarieven en betaling\n7.1. De actuele tarieven staan vermeld op de website.\n"
                 "7.2. Alle genoemde prijzen zijn exclusief BTW.",
                 chunk_type="policy", page_type="policy",
-                vector_score=0.60, rerank_score=0.62,
+                vector_score=0.40,
                 url="https://example.com/terms",
             ),
             _chunk(
                 "Artikel 8 - Betalingsvoorwaarden\n8.1. Betaling geschiedt maandelijks vooraf.\n"
                 "8.2. Bij niet-tijdige betaling is een boete verschuldigd.",
                 chunk_type="policy", page_type="policy",
-                vector_score=0.45, rerank_score=0.40,
+                vector_score=0.30,
                 url="https://example.com/terms",
             ),
         ]
@@ -259,18 +260,18 @@ class TestPricingVsPolicy:
             _chunk(
                 "Enterprise\nOp maat\nNeem contact op voor een offerte",
                 chunk_type="pricing", page_type="home",
-                vector_score=0.50, rerank_score=0.45,
+                vector_score=0.35,
             ),
             _chunk(
                 "Artikel 7 - Tarieven en betaling\nDe actuele tarieven staan op de website.\n"
                 "Alle genoemde prijzen zijn exclusief BTW.",
                 chunk_type="policy", page_type="policy",
-                vector_score=0.60, rerank_score=0.62,
+                vector_score=0.42,
             ),
             _chunk(
                 "Artikel 3 - Duur en opzegging\nDe overeenkomst wordt aangegaan voor onbepaalde tijd.",
                 chunk_type="policy", page_type="policy",
-                vector_score=0.40, rerank_score=0.38,
+                vector_score=0.30,
             ),
         ]
         scored = score_candidates(candidates, "pricing")
@@ -280,178 +281,84 @@ class TestPricingVsPolicy:
 
 
 # ---------------------------------------------------------------------------
-# 3. Scorer: negative rerank scores must not kill results
+# 3. Scorer: vector-only scoring (reranker disabled)
 # ---------------------------------------------------------------------------
 
-class TestNegativeRerankScores:
+class TestVectorOnlyScoring:
     """
-    Core regression: an English-only cross-encoder produces deeply negative
-    scores for Dutch text. The scorer must use max(rerank, vector) so the
-    vector score acts as a floor.
-    """
-
-    def test_negative_rerank_uses_vector_score(self):
-        """When rerank_score is negative, vector_score must be used as base."""
-        candidates = [
-            _chunk(
-                "Starter €149 /maand 14 dagen gratis Perfect voor kleine ondernemers "
-                "1 AI-medewerker 500 belminuten/maand Agenda integratie",
-                chunk_type="pricing", page_type="home",
-                vector_score=0.33, rerank_score=-0.50,
-            ),
-            _chunk(
-                "Artikel 7 - Tarieven en betaling De actuele tarieven staan vermeld "
-                "op de website. Alle genoemde prijzen zijn exclusief BTW.",
-                chunk_type="policy", page_type="policy",
-                vector_score=0.39, rerank_score=-0.50,
-            ),
-        ]
-        scored = score_candidates(candidates, "pricing")
-        pricing = [c for c in scored if c["chunk_type"] == "pricing"][0]
-        assert pricing["final_score"] > 0.15, (
-            f"Pricing chunk with negative rerank should still pass MIN_CONFIDENCE, "
-            f"got final_score={pricing['final_score']}"
-        )
-        assert scored[0]["chunk_type"] == "pricing", (
-            f"Pricing chunk should rank #1, got {scored[0]['chunk_type']}"
-        )
-
-    def test_deeply_negative_rerank_all_dutch(self):
-        """Simulate the exact production scenario: all rerank scores are -5 to -10."""
-        candidates = [
-            _chunk(
-                "Starter €149 /maand Perfect voor kleine ondernemers 1 AI-medewerker "
-                "500 belminuten/maand Agenda integratie CRM integratie",
-                chunk_type="pricing", page_type="home",
-                vector_score=0.33, rerank_score=-8.19,
-            ),
-            _chunk(
-                "Business €299 /maand Ideaal voor groeiende bedrijven 3 AI-medewerkers "
-                "2000 belminuten/maand Alles van Starter Prioriteit support",
-                chunk_type="pricing", page_type="home",
-                vector_score=0.33, rerank_score=-8.50,
-            ),
-            _chunk(
-                "Artikel 7 - Tarieven en betaling De actuele tarieven staan vermeld "
-                "op de website van Klantenservice.ai. Alle genoemde prijzen zijn exclusief BTW.",
-                chunk_type="policy", page_type="policy",
-                vector_score=0.39, rerank_score=-0.50,
-            ),
-            _chunk(
-                "Organisatorische maatregelen Naast technische maatregelen hebben wij "
-                "ook organisatorische maatregelen getroffen.",
-                chunk_type="general", page_type="general",
-                vector_score=0.27, rerank_score=-8.19,
-            ),
-        ]
-        scored = score_candidates(candidates, "pricing")
-
-        assert scored[0]["chunk_type"] == "pricing", (
-            f"Pricing chunk should rank #1 even with deeply negative rerank, "
-            f"got {scored[0]['chunk_type']} with score {scored[0]['final_score']}"
-        )
-        assert scored[1]["chunk_type"] == "pricing", (
-            f"Second pricing chunk should rank #2, got {scored[1]['chunk_type']}"
-        )
-        for c in scored:
-            if c["chunk_type"] == "pricing":
-                assert c["final_score"] > 0.15, (
-                    f"Pricing chunk must pass MIN_CONFIDENCE=0.15, got {c['final_score']}"
-                )
-
-
-# ---------------------------------------------------------------------------
-# 4. Scorer: high positive rerank scores (mmarco multilingual model)
-# ---------------------------------------------------------------------------
-
-class TestHighPositiveRerankScores:
-    """
-    Regression: the mmarco multilingual model gives high positive scores
-    (5-10+) for Dutch text.  Without sigmoid normalization, the scoring
-    penalties (0.25) are meaningless against 8+ raw scores.
+    With the cross-encoder disabled, rerank_score = vector_score.
+    Sigmoid normalization + type boosts must still produce correct rankings
+    and pass MIN_CONFIDENCE.
     """
 
-    def test_production_pricing_vs_policy(self):
-        """Exact production scenario: policy chunks outscore pricing due to raw logit scale."""
+    def test_production_pricing_vs_policy_vector_only(self):
+        """Exact production scenario: policy chunks have higher vector scores
+        because they contain query keywords ("tarieven", "prijzen") literally."""
         candidates = [
             _chunk(
                 "Starter €149 /maand 14 dagen gratis Perfect voor kleine ondernemers "
                 "1 AI-medewerker 500 belminuten/maand Agenda integratie CRM integratie",
                 chunk_type="pricing", page_type="home",
-                vector_score=0.33, rerank_score=6.0,
+                vector_score=0.33,
             ),
             _chunk(
                 "Business €299 /maand 14 dagen gratis Ideaal voor groeiende bedrijven "
                 "3 AI-medewerkers 2000 belminuten/maand Alles van Starter",
                 chunk_type="pricing", page_type="home",
-                vector_score=0.33, rerank_score=5.5,
+                vector_score=0.33,
             ),
             _chunk(
                 "Artikel 7 - Tarieven en betaling De actuele tarieven staan vermeld "
                 "op de website. Alle genoemde prijzen zijn exclusief BTW.",
                 chunk_type="policy", page_type="policy",
-                vector_score=0.39, rerank_score=8.72,
+                vector_score=0.39,
             ),
             _chunk(
                 "Artikel 5 - Dienstverlening Klantenservice.ai levert AI-telefonie "
                 "diensten waarmee inkomende telefoongesprekken worden afgehandeld.",
                 chunk_type="policy", page_type="policy",
-                vector_score=0.31, rerank_score=8.66,
-            ),
-            _chunk(
-                "Inleiding Klantenservice.ai respecteert uw privacy en zorgt ervoor "
-                "dat uw persoonlijke gegevens vertrouwelijk worden behandeld.",
-                chunk_type="general", page_type="general",
-                vector_score=0.27, rerank_score=5.79,
+                vector_score=0.31,
             ),
         ]
         scored = score_candidates(candidates, "pricing")
 
         assert scored[0]["chunk_type"] == "pricing", (
-            f"Pricing should rank #1 despite lower raw rerank score, "
-            f"got {scored[0]['chunk_type']} score={scored[0]['final_score']:.4f}"
+            f"Pricing should rank #1, got {scored[0]['chunk_type']} "
+            f"score={scored[0]['final_score']:.4f}"
         )
         assert scored[1]["chunk_type"] == "pricing", (
             f"Pricing should rank #2, got {scored[1]['chunk_type']}"
         )
 
-    def test_normalized_scores_in_0_1_range(self):
-        """All final_scores must be in a reasonable [0, 1.2] range after normalization."""
+    def test_all_scores_pass_min_confidence(self):
+        """Pricing chunks must pass MIN_CONFIDENCE=0.15 with vector-only scoring."""
         candidates = [
             _chunk(
                 "Starter €149 /maand 14 dagen gratis Perfect voor kleine ondernemers "
                 "1 AI-medewerker 500 belminuten/maand Agenda integratie CRM integratie",
                 chunk_type="pricing", page_type="home",
-                vector_score=0.33, rerank_score=8.0,
-            ),
-            _chunk(
-                "Artikel 7 - Tarieven en betaling De actuele tarieven staan vermeld.",
-                chunk_type="policy", page_type="policy",
-                vector_score=0.39, rerank_score=9.0,
+                vector_score=0.30,
             ),
         ]
         scored = score_candidates(candidates, "pricing")
-        for c in scored:
-            assert -0.5 <= c["final_score"] <= 1.3, (
-                f"final_score should be normalized, got {c['final_score']:.4f}"
-            )
+        assert scored[0]["final_score"] > 0.15, (
+            f"Pricing chunk must pass MIN_CONFIDENCE, got {scored[0]['final_score']:.4f}"
+        )
 
-    def test_sigmoid_spread(self):
-        """Verify sigmoid temp=3 gives enough spread between scores."""
-        low = _sigmoid(-5.0)
-        mid = _sigmoid(0.0)
-        high = _sigmoid(8.0)
-        very_high = _sigmoid(12.0)
+    def test_sigmoid_normalizes_vector_scores(self):
+        """Sigmoid maps vector scores (0.25-0.45) to a wider usable range."""
+        low = _sigmoid(0.25)
+        mid = _sigmoid(0.35)
+        high = _sigmoid(0.45)
 
-        assert low < 0.2, f"sigmoid(-5) should be <0.2, got {low:.4f}"
-        assert 0.45 < mid < 0.55, f"sigmoid(0) should be ~0.5, got {mid:.4f}"
-        assert 0.9 < high < 1.0, f"sigmoid(8) should be 0.9-1.0, got {high:.4f}"
-        assert very_high > high, f"sigmoid(12) should be > sigmoid(8)"
-        assert high - mid > 0.35, f"Should have meaningful spread between 0 and 8"
+        assert 0.5 < low < 0.6, f"sigmoid(0.25) should be ~0.52, got {low:.4f}"
+        assert 0.5 < mid < 0.6, f"sigmoid(0.35) should be ~0.54, got {mid:.4f}"
+        assert 0.5 < high < 0.6, f"sigmoid(0.45) should be ~0.56, got {high:.4f}"
+        assert low < mid < high, "Sigmoid must preserve ordering"
 
 
 # ---------------------------------------------------------------------------
-# 5. Scorer: general queries should not penalize policy
+# 4. Scorer: general queries should not penalize policy
 # ---------------------------------------------------------------------------
 
 class TestGeneralQueryNoPenalty:
@@ -470,7 +377,7 @@ class TestGeneralQueryNoPenalty:
 
 
 # ---------------------------------------------------------------------------
-# 6. Contact query: policy should also be penalized
+# 5. Contact query: policy should also be penalized
 # ---------------------------------------------------------------------------
 
 class TestContactVsPolicy:
@@ -479,12 +386,12 @@ class TestContactVsPolicy:
             _chunk(
                 "Neem contact op: 020 123 4567\ninfo@example.com\nOpeningstijden: ma-vr 9-17",
                 chunk_type="contact", page_type="contact",
-                vector_score=0.55, rerank_score=0.50,
+                vector_score=0.35,
             ),
             _chunk(
                 "Artikel 12 - Contactgegevens\nKlachten kunnen schriftelijk worden ingediend.",
                 chunk_type="policy", page_type="policy",
-                vector_score=0.58, rerank_score=0.55,
+                vector_score=0.38,
             ),
         ]
         scored = score_candidates(candidates, "contact")
@@ -505,8 +412,7 @@ if __name__ == "__main__":
     test_classes = [
         TestQueryClassifier,
         TestPricingVsPolicy,
-        TestNegativeRerankScores,
-        TestHighPositiveRerankScores,
+        TestVectorOnlyScoring,
         TestGeneralQueryNoPenalty,
         TestContactVsPolicy,
     ]
