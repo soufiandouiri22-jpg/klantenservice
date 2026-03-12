@@ -29,7 +29,7 @@ export function DemoCallWidget() {
     onError: (error: any) => {
       console.error('Demo call error:', error)
       toast.error('Verbinding verbroken. Probeer het opnieuw.')
-      if (ringbackRef.current) { ringbackRef.current.pause(); ringbackRef.current = null }
+      if (ringbackRef.current) { ringbackRef.current.pause(); ringbackRef.current.src = ''; ringbackRef.current.load(); ringbackRef.current = null }
       if (callLogIdRef.current) {
         demoApi.endCall(callLogIdRef.current).catch(() => {})
         callLogIdRef.current = null
@@ -42,7 +42,7 @@ export function DemoCallWidget() {
     try {
       setPhase('connecting')
 
-      await navigator.mediaDevices.getUserMedia({ audio: true })
+      const permStream = await navigator.mediaDevices.getUserMedia({ audio: true })
 
       // Play ringback tone to warm up audio pipeline + give natural "ringing" UX
       const ringback = new Audio('/sounds/ringback.mp3')
@@ -50,7 +50,12 @@ export function DemoCallWidget() {
       ringback.play().catch(() => {})
       await new Promise(resolve => setTimeout(resolve, 4000))
       ringback.pause()
+      ringback.src = ''
+      ringback.load()
       ringbackRef.current = null
+
+      // Release the permission stream so the SDK gets exclusive mic access
+      permStream.getTracks().forEach(t => t.stop())
 
       const data = await demoApi.getSignedUrl()
       setWorkerName(data.worker_name)
@@ -63,7 +68,7 @@ export function DemoCallWidget() {
       })
     } catch (err: any) {
       console.error('Failed to start demo call:', err)
-      if (ringbackRef.current) { ringbackRef.current.pause(); ringbackRef.current = null }
+      if (ringbackRef.current) { ringbackRef.current.pause(); ringbackRef.current.src = ''; ringbackRef.current.load(); ringbackRef.current = null }
       if (callLogIdRef.current) {
         demoApi.endCall(callLogIdRef.current).catch(() => {})
         callLogIdRef.current = null
@@ -86,7 +91,7 @@ export function DemoCallWidget() {
 
   useEffect(() => {
     return () => {
-      if (ringbackRef.current) { ringbackRef.current.pause(); ringbackRef.current = null }
+      if (ringbackRef.current) { ringbackRef.current.pause(); ringbackRef.current.src = ''; ringbackRef.current.load(); ringbackRef.current = null }
       if (callLogIdRef.current) {
         demoApi.endCall(callLogIdRef.current).catch(() => {})
       }
