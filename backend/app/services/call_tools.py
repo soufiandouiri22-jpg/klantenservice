@@ -25,7 +25,11 @@ from app.models.calendar_integration import CalendarIntegration, CalendarProvide
 from app.models.appointment import Appointment, AppointmentStatus
 from app.models.internal_note import InternalNote, NotePriority
 from app.models.training import ExampleAnswer
+from app.models.business_facts import (
+    PricingPlan, ContactInfo, OpeningHours, BusinessLocation, BusinessService,
+)
 from app.services.retrieval import RetrievalService
+from app.services.retrieval.query_classifier import classify_query
 from app.services.voice.intent_classifier import classify_intent, CallerIntent, CompanyScope
 from app.services.voice.conversation_state import ConversationStateManager
 from app.services.voice.policy_engine import PolicyEngine, PolicyResult
@@ -298,6 +302,161 @@ def _run_retrieval(db: Session, company_id: str, query: str, limit: int) -> List
     return result.get("results", []) if isinstance(result, dict) else []
 
 
+def _try_structured_facts(
+    db: Session, company_id: str, query: str,
+) -> Optional[Dict[str, Any]]:
+    """
+    Check structured business fact tables *before* RAG.
+
+    Returns a tool-result dict if structured data can answer the query,
+    or None to fall through to the retrieval pipeline.
+    """
+    classification = classify_query(query)
+    logger.info("[structured_facts] query=%r classification=%s", query, classification)
+
+    if classification == "pricing":
+        plans = (
+            db.query(PricingPlan)
+            .filter_by(company_id=company_id)
+            .order_by(PricingPlan.display_order)
+            .all()
+        )
+        if plans:
+            return _format_pricing_response(plans)
+
+    if classification == "contact":
+        contacts = db.query(ContactInfo).filter_by(company_id=company_id).all()
+        if contacts:
+            return _format_contact_response(contacts)
+
+        hours = db.query(OpeningHours).filter_by(company_id=company_id).order_by(OpeningHours.weekday).all()
+        if hours:
+            return _format_hours_response(hours)
+
+    if classification == "location":
+        locations = db.query(BusinessLocation).filter_by(company_id=company_id).all()
+        hours = db.query(OpeningHours).filter_by(company_id=company_id).order_by(OpeningHours.weekday).all()
+        if locations or hours:
+            return _format_location_response(locations, hours)
+
+    if classification == "service":
+        services = db.query(BusinessService).filter_by(company_id=company_id).all()
+        if services:
+            return _format_service_response(services)
+
+    return None
+
+
+_WEEKDAY_NAMES = ["Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag", "Zondag"]
+
+
+def _format_pricing_response(plans: List) -> Dict[str, Any]:
+    lines = []
+    for p in plans:
+        if p.price_type == "fixed" and p.price is not None:
+            price_str = f"€{p.price:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            period = f" per {p.billing_period}" if p.billing_period else ""
+            lines.append(f"{p.name} – {price_str}{period}")
+        elif p.price_type == "free":
+            lines.append(f"{p.name} – Gratis")
+        elif p.price_type == "contact_required":
+            lines.append(f"{p.name} – Prijs op aanvraag")
+        else:
+            lines.append(p.name)
+
+    content = "\n".join(lines)
+    source_url = plans[0].source_url or ""
+    logger.info("[structured_facts] returning %d pricing plans", len(plans))
+    return {
+        "ok": True,
+        "results": [{"content": content, "url": source_url, "title": "Prijzen", "chunk_type": "pricing", "score": 1.0}],
+        "top_retrieval_score": 1.0,
+        "message": content,
+        "source": "structured_facts",
+    }
+
+
+def _format_contact_response(contacts: List) -> Dict[str, Any]:
+    parts = []
+    for c in contacts:
+        if c.phone:
+            parts.append(f"Telefoon: {c.phone}")
+        if c.email:
+            parts.append(f"E-mail: {c.email}")
+        if c.whatsapp:
+            parts.append(f"WhatsApp: {c.whatsapp}")
+    content = "\n".join(parts)
+    return {
+        "ok": True,
+        "results": [{"content": content, "url": contacts[0].source_url or "", "title": "Contact", "chunk_type": "contact", "score": 1.0}],
+        "top_retrieval_score": 1.0,
+        "message": content,
+        "source": "structured_facts",
+    }
+
+
+def _format_hours_response(hours: List) -> Dict[str, Any]:
+    lines = []
+    for h in hours:
+        day = _WEEKDAY_NAMES[h.weekday] if 0 <= h.weekday <= 6 else f"Dag {h.weekday}"
+        if h.closed:
+            lines.append(f"{day}: Gesloten")
+        elif h.open_time and h.close_time:
+            lines.append(f"{day}: {h.open_time.strftime('%H:%M')} - {h.close_time.strftime('%H:%M')}")
+    content = "\n".join(lines)
+    return {
+        "ok": True,
+        "results": [{"content": content, "url": hours[0].source_url or "", "title": "Openingstijden", "chunk_type": "contact", "score": 1.0}],
+        "top_retrieval_score": 1.0,
+        "message": content,
+        "source": "structured_facts",
+    }
+
+
+def _format_location_response(locations: List, hours: List) -> Dict[str, Any]:
+    parts = []
+    for loc in locations:
+        loc_parts = [x for x in [loc.name, loc.address, f"{loc.postal_code} {loc.city}" if loc.postal_code else loc.city] if x]
+        if loc_parts:
+            parts.append(", ".join(loc_parts))
+    if hours:
+        parts.append("")
+        parts.append("Openingstijden:")
+        for h in hours:
+            day = _WEEKDAY_NAMES[h.weekday] if 0 <= h.weekday <= 6 else f"Dag {h.weekday}"
+            if h.closed:
+                parts.append(f"{day}: Gesloten")
+            elif h.open_time and h.close_time:
+                parts.append(f"{day}: {h.open_time.strftime('%H:%M')} - {h.close_time.strftime('%H:%M')}")
+    content = "\n".join(parts)
+    source_url = locations[0].source_url if locations else (hours[0].source_url if hours else "")
+    return {
+        "ok": True,
+        "results": [{"content": content, "url": source_url or "", "title": "Locatie", "chunk_type": "location", "score": 1.0}],
+        "top_retrieval_score": 1.0,
+        "message": content,
+        "source": "structured_facts",
+    }
+
+
+def _format_service_response(services: List) -> Dict[str, Any]:
+    lines = []
+    for s in services:
+        if s.price:
+            price_str = f"€{s.price:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            lines.append(f"{s.name} – {price_str}")
+        else:
+            lines.append(s.name)
+    content = "\n".join(lines)
+    return {
+        "ok": True,
+        "results": [{"content": content, "url": services[0].source_url or "", "title": "Diensten", "chunk_type": "service", "score": 1.0}],
+        "top_retrieval_score": 1.0,
+        "message": content,
+        "source": "structured_facts",
+    }
+
+
 def tool_search_knowledge(
     db: Session,
     company_id: str,
@@ -312,7 +471,17 @@ def tool_search_knowledge(
     t0 = _time.time()
     logger.info("[search_knowledge] START query=%r company=%s limit=%d", query, company_id, limit)
 
-    # 1. Retrieval pipeline (vector + metadata + fulltext + reranking)
+    # 1. Try structured business facts (deterministic, O(1))
+    structured = _try_structured_facts(db, company_id, query)
+    if structured:
+        elapsed_ms = int((_time.time() - t0) * 1000)
+        logger.info(
+            "[search_knowledge] STRUCTURED HIT in %dms: source=%s",
+            elapsed_ms, structured.get("source"),
+        )
+        return structured
+
+    # 2. Retrieval pipeline (vector + metadata + fulltext + reranking)
     retrieval_results = _run_retrieval(db, company_id, query, limit)
 
     # Log top retrieval results
@@ -388,7 +557,24 @@ def tool_get_prices(
     company_id: str,
     topic: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Get price information from knowledge base via retrieval pipeline."""
+    """Get price information — structured facts first, RAG fallback."""
+    plans = (
+        db.query(PricingPlan)
+        .filter_by(company_id=company_id)
+        .order_by(PricingPlan.display_order)
+        .all()
+    )
+
+    if plans:
+        result = _format_pricing_response(plans)
+        logger.info("[get_prices] structured hit: %d plans", len(plans))
+        return {
+            "ok": True,
+            "prices": [result["message"]],
+            "message": "Prijsinformatie gevonden.",
+            "source": "structured_facts",
+        }
+
     query = topic or "prijzen tarieven kosten"
     if topic and "prijs" not in topic.lower():
         query = f"{topic} prijs tarief kosten"

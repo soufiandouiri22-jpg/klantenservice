@@ -186,6 +186,14 @@ class IndexingOrchestrator:
                 )
                 self.db.add(db_chunk)
 
+            # --- Phase 5.5: Extract structured business facts ---
+            self._run_fact_extraction(
+                company_id=str(site.company_id),
+                site_id=str(site.id),
+                page_map=page_map,
+                chunk_dicts=all_chunk_dicts,
+            )
+
             # Finalize
             crawl_job.status = CrawlJobStatus.completed
             crawl_job.completed_at = datetime.utcnow()
@@ -218,6 +226,41 @@ class IndexingOrchestrator:
             self.db.commit()
             self._log_error(site.id, crawl_job.id, "orchestrator", None, type(exc).__name__, str(exc))
             return False
+
+    def _run_fact_extraction(
+        self, company_id: str, site_id: str,
+        page_map: dict, chunk_dicts: list,
+    ) -> None:
+        """Extract structured business facts (pricing, contact, hours, etc.)."""
+        try:
+            from .fact_extractor import extract_business_facts
+
+            pages = [
+                {
+                    "url": p.url,
+                    "title": p.title,
+                    "page_type": p.page_type,
+                    "cleaned_content": p.cleaned_content,
+                }
+                for p in page_map.values()
+                if p.cleaned_content
+            ]
+
+            counts = extract_business_facts(
+                db=self.db,
+                company_id=company_id,
+                site_id=site_id,
+                pages=pages,
+                chunks=chunk_dicts,
+            )
+            logger.info(
+                "Business fact extraction for %s: %s", site_id, counts,
+            )
+        except Exception:
+            logger.warning(
+                "Business fact extraction failed for site %s", site_id,
+                exc_info=True,
+            )
 
     def _run_domain_inference(self, company_id) -> None:
         """Infer the company's business type from indexed content."""
