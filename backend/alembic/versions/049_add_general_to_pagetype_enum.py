@@ -1,9 +1,8 @@
-"""Add 'general' to pagetype enum
+"""Add 'general' to pagetype enum (no-op: column is VARCHAR, not a DB enum)
 
 Revision ID: 049
 Revises: 048
 """
-from alembic import op
 
 revision = "049"
 down_revision = "048"
@@ -12,7 +11,7 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.execute("ALTER TYPE pagetype ADD VALUE IF NOT EXISTS 'general'")
+    pass
 
 
 def downgrade() -> None:
