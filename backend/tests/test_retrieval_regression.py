@@ -7,6 +7,7 @@ to avoid importing the full app dependency chain.
 
 Run:  python3 tests/test_retrieval_regression.py
 """
+import math
 import re
 import logging
 
@@ -40,6 +41,13 @@ GENERIC_PENALTY = -0.12
 LOW_INFO_PENALTY = -0.10
 JUNK_PENALTY = -0.40
 POLICY_CROSSTALK_PENALTY = -0.25
+SIGMOID_TEMP = 3.0
+
+def _sigmoid(x, temp=SIGMOID_TEMP):
+    try:
+        return 1.0 / (1.0 + math.exp(-x / temp))
+    except OverflowError:
+        return 0.0 if x < 0 else 1.0
 
 _POLICY_TYPES = {"policy", "terms", "privacy", "voorwaarden"}
 
@@ -76,7 +84,7 @@ def score_candidates(candidates, query_classification):
 
         c["is_junk"] = False
         boost = 0.0
-        rerank = c.get("rerank_score", 0.0)
+        rerank = _sigmoid(c.get("rerank_score", 0.0))
         vector = c.get("vector_score", 0.0)
         base_score = max(rerank, vector)
         chunk_type = c.get("chunk_type", "general")
@@ -353,7 +361,97 @@ class TestNegativeRerankScores:
 
 
 # ---------------------------------------------------------------------------
-# 4. Scorer: general queries should not penalize policy
+# 4. Scorer: high positive rerank scores (mmarco multilingual model)
+# ---------------------------------------------------------------------------
+
+class TestHighPositiveRerankScores:
+    """
+    Regression: the mmarco multilingual model gives high positive scores
+    (5-10+) for Dutch text.  Without sigmoid normalization, the scoring
+    penalties (0.25) are meaningless against 8+ raw scores.
+    """
+
+    def test_production_pricing_vs_policy(self):
+        """Exact production scenario: policy chunks outscore pricing due to raw logit scale."""
+        candidates = [
+            _chunk(
+                "Starter €149 /maand 14 dagen gratis Perfect voor kleine ondernemers "
+                "1 AI-medewerker 500 belminuten/maand Agenda integratie CRM integratie",
+                chunk_type="pricing", page_type="home",
+                vector_score=0.33, rerank_score=6.0,
+            ),
+            _chunk(
+                "Business €299 /maand 14 dagen gratis Ideaal voor groeiende bedrijven "
+                "3 AI-medewerkers 2000 belminuten/maand Alles van Starter",
+                chunk_type="pricing", page_type="home",
+                vector_score=0.33, rerank_score=5.5,
+            ),
+            _chunk(
+                "Artikel 7 - Tarieven en betaling De actuele tarieven staan vermeld "
+                "op de website. Alle genoemde prijzen zijn exclusief BTW.",
+                chunk_type="policy", page_type="policy",
+                vector_score=0.39, rerank_score=8.72,
+            ),
+            _chunk(
+                "Artikel 5 - Dienstverlening Klantenservice.ai levert AI-telefonie "
+                "diensten waarmee inkomende telefoongesprekken worden afgehandeld.",
+                chunk_type="policy", page_type="policy",
+                vector_score=0.31, rerank_score=8.66,
+            ),
+            _chunk(
+                "Inleiding Klantenservice.ai respecteert uw privacy en zorgt ervoor "
+                "dat uw persoonlijke gegevens vertrouwelijk worden behandeld.",
+                chunk_type="general", page_type="general",
+                vector_score=0.27, rerank_score=5.79,
+            ),
+        ]
+        scored = score_candidates(candidates, "pricing")
+
+        assert scored[0]["chunk_type"] == "pricing", (
+            f"Pricing should rank #1 despite lower raw rerank score, "
+            f"got {scored[0]['chunk_type']} score={scored[0]['final_score']:.4f}"
+        )
+        assert scored[1]["chunk_type"] == "pricing", (
+            f"Pricing should rank #2, got {scored[1]['chunk_type']}"
+        )
+
+    def test_normalized_scores_in_0_1_range(self):
+        """All final_scores must be in a reasonable [0, 1.2] range after normalization."""
+        candidates = [
+            _chunk(
+                "Starter €149 /maand 14 dagen gratis Perfect voor kleine ondernemers "
+                "1 AI-medewerker 500 belminuten/maand Agenda integratie CRM integratie",
+                chunk_type="pricing", page_type="home",
+                vector_score=0.33, rerank_score=8.0,
+            ),
+            _chunk(
+                "Artikel 7 - Tarieven en betaling De actuele tarieven staan vermeld.",
+                chunk_type="policy", page_type="policy",
+                vector_score=0.39, rerank_score=9.0,
+            ),
+        ]
+        scored = score_candidates(candidates, "pricing")
+        for c in scored:
+            assert -0.5 <= c["final_score"] <= 1.3, (
+                f"final_score should be normalized, got {c['final_score']:.4f}"
+            )
+
+    def test_sigmoid_spread(self):
+        """Verify sigmoid temp=3 gives enough spread between scores."""
+        low = _sigmoid(-5.0)
+        mid = _sigmoid(0.0)
+        high = _sigmoid(8.0)
+        very_high = _sigmoid(12.0)
+
+        assert low < 0.2, f"sigmoid(-5) should be <0.2, got {low:.4f}"
+        assert 0.45 < mid < 0.55, f"sigmoid(0) should be ~0.5, got {mid:.4f}"
+        assert 0.9 < high < 1.0, f"sigmoid(8) should be 0.9-1.0, got {high:.4f}"
+        assert very_high > high, f"sigmoid(12) should be > sigmoid(8)"
+        assert high - mid > 0.35, f"Should have meaningful spread between 0 and 8"
+
+
+# ---------------------------------------------------------------------------
+# 5. Scorer: general queries should not penalize policy
 # ---------------------------------------------------------------------------
 
 class TestGeneralQueryNoPenalty:
@@ -372,7 +470,7 @@ class TestGeneralQueryNoPenalty:
 
 
 # ---------------------------------------------------------------------------
-# 4. Contact query: policy should also be penalized
+# 6. Contact query: policy should also be penalized
 # ---------------------------------------------------------------------------
 
 class TestContactVsPolicy:
@@ -408,6 +506,7 @@ if __name__ == "__main__":
         TestQueryClassifier,
         TestPricingVsPolicy,
         TestNegativeRerankScores,
+        TestHighPositiveRerankScores,
         TestGeneralQueryNoPenalty,
         TestContactVsPolicy,
     ]

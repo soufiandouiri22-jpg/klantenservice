@@ -147,12 +147,15 @@ _HTML_LEAKAGE_RE = re.compile(
 _MALFORMED_RE = re.compile(
     r'(?:'
     r'^\s*(?:None|null|undefined|NaN|Error|Traceback)\s*$|'
-    r'^\s*\{?\s*\}?\s*$|'            # empty braces or whitespace only
     r'(?:File|Line)\s+"\S+",\s+line\s+\d+|'  # Python tracebacks
     r'Traceback\s*\(most\s+recent'
     r')',
     re.I | re.M,
 )
+
+# Separate pattern for empty/whitespace-only strings — \A/\Z always
+# match start/end of the full string, even with re.M.
+_EMPTY_RE = re.compile(r'\A\s*\{?\s*\}?\s*\Z')
 
 # ── Language detection (Dutch vs non-Dutch) ──────────────────────
 
@@ -277,7 +280,7 @@ def validate_output(text: str) -> GuardrailResult:
         details_parts.append("html_or_script_detected")
 
     # 5. Malformed
-    if _MALFORMED_RE.search(text):
+    if _MALFORMED_RE.search(text) or _EMPTY_RE.match(text):
         violations.append(ViolationType.MALFORMED_OUTPUT)
         details_parts.append("malformed_output_detected")
 

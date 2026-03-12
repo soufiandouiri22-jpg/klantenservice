@@ -4,12 +4,19 @@ and content quality filters.
 
 Filters out junk chunks (JSON dumps, metadata, prompt fragments, etc.)
 before scoring.
+
+Reranker scores (raw cross-encoder logits) are normalized to [0, 1] via
+sigmoid before boosts/penalties are applied.  This keeps all scoring
+constants calibrated regardless of which cross-encoder model is used.
 """
+import math
 import re
 import logging
 from typing import List, Dict
 
 logger = logging.getLogger(__name__)
+
+SIGMOID_TEMP = 3.0
 
 TYPE_MATCH_BOOST = 0.20
 GENERIC_PENALTY = -0.12
@@ -35,6 +42,14 @@ _POLICY_TYPES = {"policy", "terms", "privacy", "voorwaarden"}
 def _is_policy_chunk(chunk_type: str, page_type: str) -> bool:
     """Detect chunks that originate from terms/conditions/privacy pages."""
     return chunk_type in _POLICY_TYPES or page_type in _POLICY_TYPES
+
+
+def _sigmoid(x: float, temp: float = SIGMOID_TEMP) -> float:
+    """Normalize a raw logit to [0, 1].  temp controls spread."""
+    try:
+        return 1.0 / (1.0 + math.exp(-x / temp))
+    except OverflowError:
+        return 0.0 if x < 0 else 1.0
 
 
 def _is_junk(content: str) -> bool:
@@ -69,7 +84,7 @@ def score_candidates(
 
         c["is_junk"] = False
         boost = 0.0
-        rerank = c.get("rerank_score", 0.0)
+        rerank = _sigmoid(c.get("rerank_score", 0.0))
         vector = c.get("vector_score", 0.0)
         base_score = max(rerank, vector)
 
