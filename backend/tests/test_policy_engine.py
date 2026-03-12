@@ -597,6 +597,83 @@ def test_repeated_failure():
 
 
 # ══════════════════════════════════════════════════════════════════
+#  SCENARIO 10: English Filler Stripping
+# ══════════════════════════════════════════════════════════════════
+
+def test_english_filler_stripping():
+    print_divider("SCENARIO 10: English Filler Stripping")
+
+    cases = [
+        # (input, expected_safe_text_contains, expected_safe_text_not_contains, label)
+        (
+            "I hear you. Ik ga dat even voor u opzoeken.",
+            "Ik ga dat even voor u opzoeken",
+            "I hear you",
+            "Strips 'I hear you' prefix",
+        ),
+        (
+            "I understand. Uw afspraak is morgen om 10 uur.",
+            "Uw afspraak is morgen om 10 uur",
+            "I understand",
+            "Strips 'I understand' prefix",
+        ),
+        (
+            "Got it. Even kijken in de agenda.",
+            "Even kijken in de agenda",
+            "Got it",
+            "Strips 'Got it' prefix",
+        ),
+        (
+            "Right. Ik zoek dat voor u op.",
+            "Ik zoek dat voor u op",
+            "Right",
+            "Strips 'Right' prefix",
+        ),
+        (
+            "Okay. Ik ga dat regelen.",
+            "Ik ga dat regelen",
+            "Okay",
+            "Strips 'Okay' prefix",
+        ),
+        (
+            "Goedemiddag, waarmee kan ik u helpen?",
+            "Goedemiddag, waarmee kan ik u helpen?",
+            None,
+            "Clean Dutch unchanged",
+        ),
+        (
+            "Top, even kijken in de agenda!",
+            "Top, even kijken in de agenda!",
+            None,
+            "Dutch fillers pass through",
+        ),
+        (
+            "I hear you",
+            "Even kijken...",
+            None,
+            "Filler-only input replaced with Dutch fallback",
+        ),
+    ]
+
+    all_pass = True
+    for text, must_contain, must_not_contain, label in cases:
+        result = validate_output(text)
+        safe = result.safe_text
+
+        ok = must_contain in safe
+        if must_not_contain and must_not_contain in safe:
+            ok = False
+
+        if not ok:
+            all_pass = False
+        status = "✓" if ok else "✗"
+        print(f"  {status} [{label}] safe_text={safe!r}")
+
+    assert all_pass, "English filler stripping tests failed"
+    print("  ✓ ALL filler stripping tests PASSED")
+
+
+# ══════════════════════════════════════════════════════════════════
 #  BONUS: Full Intent Classifier Coverage
 # ══════════════════════════════════════════════════════════════════
 
@@ -673,7 +750,8 @@ if __name__ == "__main__":
     test_output_guardrails_leakage()
     test_low_confidence()
     test_repeated_failure()
+    test_english_filler_stripping()
     test_intent_coverage()
 
-    print_divider("ALL SCENARIOS COMPLETE — 9 SCENARIOS + INTENT COVERAGE")
+    print_divider("ALL SCENARIOS COMPLETE — 10 SCENARIOS + INTENT COVERAGE")
     print()

@@ -51,6 +51,32 @@ SAFE_FALLBACK_NL = (
     "Excuses, er ging iets mis. Kunt u uw vraag nog eens herhalen?"
 )
 
+# ── English filler phrases that must never reach TTS ─────────────
+# Matched case-insensitively as standalone phrases (start of sentence
+# or after punctuation). Replacements are neutral Dutch alternatives.
+_ENGLISH_FILLER_PATTERNS: list[tuple[re.Pattern, str]] = [
+    (re.compile(r'(?<![a-zA-Z])I hear you\.?(?![a-zA-Z])', re.I), ''),
+    (re.compile(r'(?<![a-zA-Z])I understand\.?(?![a-zA-Z])', re.I), ''),
+    (re.compile(r'(?<![a-zA-Z])Got it\.?(?![a-zA-Z])', re.I), ''),
+    (re.compile(r'(?<![a-zA-Z])Right\.?(?![a-zA-Z])', re.I), ''),
+    (re.compile(r'(?<![a-zA-Z])Sure\.?(?![a-zA-Z])', re.I), ''),
+    (re.compile(r'(?<![a-zA-Z])Absolutely\.?(?![a-zA-Z])', re.I), ''),
+    (re.compile(r'(?<![a-zA-Z])Okay\.?(?![a-zA-Z])', re.I), ''),
+]
+
+
+def _strip_english_fillers(text: str) -> tuple[str, list[str]]:
+    """Remove banned English filler phrases. Returns cleaned text and list of removed phrases."""
+    removed: list[str] = []
+    for pattern, replacement in _ENGLISH_FILLER_PATTERNS:
+        match = pattern.search(text)
+        if match:
+            removed.append(match.group().strip())
+            text = pattern.sub(replacement, text)
+    text = re.sub(r'[ ]{2,}', ' ', text).strip()
+    text = re.sub(r'^[,.\s]+', '', text).strip()
+    return text, removed
+
 SAFE_FALLBACK_LANGUAGE = (
     "Excuses, dat ging niet helemaal goed. "
     "Kunt u uw vraag nog één keer stellen?"
@@ -203,8 +229,29 @@ def validate_output(text: str) -> GuardrailResult:
             details="Empty or whitespace-only output",
         )
 
+    original_text = text
+
+    # Strip banned English filler phrases before all other checks
+    text, removed_fillers = _strip_english_fillers(text)
+    if removed_fillers:
+        logger.info(
+            "[output_guardrails] Stripped English fillers: %s from: %r",
+            removed_fillers, original_text[:200],
+        )
+
+    if not text.strip():
+        return GuardrailResult(
+            passed=True,
+            violations=[],
+            original_text=original_text,
+            safe_text="Even kijken...",
+            details=f"stripped_fillers={removed_fillers}; remainder empty",
+        )
+
     violations: List[ViolationType] = []
     details_parts: List[str] = []
+    if removed_fillers:
+        details_parts.append(f"stripped_fillers={removed_fillers}")
 
     # 1. Prompt leakage
     if _PROMPT_LEAKAGE_RE.search(text):
@@ -250,13 +297,13 @@ def validate_output(text: str) -> GuardrailResult:
         logger.warning(
             "[output_guardrails] BLOCKED: violations=%s text=%r",
             [v.value for v in violations],
-            text[:200],
+            original_text[:200],
         )
 
         return GuardrailResult(
             passed=False,
             violations=violations,
-            original_text=text[:2000],
+            original_text=original_text[:2000],
             safe_text=safe_text,
             details="; ".join(details_parts),
         )
@@ -264,6 +311,6 @@ def validate_output(text: str) -> GuardrailResult:
     return GuardrailResult(
         passed=True,
         violations=[],
-        original_text=text,
+        original_text=original_text,
         safe_text=text,
     )
