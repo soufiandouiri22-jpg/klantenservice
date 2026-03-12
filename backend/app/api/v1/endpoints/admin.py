@@ -60,6 +60,7 @@ from app.schemas.admin import (
     RecentCallsResponse,
 )
 from app.services.pii_masker import mask_transcript
+from app.models.billing_run import BillingRun, BillingRunStatus
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
@@ -1857,3 +1858,168 @@ async def get_call_policy_trace(
         "total_decisions": len(decisions),
         "total_violations": len(violations),
     }
+
+
+# ---------------------------------------------------------------------------
+# Billing Runs
+# ---------------------------------------------------------------------------
+
+@router.get("/billing-runs", dependencies=[Depends(require_superadmin)])
+async def list_billing_runs(
+    db: Session = Depends(get_db),
+    company_id: Optional[UUID] = None,
+    status_filter: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+):
+    """List billing runs with optional filters. Errors and stuck runs shown first."""
+    from datetime import timedelta
+
+    STUCK_THRESHOLD = timedelta(hours=2)
+
+    query = db.query(BillingRun)
+    if company_id:
+        query = query.filter(BillingRun.company_id == company_id)
+    if status_filter:
+        query = query.filter(BillingRun.status == status_filter)
+
+    query = query.order_by(
+        case(
+            (BillingRun.status == BillingRunStatus.error, 0),
+            else_=1,
+        ),
+        BillingRun.created_at.desc(),
+    )
+    total = query.count()
+    runs = query.offset(offset).limit(limit).all()
+
+    now = datetime.utcnow()
+    stuck_cutoff = now - STUCK_THRESHOLD
+    stuck_count = db.query(func.count(BillingRun.id)).filter(
+        BillingRun.status == BillingRunStatus.calculated,
+        BillingRun.created_at < stuck_cutoff,
+    ).scalar()
+
+    def _format_run(r):
+        is_stuck = (
+            r.status == BillingRunStatus.calculated
+            and r.created_at
+            and r.created_at < stuck_cutoff
+        )
+        return {
+            "id": str(r.id),
+            "company_id": str(r.company_id),
+            "company_name": r.company.name if r.company else None,
+            "stripe_invoice_id": r.stripe_invoice_id,
+            "period_start": r.period_start.isoformat(),
+            "period_end": r.period_end.isoformat(),
+            "minutes_included": r.minutes_included,
+            "minutes_used": r.minutes_used,
+            "overage_minutes": r.overage_minutes,
+            "overage_amount_cents": r.overage_amount_cents,
+            "stripe_invoice_item_id": r.stripe_invoice_item_id,
+            "status": r.status.value if r.status else None,
+            "is_stuck": is_stuck,
+            "error_message": r.error_message,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        }
+
+    return {
+        "total": total,
+        "stuck_calculated_count": stuck_count,
+        "billing_runs": [_format_run(r) for r in runs],
+    }
+
+
+@router.post("/billing-runs/{run_id}/retry", dependencies=[Depends(require_superadmin)])
+async def retry_billing_run(
+    run_id: UUID,
+    db: Session = Depends(get_db),
+):
+    """Retry a failed billing run. Safe to call multiple times (Stripe idempotency key).
+    If the original invoice is finalized, creates a standalone InvoiceItem for the next invoice."""
+    import stripe as stripe_mod
+    from app.api.v1.endpoints.payments import OVERAGE_PRICE_PER_MINUTE
+
+    billing_run = db.query(BillingRun).filter(BillingRun.id == run_id).first()
+    if not billing_run:
+        raise HTTPException(status_code=404, detail="Billing run not found")
+
+    if billing_run.status not in (BillingRunStatus.error, BillingRunStatus.calculated):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Can only retry runs with status error or calculated, got {billing_run.status.value}",
+        )
+
+    if billing_run.overage_minutes <= 0:
+        billing_run.status = BillingRunStatus.skipped
+        billing_run.error_message = None
+        db.commit()
+        return {"status": "skipped", "message": "No overage to charge"}
+
+    company = billing_run.company
+    if not company:
+        raise HTTPException(status_code=400, detail="Company not found for billing run")
+
+    idempotency_key = billing_run.stripe_idempotency_key or f"overage-{billing_run.id}"
+    description = f"{billing_run.overage_minutes} extra belminuten à €{OVERAGE_PRICE_PER_MINUTE:.2f}/min"
+
+    try:
+        item = stripe_mod.InvoiceItem.create(
+            customer=company.stripe_customer_id,
+            invoice=billing_run.stripe_invoice_id,
+            amount=billing_run.overage_amount_cents,
+            currency="eur",
+            description=description,
+            idempotency_key=idempotency_key,
+        )
+        billing_run.stripe_invoice_item_id = item.id
+        billing_run.status = BillingRunStatus.charged
+        billing_run.error_message = None
+        db.commit()
+        logger.info(
+            f"[BILLING RETRY] Successfully charged billing_run {run_id} "
+            f"for {company.name}: €{billing_run.overage_amount_cents / 100:.2f}"
+        )
+        return {"status": "charged", "stripe_invoice_item_id": item.id}
+    except stripe_mod.error.InvalidRequestError as e:
+        err_lower = str(e).lower()
+        if "finalized" in err_lower or "not open" in err_lower:
+            logger.warning(
+                f"[BILLING RETRY] Invoice finalized for {company.name}, "
+                f"creating standalone InvoiceItem for next invoice"
+            )
+            try:
+                fallback_key = f"overage-fallback-{billing_run.id}"
+                period_label = (
+                    f" (periode {billing_run.period_start.date()}→{billing_run.period_end.date()})"
+                    if billing_run.period_start and billing_run.period_end else ""
+                )
+                item = stripe_mod.InvoiceItem.create(
+                    customer=company.stripe_customer_id,
+                    amount=billing_run.overage_amount_cents,
+                    currency="eur",
+                    description=f"{description}{period_label}",
+                    idempotency_key=fallback_key,
+                )
+                billing_run.stripe_invoice_item_id = item.id
+                billing_run.status = BillingRunStatus.charged
+                billing_run.error_message = "Attached to next invoice (original was finalized)"
+                db.commit()
+                logger.info(f"[BILLING RETRY] Standalone InvoiceItem created for {company.name}")
+                return {"status": "charged_next_invoice", "stripe_invoice_item_id": item.id}
+            except stripe_mod.error.StripeError as fallback_err:
+                billing_run.error_message = f"Finalized + fallback failed: {fallback_err}"
+                db.commit()
+                logger.error(f"[BILLING RETRY] Fallback also failed for {run_id}: {fallback_err}")
+                raise HTTPException(status_code=502, detail=f"Fallback failed: {fallback_err}")
+        else:
+            billing_run.error_message = f"Retry failed: {e}"
+            db.commit()
+            logger.error(f"[BILLING RETRY] Failed for billing_run {run_id}: {e}")
+            raise HTTPException(status_code=502, detail=f"Stripe error: {e}")
+    except stripe_mod.error.StripeError as e:
+        billing_run.error_message = f"Retry failed: {e}"
+        db.commit()
+        logger.error(f"[BILLING RETRY] Failed for billing_run {run_id}: {e}")
+        raise HTTPException(status_code=502, detail=f"Stripe error: {e}")

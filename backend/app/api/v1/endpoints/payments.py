@@ -236,44 +236,40 @@ async def get_usage(
     db: Session = Depends(get_db)
 ):
     """
-    Get call minutes usage for the current billing period.
-    Based on actual call_logs.duration_seconds, not Twilio usage.
+    Get call minutes usage for the current (open) billing period.
+    Period start derived from billing_runs chain (see billing_helpers).
+    Overage rounded UP to whole minutes (business rule: ceil_to_whole_minute).
     """
-    from datetime import datetime
-    from sqlalchemy import func
-    from app.models.call_log import CallLog, CallStatus
+    from app.services.billing_helpers import (
+        get_current_billing_period_start,
+        calculate_minutes_used,
+        round_overage_minutes,
+    )
 
     company = current_user.company
     if not company:
         raise HTTPException(status_code=400, detail="User has no company")
 
-    now = datetime.utcnow()
-    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    period_start = get_current_billing_period_start(db, company)
+    minutes_used = calculate_minutes_used(db, company.id, period_start)
+    minutes_used_display = round(minutes_used, 1)
 
-    total_seconds = db.query(func.coalesce(func.sum(CallLog.duration_seconds), 0)).filter(
-        CallLog.company_id == company.id,
-        CallLog.started_at >= month_start,
-        CallLog.status == CallStatus.COMPLETED,
-        CallLog.duration_seconds > 0,
-    ).scalar()
-
-    minutes_used = round(total_seconds / 60, 1)
     plan = company.subscription_plan.value
     minutes_limit = PLAN_MINUTES.get(plan)
 
-    overage_minutes = 0.0
+    overage_minutes = 0
     overage_cost = 0.0
     if minutes_limit and minutes_used > minutes_limit:
-        overage_minutes = round(minutes_used - minutes_limit, 1)
+        overage_minutes = round_overage_minutes(minutes_used - minutes_limit)
         overage_cost = round(overage_minutes * OVERAGE_PRICE_PER_MINUTE, 2)
 
     return {
-        "minutes_used": minutes_used,
+        "minutes_used": minutes_used_display,
         "minutes_limit": minutes_limit,
         "plan": plan,
         "is_unlimited": minutes_limit is None,
         "percentage": round((minutes_used / minutes_limit) * 100, 1) if minutes_limit else 0,
-        "period_start": month_start.isoformat(),
+        "period_start": period_start.isoformat(),
         "overage_minutes": overage_minutes,
         "overage_cost": overage_cost,
         "overage_price_per_minute": OVERAGE_PRICE_PER_MINUTE,
@@ -384,15 +380,20 @@ async def handle_checkout_completed(session: dict, db: Session):
             if subscription.status == "trialing":
                 company.trial_used = True
                 
+            # Use Stripe's start_date as billing period anchor (avoids drift vs utcnow)
+            from datetime import datetime
+            company.subscription_started_at = datetime.utcfromtimestamp(subscription.start_date)
+
             logger.info(f"Subscription status from Stripe: {subscription.status}, interval: {company.billing_interval.value}")
         except stripe.error.StripeError as e:
             logger.warning(f"Could not fetch subscription status: {e}")
             company.subscription_status = "active"
+            from datetime import datetime
+            company.subscription_started_at = datetime.utcnow()
     else:
         company.subscription_status = "active"
-    
-    from datetime import datetime
-    company.subscription_started_at = datetime.utcnow()
+        from datetime import datetime
+        company.subscription_started_at = datetime.utcnow()
 
     # Sync address from Stripe customer back to company (entered during checkout)
     try:
@@ -599,78 +600,208 @@ async def handle_payment_failed(invoice: dict, db: Session):
 async def handle_invoice_created(invoice: dict, db: Session):
     """
     Add overage line item when Stripe creates the next invoice.
-    
+
     Stripe fires invoice.created ~1 hour before finalizing.
-    We calculate overage minutes for the previous billing period
-    and attach an InvoiceItem so it appears on the invoice.
+    Only processes renewal invoices (billing_reason == "subscription_cycle").
+    Uses the billing_runs table for idempotency (UNIQUE on stripe_invoice_id).
+
+    Period derivation (no date arithmetic):
+        period_end   = invoice subscription-line period.start  (new period start = old period end)
+        period_start = previous billing_runs.period_end  OR  subscription.start_date (first cycle)
     """
+    from datetime import datetime
+    from sqlalchemy import desc
+    from sqlalchemy.exc import IntegrityError
+    from app.models.billing_run import BillingRun, BillingRunStatus
+    from app.services.billing_helpers import (
+        calculate_minutes_used,
+        round_overage_minutes,
+    )
+
     subscription_id = invoice.get("subscription")
     customer_id = invoice.get("customer")
     invoice_id = invoice.get("id")
+    billing_reason = invoice.get("billing_reason")
 
     if not subscription_id or not customer_id:
         return
 
+    if billing_reason != "subscription_cycle":
+        logger.info(f"[OVERAGE] Skipping non-renewal invoice {invoice_id} (reason={billing_reason})")
+        return
+
+    # --- Idempotency check ---
+    existing_run = db.query(BillingRun).filter(
+        BillingRun.stripe_invoice_id == invoice_id
+    ).first()
+
+    if existing_run and existing_run.status in (
+        BillingRunStatus.charged,
+        BillingRunStatus.skipped,
+    ):
+        logger.info(f"[OVERAGE] Already processed invoice {invoice_id} (status={existing_run.status.value})")
+        return
+
+    # --- Find company ---
     company = db.query(Company).filter(
         Company.stripe_subscription_id == subscription_id
     ).first()
-
     if not company:
         company = db.query(Company).filter(
             Company.stripe_customer_id == customer_id
         ).first()
-
     if not company:
         logger.warning(f"[OVERAGE] Company not found for invoice {invoice_id}")
         return
 
     plan = company.subscription_plan.value
     limit = PLAN_MINUTES.get(plan)
-
     if limit is None:
         return
 
-    from datetime import datetime
-    from sqlalchemy import func
-    from app.models.call_log import CallLog, CallStatus
+    # --- Derive billing period from Stripe data (no date math) ---
+    sub_line = next(
+        (ln for ln in invoice.get("lines", {}).get("data", [])
+         if ln.get("type") == "subscription"),
+        None,
+    )
+    if sub_line:
+        overage_period_end = datetime.utcfromtimestamp(sub_line["period"]["start"])
+    else:
+        sub = stripe.Subscription.retrieve(subscription_id)
+        overage_period_end = datetime.utcfromtimestamp(sub.current_period_start)
 
-    now = datetime.utcnow()
-    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    last_run = (
+        db.query(BillingRun.period_end)
+        .filter(
+            BillingRun.company_id == company.id,
+            BillingRun.status.in_([BillingRunStatus.charged, BillingRunStatus.skipped]),
+        )
+        .order_by(desc(BillingRun.period_end))
+        .first()
+    )
+    if last_run:
+        overage_period_start = last_run[0]
+    elif company.subscription_started_at:
+        overage_period_start = company.subscription_started_at
+    else:
+        sub = stripe.Subscription.retrieve(subscription_id)
+        overage_period_start = datetime.utcfromtimestamp(sub.start_date)
 
-    total_seconds = db.query(func.coalesce(func.sum(CallLog.duration_seconds), 0)).filter(
-        CallLog.company_id == company.id,
-        CallLog.started_at >= month_start,
-        CallLog.status == CallStatus.COMPLETED,
-        CallLog.duration_seconds > 0,
-    ).scalar()
+    # --- Calculate overage ---
+    minutes_used = calculate_minutes_used(
+        db, company.id, overage_period_start, overage_period_end,
+    )
+    raw_overage = minutes_used - limit
+    overage_minutes = round_overage_minutes(raw_overage)
+    amount_cents = overage_minutes * int(round(OVERAGE_PRICE_PER_MINUTE * 100))
 
-    minutes_used = total_seconds / 60
-    overage = minutes_used - limit
+    # --- Create or update billing_run row ---
+    billing_run = existing_run  # may be a previous error run
+    if not billing_run:
+        billing_run = BillingRun(
+            company_id=company.id,
+            stripe_invoice_id=invoice_id,
+            stripe_subscription_id=subscription_id,
+            period_start=overage_period_start,
+            period_end=overage_period_end,
+            minutes_included=limit,
+            minutes_used=round(minutes_used, 2),
+            overage_minutes=overage_minutes,
+            overage_amount_cents=amount_cents,
+        )
+        db.add(billing_run)
+        try:
+            db.flush()
+        except IntegrityError:
+            db.rollback()
+            logger.info(f"[OVERAGE] Duplicate billing_run for invoice {invoice_id} (concurrent webhook), skipping")
+            return
+    else:
+        billing_run.period_start = overage_period_start
+        billing_run.period_end = overage_period_end
+        billing_run.minutes_included = limit
+        billing_run.minutes_used = round(minutes_used, 2)
+        billing_run.overage_minutes = overage_minutes
+        billing_run.overage_amount_cents = amount_cents
+        billing_run.error_message = None
 
-    if overage <= 0:
-        logger.info(f"[OVERAGE] No overage for {company.name} ({minutes_used:.0f}/{limit})")
+    idempotency_key = f"overage-{billing_run.id}"
+    billing_run.stripe_idempotency_key = idempotency_key
+
+    if overage_minutes <= 0:
+        billing_run.status = BillingRunStatus.skipped
+        db.commit()
+        logger.info(
+            f"[OVERAGE] No overage for {company.name} "
+            f"({minutes_used:.1f}/{limit} min, period {overage_period_start.date()}→{overage_period_end.date()})"
+        )
         return
 
-    overage_rounded = round(overage, 1)
-    amount_cents = int(round(overage_rounded * OVERAGE_PRICE_PER_MINUTE * 100))
+    billing_run.status = BillingRunStatus.calculated
+    db.commit()
 
-    if amount_cents <= 0:
-        return
-
+    # --- Create Stripe InvoiceItem (idempotent via key) ---
     try:
-        stripe.InvoiceItem.create(
+        item = stripe.InvoiceItem.create(
             customer=customer_id,
             invoice=invoice_id,
             amount=amount_cents,
             currency="eur",
-            description=f"{overage_rounded} extra belminuten a €{OVERAGE_PRICE_PER_MINUTE:.2f}/min",
+            description=f"{overage_minutes} extra belminuten à €{OVERAGE_PRICE_PER_MINUTE:.2f}/min",
+            idempotency_key=idempotency_key,
         )
+        billing_run.stripe_invoice_item_id = item.id
+        billing_run.status = BillingRunStatus.charged
+        db.commit()
         logger.info(
-            f"[OVERAGE] Added €{amount_cents/100:.2f} overage charge for {company.name} "
-            f"({overage_rounded} min over limit)"
+            f"[OVERAGE] Charged €{amount_cents/100:.2f} for {company.name} "
+            f"({overage_minutes} min over, period {overage_period_start.date()}→{overage_period_end.date()})"
         )
+    except stripe.error.InvalidRequestError as e:
+        if "invoice" in str(e).lower() and ("finalized" in str(e).lower() or "not open" in str(e).lower()):
+            logger.warning(
+                f"[OVERAGE] Invoice {invoice_id} already finalized for {company.name}, "
+                f"creating standalone InvoiceItem for next invoice"
+            )
+            try:
+                fallback_key = f"overage-fallback-{billing_run.id}"
+                item = stripe.InvoiceItem.create(
+                    customer=customer_id,
+                    amount=amount_cents,
+                    currency="eur",
+                    description=(
+                        f"{overage_minutes} extra belminuten à €{OVERAGE_PRICE_PER_MINUTE:.2f}/min "
+                        f"(periode {overage_period_start.date()}→{overage_period_end.date()})"
+                    ),
+                    idempotency_key=fallback_key,
+                )
+                billing_run.stripe_invoice_item_id = item.id
+                billing_run.status = BillingRunStatus.charged
+                billing_run.error_message = "Attached to next invoice (original was finalized)"
+                db.commit()
+                logger.info(
+                    f"[OVERAGE] Standalone InvoiceItem created for {company.name} "
+                    f"(€{amount_cents/100:.2f}, will appear on next invoice)"
+                )
+            except stripe.error.StripeError as fallback_err:
+                billing_run.status = BillingRunStatus.error
+                billing_run.error_message = f"Finalized + fallback failed: {fallback_err}"
+                db.commit()
+                logger.error(f"[OVERAGE] Fallback InvoiceItem also failed for {company.name}: {fallback_err}")
+        else:
+            billing_run.status = BillingRunStatus.error
+            billing_run.error_message = str(e)
+            db.commit()
+            logger.error(f"[OVERAGE] Failed InvoiceItem for {company.name} (invoice={invoice_id}): {e}")
     except stripe.error.StripeError as e:
-        logger.error(f"[OVERAGE] Failed to add InvoiceItem for {company.name}: {e}")
+        billing_run.status = BillingRunStatus.error
+        billing_run.error_message = str(e)
+        db.commit()
+        logger.error(
+            f"[OVERAGE] Failed InvoiceItem for {company.name} "
+            f"(invoice={invoice_id}): {e}"
+        )
 
 
 def _build_stripe_address(company) -> dict | None:

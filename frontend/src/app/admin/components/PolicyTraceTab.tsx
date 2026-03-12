@@ -360,7 +360,7 @@ export function PolicyTraceTab() {
     refetchInterval: 30000,
   })
 
-  const { data: policyTrace, isLoading: traceLoading } = useQuery({
+  const { data: policyTrace, isLoading: traceLoading } = useQuery<PolicyTrace>({
     queryKey: ['admin-policy-trace', selectedCallId],
     queryFn: () => adminApi.getCallPolicyTrace(selectedCallId!),
     enabled: !!selectedCallId,

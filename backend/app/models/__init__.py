@@ -19,6 +19,7 @@ from app.models.context_log import ContextLog
 from app.models.voice_session import VoiceSession, PolicyDecisionLog, CallPhase
 from app.models.crm_integration import CRMIntegration
 from app.models.notification import Notification
+from app.models.billing_run import BillingRun, BillingRunStatus
 from app.services.indexing.models import (
     IdxSite, IdxCrawlJob, IdxPage, IdxChunk, IdxError, RtvEvent, RtvResult,
 )
@@ -55,4 +56,6 @@ __all__ = [
     "IdxError",
     "RtvEvent",
     "RtvResult",
+    "BillingRun",
+    "BillingRunStatus",
 ]

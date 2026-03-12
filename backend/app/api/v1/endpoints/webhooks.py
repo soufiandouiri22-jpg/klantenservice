@@ -409,9 +409,16 @@ async def twilio_voice_webhook(
 
 
 def _check_usage_alerts(db: Session, company_id):
-    """Send email alerts when usage hits 80% or 100% (once per month per threshold)."""
-    from app.api.v1.endpoints.payments import PLAN_MINUTES, OVERAGE_PRICE_PER_MINUTE
-    from sqlalchemy import func as sqlfunc
+    """Send email alerts when usage hits 80% or 100% (once per billing cycle per threshold).
+
+    Uses billing_runs chain to determine the current billing period start,
+    so alerts reset correctly at the real Stripe billing boundary.
+    """
+    from app.api.v1.endpoints.payments import PLAN_MINUTES
+    from app.services.billing_helpers import (
+        get_current_billing_period_start,
+        calculate_minutes_used,
+    )
 
     company = db.query(Company).filter(Company.id == company_id).first()
     if not company:
@@ -422,22 +429,16 @@ def _check_usage_alerts(db: Session, company_id):
     if limit is None:
         return
 
-    now = datetime.utcnow()
-    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-
-    total_seconds = db.query(sqlfunc.coalesce(sqlfunc.sum(CallLog.duration_seconds), 0)).filter(
-        CallLog.company_id == company.id,
-        CallLog.started_at >= month_start,
-        CallLog.status == CallStatus.COMPLETED,
-        CallLog.duration_seconds > 0,
-    ).scalar()
-    minutes_used = total_seconds / 60
+    period_start = get_current_billing_period_start(db, company)
+    minutes_used = calculate_minutes_used(db, company.id, period_start)
     percentage = (minutes_used / limit) * 100
 
     from app.core.email import send_usage_warning_email, send_usage_exceeded_email
 
+    now = datetime.utcnow()
+
     if percentage >= 100:
-        if not company.usage_exceeded_sent_at or company.usage_exceeded_sent_at < month_start:
+        if not company.usage_exceeded_sent_at or company.usage_exceeded_sent_at < period_start:
             send_usage_exceeded_email(
                 to_email=company.email,
                 company_name=company.name,
@@ -448,7 +449,7 @@ def _check_usage_alerts(db: Session, company_id):
             db.commit()
             logger.info(f"[USAGE ALERT] Sent 100% exceeded email to {company.name}")
     elif percentage >= 80:
-        if not company.usage_warning_sent_at or company.usage_warning_sent_at < month_start:
+        if not company.usage_warning_sent_at or company.usage_warning_sent_at < period_start:
             send_usage_warning_email(
                 to_email=company.email,
                 company_name=company.name,
