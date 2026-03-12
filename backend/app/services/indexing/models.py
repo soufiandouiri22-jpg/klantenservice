@@ -49,6 +49,7 @@ class PageType(str, Enum):
     policy = "policy"
     blog = "blog"
     location = "location"
+    general = "general"
     unknown = "unknown"
 
 
