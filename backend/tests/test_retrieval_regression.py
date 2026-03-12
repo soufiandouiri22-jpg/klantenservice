@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 # ── Extracted from query_classifier.py ──────────────────────────────────────
 
 _RULES: list[tuple[re.Pattern, str]] = [
-    (re.compile(r"\b(prij[sz]\w*|kost\w*|tariev\w*|tarief\w*|pakket\w*|plan\w*|abonnement\w*|euro|€|betaal\w*|goedkoop\w*|duur|budget\w*|belminut\w*)\b", re.I), "pricing"),
+    (re.compile(r"\b(prij[sz]\w*|kost\w*|tariev\w*|tarief\w*|pakket\w*|plan\w*|abonnement\w*|euro|€|betaal\w*|goedkoop\w*|duur|budget\w*|belminut\w*|starter|business|enterprise)\b", re.I), "pricing"),
     (re.compile(r"\b(openingstijd\w*|bereikbaar\w*|bellen|telefoon\w*|email\w*|e-mail\w*|contact\w*|adres\w*|locatie\w*|route\w*)\b", re.I), "contact"),
     (re.compile(r"\b(retour\w*|terugsturen|annuleer\w*|annulering\w*|opzeg\w*|garantie\w*|verzend\w*|lever\w*|bezorg\w*)\b", re.I), "policy"),
     (re.compile(r"\b(faq|veelgesteld\w*|vraag en antwoord)\b", re.I), "faq"),
@@ -162,6 +162,15 @@ class TestQueryClassifier:
 
     def test_policy(self):
         assert classify_query("Wat is het retourbeleid?") == "policy"
+
+    def test_enterprise(self):
+        assert classify_query("Hebben jullie ook enterprise?") == "pricing"
+
+    def test_business(self):
+        assert classify_query("Wat kost business?") == "pricing"
+
+    def test_starter(self):
+        assert classify_query("Wat is het starter pakket?") == "pricing"
 
     def test_general(self):
         assert classify_query("Vertel me over jullie bedrijf") == "general"
