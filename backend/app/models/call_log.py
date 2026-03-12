@@ -65,7 +65,7 @@ class CallLog(Base):
     recording_url = Column(String(500), nullable=True)
     recording_duration_seconds = Column(Integer, nullable=True)
     recording_consent_given = Column(Boolean, default=False)
-    elevenlabs_conversation_id = Column(String(100), nullable=True)  # Demo calls: fetch audio via API
+    elevenlabs_conversation_id = Column(String(100), nullable=True)  # ElevenLabs conversation ID for transcript + audio fetch
     
     # AI Analysis
     sentiment = Column(String(20), nullable=True)  # positive, neutral, negative

@@ -9,6 +9,7 @@ Rate-limited to prevent abuse.
 """
 import logging
 import time
+import asyncio
 from collections import defaultdict
 from datetime import datetime
 from uuid import uuid4
@@ -222,6 +223,7 @@ async def get_demo_signed_url(
         "overrides": {
             "agent": {
                 "prompt": {"prompt": full_instructions},
+                "firstMessage": first_msg,
             },
             "tts": {"voiceId": voice_id},
         },
@@ -265,4 +267,30 @@ async def end_demo_call(
         db.commit()
         logger.info(f"[DEMO CALL] Ended demo CallLog {call_log.id}")
 
+        # Post-call: fetch transcript from ElevenLabs + sentiment analysis
+        if call_log.elevenlabs_conversation_id:
+            try:
+                asyncio.create_task(
+                    _run_demo_post_call(call_log.id)
+                )
+            except Exception as e:
+                logger.warning(f"[DEMO CALL] Post-call analysis scheduling failed: {e}")
+
     return {"ok": True}
+
+
+async def _run_demo_post_call(call_log_id):
+    """Background task: fetch demo call transcript + sentiment."""
+    from app.core.database import SessionLocal
+    from app.services.transcript_service import fetch_and_process_transcript
+
+    db = SessionLocal()
+    try:
+        call_log = db.query(CallLog).filter(CallLog.id == call_log_id).first()
+        if not call_log:
+            return
+        await fetch_and_process_transcript(db, call_log)
+    except Exception as e:
+        logger.warning(f"[DEMO CALL] Post-call analysis failed for {call_log_id}: {e}", exc_info=True)
+    finally:
+        db.close()

@@ -14,6 +14,9 @@ import httpx
 
 import logging
 import asyncio
+import re as _re
+import xml.etree.ElementTree as _ET
+from urllib.parse import urlparse, parse_qs
 
 from app.core.database import get_db
 from app.core.config import settings
@@ -54,10 +57,62 @@ async def _start_recording(call_sid: str):
         logger.warning(f"[RECORDING] Failed to start for {call_sid}: {e}")
 
 
+async def _run_post_call_analysis(call_log_id, db_url=None):
+    """
+    Background task: fetch transcript from ElevenLabs and run sentiment analysis.
+    Uses its own DB session so it can run after the webhook response is sent.
+    """
+    from app.core.database import SessionLocal
+    from app.services.transcript_service import fetch_and_process_transcript
+
+    db = SessionLocal()
+    try:
+        call_log = db.query(CallLog).filter(CallLog.id == call_log_id).first()
+        if not call_log:
+            logger.warning(f"[POST-CALL] call_log {call_log_id} not found")
+            return
+        await fetch_and_process_transcript(db, call_log)
+    except Exception as e:
+        logger.warning(f"[POST-CALL] Analysis failed for {call_log_id}: {e}", exc_info=True)
+    finally:
+        db.close()
+
+
 def verify_twilio_signature(request: Request, signature: str) -> bool:
     """Verify Twilio webhook signature."""
     # In production, implement proper Twilio signature verification
     return True
+
+
+def _extract_conversation_id(twiml: str, headers: dict) -> str | None:
+    """
+    Try to extract the ElevenLabs conversation_id from the register-call
+    response (TwiML XML or response headers).
+    """
+    # 1) Check response headers
+    for key in ("x-conversation-id", "x-elevenlabs-conversation-id", "conversation-id"):
+        if key in headers:
+            return headers[key]
+
+    # 2) Parse TwiML XML and look for WebSocket URL with conversation_id param
+    try:
+        root = _ET.fromstring(twiml)
+        for elem in root.iter():
+            url = elem.get("url") or elem.get("Url") or ""
+            if "elevenlabs" in url and ("conversation" in url or "convai" in url):
+                parsed = urlparse(url)
+                qs = parse_qs(parsed.query)
+                if "conversation_id" in qs:
+                    return qs["conversation_id"][0]
+    except _ET.ParseError:
+        pass
+
+    # 3) Regex fallback on the raw TwiML text
+    m = _re.search(r'conversation_id=([a-zA-Z0-9_-]+)', twiml)
+    if m:
+        return m.group(1)
+
+    return None
 
 
 def _tts_twiml(text: str, voice: str = None, extra_twiml: str = "") -> str:
@@ -389,6 +444,12 @@ async def twilio_voice_webhook(
                 f"twiml={twiml}"
             )
 
+            conv_id = _extract_conversation_id(twiml, dict(resp.headers))
+            if conv_id:
+                call_log.elevenlabs_conversation_id = conv_id
+                db.commit()
+                logger.info(f"[VOICE WEBHOOK] Stored conversation_id={conv_id} for call_sid={call_sid}")
+
             asyncio.create_task(_start_recording(call_sid))
 
             return Response(content=twiml, media_type="text/xml")
@@ -529,41 +590,12 @@ async def twilio_status_webhook(
             except Exception:
                 logger.warning("Failed to create missed-call notification", exc_info=True)
 
-        # Post-call sentiment analysis (non-blocking)
+        # Post-call: fetch transcript from ElevenLabs + sentiment analysis
         if call_status == "completed":
             try:
-                from app.services.sentiment_service import analyze_sentiment
-                transcripts = db.query(CallTranscript).filter(
-                    CallTranscript.call_log_id == call_log.id
-                ).order_by(CallTranscript.timestamp).all()
-                if transcripts:
-                    transcript_text = "\n".join(
-                        f"{'Klant' if t.speaker == 'caller' else 'AI'}: {t.message}"
-                        for t in transcripts
-                    )
-                    sentiment = await analyze_sentiment(transcript_text)
-                    if sentiment:
-                        call_log.sentiment = sentiment
-                        db.commit()
-                        logger.info(f"[SENTIMENT] call_sid={call_sid} → {sentiment}")
-
-                        if sentiment == "negative":
-                            try:
-                                from app.services.notification_service import create_notification
-                                from app.models.notification import NotificationType
-                                caller = call_log.caller_number or "Onbekend nummer"
-                                create_notification(
-                                    db=db,
-                                    company_id=str(call_log.company_id),
-                                    type=NotificationType.CALL_ERROR,
-                                    title="Ontevreden klant",
-                                    message=f"Gesprek met {caller} is als negatief beoordeeld.",
-                                    url=f"/dashboard/calls",
-                                )
-                            except Exception:
-                                logger.warning("Failed to create negative-sentiment notification", exc_info=True)
-            except Exception as sent_err:
-                logger.warning(f"Sentiment analysis failed (non-blocking): {sent_err}")
+                asyncio.create_task(_run_post_call_analysis(call_log.id))
+            except Exception as e:
+                logger.warning(f"Post-call analysis scheduling failed: {e}")
 
         # Write call summary back to CRM if configured
         if call_status == "completed" and call_log.summary:
