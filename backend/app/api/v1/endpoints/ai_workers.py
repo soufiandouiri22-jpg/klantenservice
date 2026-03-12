@@ -149,7 +149,7 @@ async def list_ai_workers(
         worker_dict["linked_website"] = {
             "id": str(website.id),
             "base_url": website.base_url,
-            "status": website.status.value if website.status else None,
+            "status": website.status if website.status else None,
         } if website else None
         
         # Find linked calendar

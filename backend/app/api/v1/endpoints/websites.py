@@ -203,7 +203,7 @@ async def reindex_website(
 
     asyncio.create_task(_run_indexing_background(str(site.id), settings.DATABASE_URL))
 
-    return IndexTriggerResponse(message="Indexering gestart", status=site.status.value, estimated_time_minutes=5)
+    return IndexTriggerResponse(message="Indexering gestart", status=site.status, estimated_time_minutes=5)
 
 
 @router.post("/{website_id}/test", response_model=TestQuestionResponse)
