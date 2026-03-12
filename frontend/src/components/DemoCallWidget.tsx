@@ -14,6 +14,7 @@ export function DemoCallWidget() {
   const [workerName, setWorkerName] = useState('')
   const [micMuted, setMicMuted] = useState(false)
   const callLogIdRef = useRef<string | null>(null)
+  const ringbackRef = useRef<HTMLAudioElement | null>(null)
 
   const conversation = useConversation({
     micMuted,
@@ -28,6 +29,7 @@ export function DemoCallWidget() {
     onError: (error: any) => {
       console.error('Demo call error:', error)
       toast.error('Verbinding verbroken. Probeer het opnieuw.')
+      if (ringbackRef.current) { ringbackRef.current.pause(); ringbackRef.current = null }
       if (callLogIdRef.current) {
         demoApi.endCall(callLogIdRef.current).catch(() => {})
         callLogIdRef.current = null
@@ -42,8 +44,13 @@ export function DemoCallWidget() {
 
       await navigator.mediaDevices.getUserMedia({ audio: true })
 
-      // Let browser audio pipeline warm up before ElevenLabs starts speaking
-      await new Promise(resolve => setTimeout(resolve, 3000))
+      // Play ringback tone to warm up audio pipeline + give natural "ringing" UX
+      const ringback = new Audio('/sounds/ringback.mp3')
+      ringbackRef.current = ringback
+      ringback.play().catch(() => {})
+      await new Promise(resolve => setTimeout(resolve, 4000))
+      ringback.pause()
+      ringbackRef.current = null
 
       const data = await demoApi.getSignedUrl()
       setWorkerName(data.worker_name)
@@ -56,6 +63,7 @@ export function DemoCallWidget() {
       })
     } catch (err: any) {
       console.error('Failed to start demo call:', err)
+      if (ringbackRef.current) { ringbackRef.current.pause(); ringbackRef.current = null }
       if (callLogIdRef.current) {
         demoApi.endCall(callLogIdRef.current).catch(() => {})
         callLogIdRef.current = null
@@ -78,6 +86,7 @@ export function DemoCallWidget() {
 
   useEffect(() => {
     return () => {
+      if (ringbackRef.current) { ringbackRef.current.pause(); ringbackRef.current = null }
       if (callLogIdRef.current) {
         demoApi.endCall(callLogIdRef.current).catch(() => {})
       }
