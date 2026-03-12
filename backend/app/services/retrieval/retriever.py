@@ -206,7 +206,9 @@ class RetrievalService:
         ts_query_parts = [w for w in query.lower().split() if len(w) > 2]
         ts_query = " | ".join(ts_query_parts) if ts_query_parts else query.lower()
 
-        # For specific query types, first fetch type-matched chunks
+        # For specific query types, fetch type-matched chunks first and
+        # backfill with general results. Even a single typed match is valuable
+        # (e.g. a company with only 2 pricing chunks must not lose them).
         if query_classification not in ("general",):
             typed_candidates = await self._fetch_candidates(
                 company_id=company_id,
@@ -216,8 +218,7 @@ class RetrievalService:
                 site_id=site_id,
                 chunk_type_filter=query_classification,
             )
-            if len(typed_candidates) >= 3:
-                # Backfill with general results to get diverse context
+            if typed_candidates:
                 remaining = limit - len(typed_candidates)
                 if remaining > 0:
                     general_candidates = await self._fetch_candidates(

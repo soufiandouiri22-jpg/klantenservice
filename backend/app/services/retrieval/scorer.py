@@ -15,6 +15,7 @@ TYPE_MATCH_BOOST = 0.20
 GENERIC_PENALTY = -0.12
 LOW_INFO_PENALTY = -0.10
 JUNK_PENALTY = -0.40
+POLICY_CROSSTALK_PENALTY = -0.25
 
 # Patterns that indicate junk / non-informational content
 _JUNK_PATTERNS = [
@@ -26,6 +27,14 @@ _JUNK_PATTERNS = [
     re.compile(r"(__webpack|module\.exports|import\s+\{|require\()", re.I),
     re.compile(r"(cookie.?policy|privacy.?policy|terms.?of.?service).{0,30}(accept|decline|agree)", re.I),
 ]
+
+
+_POLICY_TYPES = {"policy", "terms", "privacy", "voorwaarden"}
+
+
+def _is_policy_chunk(chunk_type: str, page_type: str) -> bool:
+    """Detect chunks that originate from terms/conditions/privacy pages."""
+    return chunk_type in _POLICY_TYPES or page_type in _POLICY_TYPES
 
 
 def _is_junk(content: str) -> bool:
@@ -62,17 +71,26 @@ def score_candidates(
         boost = 0.0
         base_score = c.get("rerank_score", c.get("vector_score", 0.0))
 
-        # Type match boost (stronger for pricing)
+        chunk_type = c.get("chunk_type", "general")
+        page_type = c.get("page_type", "unknown")
+
+        # Type match boost
         if query_classification != "general":
-            if c.get("chunk_type") == query_classification:
+            if chunk_type == query_classification:
                 boost += TYPE_MATCH_BOOST
-            elif c.get("page_type") == query_classification:
+            elif page_type == query_classification:
                 boost += TYPE_MATCH_BOOST * 0.6
 
         # Generic homepage penalty on specific queries
         if query_classification != "general":
-            if c.get("page_type") == "home" and c.get("chunk_type") == "general":
+            if page_type == "home" and chunk_type == "general":
                 boost += GENERIC_PENALTY
+
+        # Policy crosstalk penalty: policy/terms chunks often contain words
+        # like "tarieven", "prijzen", "kosten" in a legal context. When the
+        # user asks about pricing/contact/faq/etc., these are misleading.
+        if query_classification not in ("general", "policy") and _is_policy_chunk(chunk_type, page_type):
+            boost += POLICY_CROSSTALK_PENALTY
 
         # Low info penalty
         if (c.get("token_count") or 0) < 50:
