@@ -8,7 +8,7 @@ from datetime import datetime
 from enum import Enum
 from sqlalchemy import (
     Column, String, DateTime, Boolean, Integer, Text, Float,
-    ForeignKey, Enum as SQLEnum, JSON,
+    ForeignKey, JSON,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
@@ -83,10 +83,7 @@ class IdxSite(Base):
         "blocked_paths": ["/admin", "/login", "/wp-admin"],
         "provider": "http",
     })
-    status = Column(
-        SQLEnum(SiteStatus, values_callable=lambda x: [e.value for e in x]),
-        default=SiteStatus.pending, nullable=False,
-    )
+    status = Column(String(20), default="pending", nullable=False)
     stats = Column(JSON, default=dict)
     last_crawled_at = Column(DateTime, nullable=True)
     last_error = Column(Text, nullable=True)
@@ -116,10 +113,7 @@ class IdxCrawlJob(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     site_id = Column(UUID(as_uuid=True), ForeignKey("idx_sites.id", ondelete="CASCADE"), nullable=False, index=True)
     company_id = Column(UUID(as_uuid=True), ForeignKey("companies.id"), nullable=False, index=True)
-    status = Column(
-        SQLEnum(CrawlJobStatus, values_callable=lambda x: [e.value for e in x]),
-        default=CrawlJobStatus.queued, nullable=False,
-    )
+    status = Column(String(20), default="queued", nullable=False)
     provider = Column(String(50), default="http")
     config = Column(JSON, default=dict)
     stats = Column(JSON, default=lambda: {
@@ -165,10 +159,7 @@ class IdxPage(Base):
     status_code = Column(Integer, nullable=True)
     content_type = Column(String(100), nullable=True)
     language = Column(String(20), nullable=True)
-    page_type = Column(
-        SQLEnum(PageType, values_callable=lambda x: [e.value for e in x]),
-        default=PageType.unknown, nullable=False,
-    )
+    page_type = Column(String(20), default="unknown", nullable=False)
     content_hash = Column(String(64), nullable=True)
     discovered_from_url = Column(Text, nullable=True)
     crawled_at = Column(DateTime, default=datetime.utcnow)
@@ -199,10 +190,7 @@ class IdxChunk(Base):
     url = Column(Text, nullable=True)
     page_title = Column(Text, nullable=True)
     page_type = Column(String(30), nullable=True)
-    chunk_type = Column(
-        SQLEnum(ChunkType, values_callable=lambda x: [e.value for e in x]),
-        default=ChunkType.general, nullable=False,
-    )
+    chunk_type = Column(String(20), default="general", nullable=False)
     section_path = Column(Text, nullable=True)
     heading_hierarchy = Column(JSON, default=list)
     content = Column(Text, nullable=False)
