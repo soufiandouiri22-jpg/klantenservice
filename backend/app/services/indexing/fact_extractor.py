@@ -46,20 +46,26 @@ _PER_PERIOD_RE = re.compile(
 )
 
 _PLAN_NAME_RE = re.compile(
-    r"\b(starter|basic|standaard|standard|business|professional|pro|"
-    r"premium|enterprise|gratis|free|plus|growth|advanced|custom|lite|team)\b",
+    r"\b(starter|basic|standaard|standard|business|professional|"
+    r"premium|enterprise|plus|growth|advanced|lite|team)\b",
     re.I,
 )
 
 _CONTACT_REQUIRED_RE = re.compile(
-    r"op\s+aanvraag|neem\s+contact|contact\s+(?:opnemen|sales|ons)"
+    r"op\s+aanvraag|neem\s+contact\s+op"
     r"|request\s+(?:pricing|quote|a\s+quote)|offerte"
-    r"|custom\s+pricing|enterprise\s+pricing"
-    r"|bel\s+(?:ons|voor)",
+    r"|custom\s+pricing|enterprise\s+pricing",
     re.I,
 )
 
-_FREE_RE = re.compile(r"\bgratis\b|\bfree\b|\b€\s*0[.,]?0*\b", re.I)
+_FREE_TRIAL_RE = re.compile(
+    r"gratis\s+(?:proef|trial|probeer|uitproberen|starten|testen)"
+    r"|(?:probeer|start|test)\w*\s+(?:het\s+)?gratis"
+    r"|dagen?\s+gratis"
+    r"|gratis\s+(?:uit|•|,|\.|$)"
+    r"|free\s+trial",
+    re.I,
+)
 
 _PHONE_RE = re.compile(r"(?:\+31|0)\s*[\d\s\-().]{7,15}")
 _EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")
@@ -245,7 +251,7 @@ def _extract_pricing(
         has_plan_name = bool(_PLAN_NAME_RE.search(text))
         has_contact_price = bool(_CONTACT_REQUIRED_RE.search(text))
 
-        if is_pricing_page or has_price_signal or (has_plan_name and (has_contact_price or has_price_signal)):
+        if is_pricing_page or (has_plan_name and (has_price_signal or has_contact_price)):
             pricing_texts.append((text, url))
 
     if not pricing_texts:
@@ -283,75 +289,87 @@ def _extract_pricing(
     return saved
 
 
+_PROXIMITY_CHARS = 150
+
+
+def _find_price_after(text: str, start_pos: int) -> Tuple[Optional[Decimal], Optional[str]]:
+    """Find the first valid €-price in the text within _PROXIMITY_CHARS after start_pos."""
+    end_pos = min(len(text), start_pos + _PROXIMITY_CHARS)
+    window = text[start_pos:end_pos]
+
+    m = _PRICE_RE.search(window)
+    if not m:
+        return None, "EUR"
+
+    raw = next((g for g in m.groups() if g), None)
+    if not raw:
+        return None, "EUR"
+
+    price = _parse_price(raw)
+    if price is None or price <= 0:
+        return None, "EUR"
+
+    currency = _detect_currency(window[m.start():m.end() + 20])
+    return price, currency
+
+
 def _parse_plans(text: str, default_url: str) -> List[Dict]:
     """Parse individual plans from combined pricing text."""
     plans: List[Dict] = []
+    seen_names: set = set()
 
-    sections = re.split(r"(?=^#{1,4}\s|\n{2,}(?=[A-Z]))", text, flags=re.MULTILINE)
-    if len(sections) <= 1:
-        sections = re.split(r"\n---\n", text)
-
-    for section in sections:
-        section = section.strip()
-        if not section:
+    for m in _PLAN_NAME_RE.finditer(text):
+        pname = m.group(1)
+        name_key = pname.lower()
+        if name_key in seen_names:
             continue
 
-        plan_names = _PLAN_NAME_RE.findall(section)
-        if not plan_names:
-            continue
-
-        for pname in dict.fromkeys(plan_names):
-            plan = _extract_single_plan(section, pname, default_url)
-            if plan:
-                plans.append(plan)
-
-    if not plans:
-        plan_names = _PLAN_NAME_RE.findall(text)
-        for pname in dict.fromkeys(plan_names):
-            plan = _extract_single_plan(text, pname, default_url)
-            if plan:
-                plans.append(plan)
+        plan = _extract_single_plan(text, pname, m.start(), default_url)
+        if plan:
+            seen_names.add(name_key)
+            plans.append(plan)
 
     return plans
 
 
-def _extract_single_plan(text: str, plan_name: str, source_url: str) -> Optional[Dict]:
-    """Extract a single plan's details from surrounding text."""
+def _extract_single_plan(
+    text: str, plan_name: str, name_pos: int, source_url: str,
+) -> Optional[Dict]:
+    """Extract a single plan's details using the text near name_pos."""
     name = plan_name.strip().capitalize()
 
-    price_match = _PRICE_RE.search(text)
-    raw_price = None
-    if price_match:
-        raw_price = next((g for g in price_match.groups() if g), None)
+    window_start = max(0, name_pos - 20)
+    window_end = min(len(text), name_pos + _PROXIMITY_CHARS)
+    window = text[window_start:window_end]
 
-    price = _parse_price(raw_price) if raw_price else None
-    currency = _detect_currency(text)
-    billing_period = _detect_period(text)
+    if _FREE_TRIAL_RE.search(window):
+        nearby_plan = _PLAN_NAME_RE.search(window)
+        if not nearby_plan or nearby_plan.group(1).lower() == plan_name.lower():
+            pass
 
-    is_free = bool(_FREE_RE.search(text))
-    is_contact = bool(_CONTACT_REQUIRED_RE.search(text))
+    price, currency = _find_price_after(text, name_pos)
+    billing_period = _detect_period(window)
 
-    if is_free and price is None:
-        price_type = "free"
-    elif price is not None:
+    nearby_contact = bool(_CONTACT_REQUIRED_RE.search(window))
+
+    if price is not None:
         price_type = "fixed"
-    elif is_contact:
+    elif nearby_contact:
         price_type = "contact_required"
     else:
-        price_type = "custom"
+        return None
 
     features = []
-    for line in text.split("\n"):
+    for line in window.split("\n"):
         line = line.strip()
         if line.startswith(("- ", "• ", "✓ ", "* ")):
             feat = line.lstrip("-•✓* ").strip()
-            if feat and len(feat) < 120:
+            if feat and 3 < len(feat) < 120:
                 features.append(feat)
 
-    name_idx = text.lower().find(plan_name.lower())
-    desc_text = text[name_idx:name_idx + 300] if name_idx >= 0 else text[:300]
+    desc_from_name = text[name_pos:name_pos + 300]
     desc_lines = [
-        l.strip() for l in desc_text.split("\n")
+        l.strip() for l in desc_from_name.split("\n")
         if l.strip() and not l.strip().startswith(("#", "-", "•", "✓", "*"))
     ]
     description = " ".join(desc_lines[:3])[:500] if desc_lines else None

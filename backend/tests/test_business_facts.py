@@ -31,20 +31,26 @@ _PER_PERIOD_RE = re.compile(
 )
 
 _PLAN_NAME_RE = re.compile(
-    r"\b(starter|basic|standaard|standard|business|professional|pro|"
-    r"premium|enterprise|gratis|free|plus|growth|advanced|custom|lite|team)\b",
+    r"\b(starter|basic|standaard|standard|business|professional|"
+    r"premium|enterprise|plus|growth|advanced|lite|team)\b",
     re.I,
 )
 
 _CONTACT_REQUIRED_RE = re.compile(
-    r"op\s+aanvraag|neem\s+contact|contact\s+(?:opnemen|sales|ons)"
+    r"op\s+aanvraag|neem\s+contact\s+op"
     r"|request\s+(?:pricing|quote|a\s+quote)|offerte"
-    r"|custom\s+pricing|enterprise\s+pricing"
-    r"|bel\s+(?:ons|voor)",
+    r"|custom\s+pricing|enterprise\s+pricing",
     re.I,
 )
 
-_FREE_RE = re.compile(r"\bgratis\b|\bfree\b|\b€\s*0[.,]?0*\b", re.I)
+_FREE_TRIAL_RE = re.compile(
+    r"gratis\s+(?:proef|trial|probeer|uitproberen|starten|testen)"
+    r"|(?:probeer|start|test)\w*\s+(?:het\s+)?gratis"
+    r"|dagen?\s+gratis"
+    r"|gratis\s+(?:uit|•|,|\.|$)"
+    r"|free\s+trial",
+    re.I,
+)
 
 _PHONE_RE = re.compile(r"(?:\+31|0)\s*[\d\s\-().]{7,15}")
 _EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")
@@ -121,14 +127,61 @@ def _detect_period(text: str) -> Optional[str]:
     return mapping.get(raw)
 
 
-def _detect_price_type(text: str, has_price: bool) -> str:
-    if _FREE_RE.search(text) and not has_price:
-        return "free"
-    if has_price:
-        return "fixed"
-    if _CONTACT_REQUIRED_RE.search(text):
-        return "contact_required"
-    return "custom"
+PROXIMITY_CHARS = 150
+
+
+def _find_price_after(text: str, start_pos: int) -> Optional[Decimal]:
+    end_pos = min(len(text), start_pos + PROXIMITY_CHARS)
+    window = text[start_pos:end_pos]
+    m = _PRICE_RE.search(window)
+    if not m:
+        return None
+    raw = next((g for g in m.groups() if g), None)
+    if not raw:
+        return None
+    price = _parse_price(raw)
+    return price if price is not None and price > 0 else None
+
+
+def _extract_plan_from_text(text: str, plan_name: str, name_pos: int) -> Optional[Dict]:
+    """Extract a plan using the forward-proximity logic."""
+    window_start = max(0, name_pos - 20)
+    window_end = min(len(text), name_pos + PROXIMITY_CHARS)
+    window = text[window_start:window_end]
+
+    price = _find_price_after(text, name_pos)
+    nearby_contact = bool(_CONTACT_REQUIRED_RE.search(window))
+
+    if price is not None:
+        price_type = "fixed"
+    elif nearby_contact:
+        price_type = "contact_required"
+    else:
+        return None
+
+    billing_period = _detect_period(window)
+    return {
+        "name": plan_name.strip().capitalize(),
+        "price": price,
+        "price_type": price_type,
+        "billing_period": billing_period,
+    }
+
+
+def _parse_plans_from_text(text: str) -> List[Dict]:
+    """Full plan extraction from text — mirrors production."""
+    plans = []
+    seen = set()
+    for m in _PLAN_NAME_RE.finditer(text):
+        pname = m.group(1)
+        key = pname.lower()
+        if key in seen:
+            continue
+        plan = _extract_plan_from_text(text, pname, m.start())
+        if plan:
+            seen.add(key)
+            plans.append(plan)
+    return plans
 
 
 # ── Dataclasses to simulate DB models ─────────────────────────────
@@ -232,20 +285,12 @@ class TestPricingExtraction:
     @staticmethod
     def test_enterprise_no_price():
         text = "Enterprise Prijs op aanvraag"
-        names = _PLAN_NAME_RE.findall(text)
-        prices = _PRICE_RE.findall(text)
-        has_price = bool(prices)
-        price_type = _detect_price_type(text, has_price)
-        _assert("enterprise" in [n.lower() for n in names], "pricing: enterprise plan detected")
-        _assert(price_type == "contact_required", "pricing: enterprise -> contact_required", f"got {price_type}")
-
-    @staticmethod
-    def test_free_plan():
-        text = "Free tier Gratis voor altijd"
-        names = _PLAN_NAME_RE.findall(text)
-        price_type = _detect_price_type(text, False)
-        _assert("free" in [n.lower() for n in names], "pricing: free plan detected")
-        _assert(price_type == "free", "pricing: gratis -> free", f"got {price_type}")
+        m = _PLAN_NAME_RE.search(text)
+        _assert(m is not None, "pricing: enterprise plan detected")
+        plan = _extract_plan_from_text(text, "Enterprise", m.start()) if m else None
+        _assert(plan is not None, "pricing: enterprise extracted")
+        if plan:
+            _assert(plan["price_type"] == "contact_required", "pricing: enterprise -> contact_required", f"got {plan['price_type']}")
 
     @staticmethod
     def test_multiple_plans_in_text():
@@ -265,10 +310,10 @@ Enterprise Prijs op aanvraag
     def test_contact_required_patterns():
         patterns = [
             "Neem contact op voor een offerte",
-            "Contact sales for pricing",
             "Request a quote",
             "Prijs op aanvraag",
-            "Bel ons voor meer informatie",
+            "Enterprise pricing",
+            "Custom pricing",
         ]
         for p in patterns:
             _assert(
@@ -541,6 +586,191 @@ class TestEdgeCases:
         for name in ["STARTER", "Starter", "starter", "ENTERPRISE", "Enterprise"]:
             _assert(bool(_PLAN_NAME_RE.search(name)), f"edge: plan name '{name}' detected")
 
+    @staticmethod
+    def test_gratis_free_not_plan_names():
+        for word in ["gratis", "free", "pro", "custom", "Free", "Gratis"]:
+            _assert(not bool(_PLAN_NAME_RE.search(word)), f"edge: '{word}' is NOT a plan name")
+
+
+# ── 8. Klantenservice.ai homepage regression ─────────────────────
+
+_HOMEPAGE = """AI-telefonisten voor uw bedrijf
+Automatiseer uw klantenservice met intelligente AI-medewerkers die 24/7 beschikbaar zijn.
+
+Start gratis proefperiode
+Boek een demo
+Probeer het gratis • Annuleren kan altijd
+
+Starter
+€149 /maand
+14 dagen gratis
+Perfect voor kleine ondernemers
+- 1 AI-medewerker
+- 500 belminuten/maand
+- Agenda integratie
+- CRM integratie
+- Website kennis
+Probeer het gratis uit
+
+Meest gekozen
+Business
+€299 /maand
+14 dagen gratis
+Ideaal voor groeiende bedrijven
+- 5 AI-medewerkers
+- 2.000 belminuten/maand
+- Agenda integratie
+- CRM integratie
+- Website kennis
+- Prioriteit support
+Probeer het gratis uit
+
+Enterprise
+Prijs op aanvraag
+Voor grote organisaties
+- 7+ AI-medewerkers
+- Onbeperkt belminuten
+- Custom integraties
+- Dedicated account manager
+- SLA garantie
+Neem contact op
+
+Veelgestelde vragen
+Hoe snel kan ik starten?
+Kan ik de AI trainen met mijn eigen informatie?
+"""
+
+
+class TestHomepageRegression:
+
+    @staticmethod
+    def test_exactly_three_plans():
+        plans = _parse_plans_from_text(_HOMEPAGE)
+        _assert(len(plans) == 3, f"homepage: exactly 3 plans", f"got {len(plans)}: {[p['name'] for p in plans]}")
+
+    @staticmethod
+    def test_starter_price_149():
+        plans = _parse_plans_from_text(_HOMEPAGE)
+        starter = next((p for p in plans if p["name"] == "Starter"), None)
+        _assert(starter is not None, "homepage: Starter plan found")
+        if starter:
+            _assert(starter["price"] == Decimal("149"), "homepage: Starter price = 149", f"got {starter['price']}")
+            _assert(starter["price_type"] == "fixed", "homepage: Starter type = fixed")
+            _assert(starter["billing_period"] == "maand", "homepage: Starter period = maand")
+
+    @staticmethod
+    def test_business_price_299():
+        plans = _parse_plans_from_text(_HOMEPAGE)
+        biz = next((p for p in plans if p["name"] == "Business"), None)
+        _assert(biz is not None, "homepage: Business plan found")
+        if biz:
+            _assert(biz["price"] == Decimal("299"), "homepage: Business price = 299", f"got {biz['price']}")
+            _assert(biz["price_type"] == "fixed", "homepage: Business type = fixed")
+            _assert(biz["billing_period"] == "maand", "homepage: Business period = maand")
+
+    @staticmethod
+    def test_enterprise_contact_required():
+        plans = _parse_plans_from_text(_HOMEPAGE)
+        ent = next((p for p in plans if p["name"] == "Enterprise"), None)
+        _assert(ent is not None, "homepage: Enterprise plan found")
+        if ent:
+            _assert(ent["price"] is None, "homepage: Enterprise price = None", f"got {ent['price']}")
+            _assert(ent["price_type"] == "contact_required", "homepage: Enterprise type = contact_required", f"got {ent['price_type']}")
+
+    @staticmethod
+    def test_no_gratis_plan():
+        plans = _parse_plans_from_text(_HOMEPAGE)
+        names = {p["name"].lower() for p in plans}
+        _assert("gratis" not in names, "homepage: no 'Gratis' plan", f"got names: {names}")
+        _assert("free" not in names, "homepage: no 'Free' plan", f"got names: {names}")
+
+    @staticmethod
+    def test_no_custom_plan():
+        plans = _parse_plans_from_text(_HOMEPAGE)
+        names = {p["name"].lower() for p in plans}
+        _assert("custom" not in names, "homepage: no 'Custom' plan", f"got names: {names}")
+
+    @staticmethod
+    def test_no_pro_plan():
+        plans = _parse_plans_from_text(_HOMEPAGE)
+        names = {p["name"].lower() for p in plans}
+        _assert("pro" not in names, "homepage: no 'Pro' plan", f"got names: {names}")
+
+    @staticmethod
+    def test_14_dagen_gratis_not_plan():
+        text = "14 dagen gratis proberen! Start nu."
+        plans = _parse_plans_from_text(text)
+        _assert(len(plans) == 0, "homepage: '14 dagen gratis' -> 0 plans", f"got {len(plans)}")
+
+    @staticmethod
+    def test_gratis_proefperiode_not_plan():
+        text = "Start gratis proefperiode. Annuleren kan altijd. Probeer het gratis uit."
+        plans = _parse_plans_from_text(text)
+        _assert(len(plans) == 0, "homepage: 'gratis proefperiode' -> 0 plans", f"got {len(plans)}")
+
+    @staticmethod
+    def test_cta_not_plan():
+        text = "Probeer het gratis • Boek een demo • Neem contact op"
+        plans = _parse_plans_from_text(text)
+        _assert(len(plans) == 0, "homepage: CTA text -> 0 plans", f"got {len(plans)}")
+
+    @staticmethod
+    def test_faq_not_plan():
+        text = "Veelgestelde vragen\nKan ik gratis starten?\nJa, met een proefperiode van 14 dagen."
+        plans = _parse_plans_from_text(text)
+        _assert(len(plans) == 0, "homepage: FAQ text -> 0 plans", f"got {len(plans)}")
+
+    @staticmethod
+    def test_plan_order_preserved():
+        plans = _parse_plans_from_text(_HOMEPAGE)
+        if len(plans) == 3:
+            _assert(plans[0]["name"] == "Starter", "homepage: plan order [0] = Starter")
+            _assert(plans[1]["name"] == "Business", "homepage: plan order [1] = Business")
+            _assert(plans[2]["name"] == "Enterprise", "homepage: plan order [2] = Enterprise")
+
+    @staticmethod
+    def test_price_not_contaminated_by_14_dagen():
+        plans = _parse_plans_from_text(_HOMEPAGE)
+        for p in plans:
+            if p["price"] is not None:
+                _assert(p["price"] > 50, f"homepage: {p['name']} price > 50 (not 14)", f"got {p['price']}")
+
+    @staticmethod
+    def test_dollar_plan():
+        text = "Pro $99/mo billed annually\nBusiness $199/mo"
+        plans = _parse_plans_from_text(text)
+        _assert(len(plans) >= 1, "dollar: at least 1 plan extracted", f"got {len(plans)}")
+        if plans:
+            biz = next((p for p in plans if p["name"] == "Business"), None)
+            if biz:
+                _assert(biz["price"] == Decimal("199"), "dollar: Business = $199", f"got {biz['price']}")
+
+    @staticmethod
+    def test_multiple_pricing_sections():
+        text = """Prijzen
+
+Starter
+€49 per maand
+Ideaal voor starters
+
+---
+
+Premium
+€199 per maand
+Voor professionals
+
+---
+
+Enterprise
+Prijs op aanvraag
+"""
+        plans = _parse_plans_from_text(text)
+        _assert(len(plans) == 3, f"multi-section: 3 plans", f"got {len(plans)}")
+        if len(plans) == 3:
+            _assert(plans[0]["price"] == Decimal("49"), "multi-section: Starter = 49")
+            _assert(plans[1]["price"] == Decimal("199"), "multi-section: Premium = 199")
+            _assert(plans[2]["price_type"] == "contact_required", "multi-section: Enterprise = contact_required")
+
 
 # ═══════════════════════════════════════════════════════════════════
 # Runner
@@ -554,6 +784,7 @@ test_classes = [
     TestFormatting,
     TestDeterminism,
     TestEdgeCases,
+    TestHomepageRegression,
 ]
 
 
