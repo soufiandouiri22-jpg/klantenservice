@@ -160,7 +160,7 @@ def save_transcript_records(
 
     for entry in transcript:
         role = entry.get("role", "")
-        message = entry.get("message", "").strip()
+        message = (entry.get("message") or "").strip()
         time_secs = entry.get("time_in_call_secs", 0)
 
         if not message:
@@ -190,7 +190,7 @@ def build_transcript_text(transcript: list[dict]) -> str:
     lines = []
     for entry in transcript:
         role = entry.get("role", "")
-        message = entry.get("message", "").strip()
+        message = (entry.get("message") or "").strip()
         if not message:
             continue
         label = "Klant" if role == "user" else "AI"

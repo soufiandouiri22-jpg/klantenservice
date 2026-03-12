@@ -239,6 +239,23 @@ class RetrievalService:
                 )
                 return typed_candidates
 
+            # No typed chunks found — try content-based fallback for pricing
+            if query_classification == "pricing":
+                pricing_fallback = await self._fetch_candidates(
+                    company_id=company_id,
+                    embedding_str=embedding_str,
+                    ts_query=ts_query,
+                    limit=limit,
+                    site_id=site_id,
+                    content_contains="€",
+                )
+                if pricing_fallback:
+                    logger.info(
+                        "[retriever] pricing content fallback: %d chunks containing €",
+                        len(pricing_fallback),
+                    )
+                    return pricing_fallback
+
         # Default: fetch without type filter
         return await self._fetch_candidates(
             company_id=company_id,
@@ -256,6 +273,7 @@ class RetrievalService:
         limit: int,
         site_id: Optional[str] = None,
         chunk_type_filter: Optional[str] = None,
+        content_contains: Optional[str] = None,
     ) -> List[Dict]:
         """Execute the hybrid search SQL query."""
         where_parts = ["c.company_id = :company_id", "c.embedding IS NOT NULL"]
@@ -273,6 +291,10 @@ class RetrievalService:
         if chunk_type_filter:
             where_parts.append("(c.chunk_type = :chunk_type OR c.page_type = :chunk_type)")
             params["chunk_type"] = chunk_type_filter
+
+        if content_contains:
+            where_parts.append("c.content LIKE :content_pattern")
+            params["content_pattern"] = f"%{content_contains}%"
 
         where_clause = " AND ".join(where_parts)
 

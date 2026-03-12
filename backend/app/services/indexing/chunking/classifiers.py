@@ -96,8 +96,9 @@ def classify_chunk_type(
 
     # Pricing: contains price indicators
     price_signals = (
-        lower.count("€") + lower.count("per maand") + lower.count("/mo")
-        + lower.count("per jaar") + lower.count("/yr")
+        lower.count("€") + lower.count("per maand") + lower.count("/maand")
+        + lower.count("/mo") + lower.count("per jaar") + lower.count("/jaar")
+        + lower.count("/yr")
     )
     if price_signals >= 2:
         return "pricing"
