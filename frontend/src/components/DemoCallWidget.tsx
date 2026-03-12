@@ -118,9 +118,9 @@ export function DemoCallWidget() {
 
   // Active call
   return (
-    <div className="relative z-10 flex flex-col items-center gap-4">
+    <div className="relative z-10 flex flex-col items-center gap-2 sm:gap-4">
       {/* Speaking indicator */}
-      <div className="relative flex items-center justify-center w-24 h-24">
+      <div className="relative flex items-center justify-center w-16 h-16 sm:w-24 sm:h-24">
         <div className={cn(
           'absolute inset-0 rounded-full bg-primary-400/30 transition-transform duration-300',
           conversation.isSpeaking ? 'scale-125 animate-pulse' : 'scale-100'
@@ -129,12 +129,12 @@ export function DemoCallWidget() {
           'absolute inset-2 rounded-full bg-primary-400/20 transition-transform duration-500',
           conversation.isSpeaking ? 'scale-110 animate-pulse' : 'scale-100'
         )} />
-        <div className="relative bg-primary-600 rounded-full p-5">
-          <Mic className="h-7 w-7 text-white" />
+        <div className="relative bg-primary-600 rounded-full p-3 sm:p-5">
+          <Mic className="h-5 w-5 sm:h-7 sm:w-7 text-white" />
         </div>
       </div>
 
-      <p className="text-sm text-white/90 font-medium">
+      <p className="text-xs sm:text-sm text-white/90 font-medium">
         {conversation.isSpeaking ? `${workerName} spreekt...` : 'Luistert...'}
       </p>
 
@@ -143,23 +143,23 @@ export function DemoCallWidget() {
         <button
           onClick={() => setMicMuted(!micMuted)}
           className={cn(
-            'rounded-full p-3 transition-colors backdrop-blur-sm',
+            'rounded-full p-2.5 sm:p-3 transition-colors backdrop-blur-sm',
             micMuted
               ? 'bg-red-500/80 text-white hover:bg-red-500'
               : 'bg-white/10 text-white hover:bg-white/20'
           )}
         >
-          {micMuted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+          {micMuted ? <MicOff className="h-4 w-4 sm:h-5 sm:w-5" /> : <Mic className="h-4 w-4 sm:h-5 sm:w-5" />}
         </button>
         <button
           onClick={endCall}
-          className="rounded-full p-3 bg-red-600 text-white hover:bg-red-700 transition-colors"
+          className="rounded-full p-2.5 sm:p-3 bg-red-600 text-white hover:bg-red-700 transition-colors"
         >
-          <PhoneOff className="h-5 w-5" />
+          <PhoneOff className="h-4 w-4 sm:h-5 sm:w-5" />
         </button>
       </div>
 
-      <p className="text-xs text-white/50 max-w-xs text-center">
+      <p className="hidden sm:block text-xs text-white/50 max-w-xs text-center">
         Spreek live met onze AI-telefonist. Vraag naar onze diensten of plan een demo in.
       </p>
     </div>
