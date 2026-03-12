@@ -15,7 +15,7 @@ from uuid import uuid4
 from sqlalchemy.orm import Session
 
 from app.models.voice_session import VoiceSession, PolicyDecisionLog, CallPhase
-from .intent_classifier import CallerIntent, is_off_topic
+from .intent_classifier import CallerIntent, CompanyScope, is_off_topic, check_company_scope
 
 logger = logging.getLogger(__name__)
 
@@ -301,26 +301,43 @@ def _policy_off_topic(
     session: VoiceSession,
     intent: CallerIntent,
     utterance: str = "",
+    company_scope: Optional[CompanyScope] = None,
 ) -> PolicyResult:
     """
     Rule: Block off-topic requests. Redirect to company scope.
 
-    Two-layer check:
-    1. If the intent classifier already tagged it as off_topic → block
-    2. Even if intent is something else (e.g. "question"), run is_off_topic()
-       on the raw utterance as a secondary scope check → block
+    Three-layer check:
+    1. If intent == OFF_TOPIC but the utterance matches the company's
+       domain → exempt (e.g. "pizza" for a pizza restaurant).
+    2. Secondary utterance-level off-topic check (company-aware).
+    3. Cross-domain scope check: if the utterance matches a DIFFERENT
+       industry's domain keywords, block it.
     """
+    # Layer 1: intent-based off-topic with domain exemption
     if intent == CallerIntent.OFF_TOPIC:
-        return PolicyResult(
-            allowed=False,
-            policy_name="scope_guard",
-            required_action="block",
-            reason_code="off_topic_intent",
-            instruction_nl=_OFF_TOPIC_RESPONSE,
-        )
+        if company_scope and company_scope.business_type:
+            scope = check_company_scope(utterance, company_scope)
+            if scope == "on_topic":
+                pass  # Exempt: domain term for this company
+            else:
+                return PolicyResult(
+                    allowed=False,
+                    policy_name="scope_guard",
+                    required_action="block",
+                    reason_code="off_topic_intent",
+                    instruction_nl=_OFF_TOPIC_RESPONSE,
+                )
+        else:
+            return PolicyResult(
+                allowed=False,
+                policy_name="scope_guard",
+                required_action="block",
+                reason_code="off_topic_intent",
+                instruction_nl=_OFF_TOPIC_RESPONSE,
+            )
 
-    # Secondary scope check on raw utterance
-    if utterance and is_off_topic(utterance):
+    # Layer 2: secondary utterance-level off-topic (company-aware)
+    if utterance and is_off_topic(utterance, company_scope):
         return PolicyResult(
             allowed=False,
             policy_name="scope_guard",
@@ -328,6 +345,18 @@ def _policy_off_topic(
             reason_code="off_topic_utterance",
             instruction_nl=_OFF_TOPIC_RESPONSE,
         )
+
+    # Layer 3: cross-domain scope check
+    if company_scope and company_scope.business_type and utterance:
+        scope = check_company_scope(utterance, company_scope)
+        if scope == "off_topic":
+            return PolicyResult(
+                allowed=False,
+                policy_name="scope_guard",
+                required_action="block",
+                reason_code="out_of_scope_domain",
+                instruction_nl=_OFF_TOPIC_RESPONSE,
+            )
 
     return PolicyResult(
         allowed=True,
@@ -404,6 +433,7 @@ class PolicyEngine:
         intent_confidence: float = 0.0,
         retrieval_confidence: float = 1.0,
         utterance: str = "",
+        company_scope: Optional[CompanyScope] = None,
     ) -> PolicyResult:
         """
         Run all policies for the given reason. Return the most restrictive result.
@@ -412,7 +442,8 @@ class PolicyEngine:
 
         if not policies:
             return self._evaluate_auto(session, intent, trigger_tool,
-                                       retrieval_confidence, utterance)
+                                       retrieval_confidence, utterance,
+                                       company_scope)
 
         phase_before = session.phase
 
@@ -421,7 +452,7 @@ class PolicyEngine:
             if policy_fn == _policy_low_confidence:
                 result = policy_fn(session, intent, retrieval_confidence)
             elif policy_fn == _policy_off_topic:
-                result = policy_fn(session, intent, utterance)
+                result = policy_fn(session, intent, utterance, company_scope)
             else:
                 result = policy_fn(session, intent)
             results.append(result)
@@ -454,6 +485,7 @@ class PolicyEngine:
         intent_confidence: float = 0.0,
         retrieval_confidence: float = 1.0,
         utterance: str = "",
+        company_scope: Optional[CompanyScope] = None,
     ) -> Optional[PolicyResult]:
         """
         Run all applicable auto-triggered policies (called on every tool invocation).
@@ -461,6 +493,7 @@ class PolicyEngine:
         """
         return self._evaluate_auto(
             session, intent, trigger_tool, retrieval_confidence, utterance,
+            company_scope,
         )
 
     def _evaluate_auto(
@@ -470,6 +503,7 @@ class PolicyEngine:
         trigger_tool: str,
         retrieval_confidence: float,
         utterance: str = "",
+        company_scope: Optional[CompanyScope] = None,
     ) -> Optional[PolicyResult]:
         """
         Auto-triggered policies that run on every tool call regardless of reason.
@@ -482,8 +516,8 @@ class PolicyEngine:
         if esc.required_action == "escalate":
             checks.append(esc)
 
-        # Always check off-topic (with secondary utterance scope check)
-        ot = _policy_off_topic(session, intent, utterance)
+        # Always check off-topic (company-aware scope check)
+        ot = _policy_off_topic(session, intent, utterance, company_scope)
         if not ot.allowed:
             checks.append(ot)
 

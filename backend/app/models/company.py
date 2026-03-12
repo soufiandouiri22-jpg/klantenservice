@@ -3,7 +3,7 @@ klantenservice.ai - Company (Tenant) Model
 """
 from datetime import datetime
 from enum import Enum
-from sqlalchemy import Column, String, DateTime, Boolean, Integer, Text, Enum as SQLEnum, JSON
+from sqlalchemy import Column, String, DateTime, Boolean, Integer, Float, Text, Enum as SQLEnum, JSON
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 import uuid
@@ -108,6 +108,12 @@ class Company(Base):
     # rag_threshold_override, audio_segment_ms_override, max_calls_per_minute,
     # disable_auto_booking, etc.
     admin_overrides = Column(JSON, default=dict)
+
+    # Inferred business domain (auto-detected from company name + indexed website)
+    inferred_business_type = Column(String(50), nullable=True)
+    inferred_business_confidence = Column(Float, nullable=True)
+    inferred_topics = Column(JSON, nullable=True)
+    business_type_override = Column(String(50), nullable=True)
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -128,7 +134,11 @@ class Company(Base):
     
     def __repr__(self):
         return f"<Company {self.name}>"
-    
+
+    @property
+    def effective_business_type(self) -> str | None:
+        return self.business_type_override or self.inferred_business_type
+
     @property
     def ai_worker_limit(self) -> int:
         """Get the AI worker limit based on subscription plan."""

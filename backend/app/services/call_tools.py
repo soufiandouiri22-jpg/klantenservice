@@ -26,12 +26,32 @@ from app.models.appointment import Appointment, AppointmentStatus
 from app.models.internal_note import InternalNote, NotePriority
 from app.models.training import ExampleAnswer
 from app.services.retrieval import RetrievalService
-from app.services.voice.intent_classifier import classify_intent, CallerIntent
+from app.services.voice.intent_classifier import classify_intent, CallerIntent, CompanyScope
 from app.services.voice.conversation_state import ConversationStateManager
 from app.services.voice.policy_engine import PolicyEngine, PolicyResult
 from app.services.voice.output_guardrails import validate_output, ViolationType
 
 logger = logging.getLogger(__name__)
+
+_company_scope_cache: dict[str, CompanyScope] = {}
+
+
+def _get_company_scope(db: Session, company_id: str) -> CompanyScope:
+    """Build a CompanyScope from the company's inferred business profile (cached)."""
+    if company_id in _company_scope_cache:
+        return _company_scope_cache[company_id]
+
+    from app.models.company import Company
+    company = db.query(Company).filter(Company.id == company_id).first()
+    if not company:
+        scope = CompanyScope()
+    else:
+        scope = CompanyScope(
+            business_type=company.effective_business_type,
+            topics=company.inferred_topics or [],
+        )
+    _company_scope_cache[company_id] = scope
+    return scope
 
 
 async def tool_check_availability(
@@ -648,6 +668,8 @@ def tool_check_policy(
 
     mgr.record_turn(session, intent, customer_message, "check_policy", confidence)
 
+    company_scope = _get_company_scope(db, company_id) if company_id else None
+
     engine = PolicyEngine(db)
     result = engine.evaluate(
         session=session,
@@ -656,6 +678,7 @@ def tool_check_policy(
         trigger_reason=trigger_reason,
         intent_confidence=confidence,
         utterance=customer_message,
+        company_scope=company_scope,
     )
 
     if trigger_reason == "ending_call" and result.allowed:
@@ -703,6 +726,8 @@ def run_auto_policies(
     intent, confidence = classify_intent(customer_message)
     mgr.record_turn(session, intent, customer_message, tool_name, confidence)
 
+    company_scope = _get_company_scope(db, company_id) if company_id else None
+
     engine = PolicyEngine(db)
     override = engine.evaluate_all(
         session=session,
@@ -711,6 +736,7 @@ def run_auto_policies(
         intent_confidence=confidence,
         retrieval_confidence=retrieval_confidence,
         utterance=customer_message,
+        company_scope=company_scope,
     )
 
     db.commit()

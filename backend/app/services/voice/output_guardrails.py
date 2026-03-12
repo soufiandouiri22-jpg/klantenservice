@@ -107,7 +107,7 @@ _TOOL_LEAKAGE_RE = re.compile(
     r"search_knowledge|check_availability|book_appointment|"
     r"create_note|flag_unknown|transfer_call|check_policy|"
     r"end_call|get_prices|"
-    r"tool_call|function_call|"
+    r"tool_call|function_call|tool_result|"
     r"kennisbank|knowledge\s*base|retrieval\s*pipeline|"
     r"tool\s+result|tool\s+response|"
     r"\btrigger_reason\b|\brequired_action\b|\breason_code\b"
@@ -121,6 +121,7 @@ _JSON_LEAKAGE_RE = re.compile(
     r'(?:'
     r'\{["\']?\w+["\']?\s*:|'        # {"key": or {'key':
     r'\[\s*\{|'                       # [{ array of objects
+    r'\[\s*"[^"]+"\s*,|'             # ["item1", ... raw JSON string arrays
     r'```|'                           # markdown code fence
     r'"ok"\s*:\s*(?:true|false)|'     # "ok": true
     r'"results"\s*:\s*\[|'            # "results": [

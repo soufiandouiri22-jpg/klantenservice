@@ -1085,6 +1085,10 @@ async def get_customer_detail(
         is_kill_switched=company.is_kill_switched or False,
         feature_flags=company.feature_flags or {},
         admin_overrides=company.admin_overrides or {},
+        inferred_business_type=company.inferred_business_type,
+        inferred_business_confidence=company.inferred_business_confidence,
+        inferred_topics=company.inferred_topics,
+        business_type_override=company.business_type_override,
         stats=stats,
         created_at=company.created_at,
         updated_at=company.updated_at,
@@ -1111,7 +1115,10 @@ async def update_customer_overrides(
     
     if data.feature_flags is not None:
         company.feature_flags = data.feature_flags
-    
+
+    if data.business_type_override is not None:
+        company.business_type_override = data.business_type_override or None
+
     db.commit()
     
     return {"status": "updated", "customer_id": str(customer_id)}

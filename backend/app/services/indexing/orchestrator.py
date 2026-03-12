@@ -199,6 +199,9 @@ class IndexingOrchestrator:
             }
             self.db.commit()
 
+            # --- Phase 6: Infer business type ---
+            self._run_domain_inference(site.company_id)
+
             logger.info(
                 "Indexing complete for %s: %d pages, %d chunks",
                 site.base_url, len(crawled_pages), len(all_chunk_dicts),
@@ -215,6 +218,20 @@ class IndexingOrchestrator:
             self.db.commit()
             self._log_error(site.id, crawl_job.id, "orchestrator", None, type(exc).__name__, str(exc))
             return False
+
+    def _run_domain_inference(self, company_id) -> None:
+        """Infer the company's business type from indexed content."""
+        try:
+            from app.models.company import Company
+            from app.services.domain_inference import update_company_inference
+
+            company = self.db.query(Company).filter(
+                Company.id == company_id,
+            ).first()
+            if company:
+                update_company_inference(self.db, company)
+        except Exception:
+            logger.warning("Domain inference failed for company %s", company_id, exc_info=True)
 
     def _chunk_page(self, cleaned_text: str, page_type: str, url: str, title: str, page) -> list:
         """Run semantic chunker + special extractors on cleaned page text."""

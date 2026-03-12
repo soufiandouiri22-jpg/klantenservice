@@ -52,6 +52,10 @@ interface CustomerDetail extends Customer {
   is_verified: boolean
   feature_flags: Record<string, any>
   admin_overrides: Record<string, any>
+  inferred_business_type?: string
+  inferred_business_confidence?: number
+  inferred_topics?: string[]
+  business_type_override?: string
   updated_at: string
 }
 
@@ -364,6 +368,7 @@ function CustomerDetailContent({ customer, onSave, onSubscriptionSave, onDelete,
   const [overrides, setOverrides] = useState(customer.admin_overrides || {})
   const [selectedPlan, setSelectedPlan] = useState(customer.subscription_plan)
   const [selectedStatus, setSelectedStatus] = useState(customer.subscription_status)
+  const [businessTypeOverride, setBusinessTypeOverride] = useState(customer.business_type_override || '')
 
   const handleChange = (key: string, value: any) => {
     setOverrides((prev: any) => ({ ...prev, [key]: value }))
@@ -426,6 +431,50 @@ function CustomerDetailContent({ customer, onSave, onSubscriptionSave, onDelete,
             </Button>
           </div>
         )}
+      </div>
+
+      <hr />
+
+      {/* Business Type Inference */}
+      <div>
+        <h4 className="text-sm font-semibold text-gray-900 mb-4">
+          Branche / Domein
+        </h4>
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div>
+            <p className="text-sm text-gray-500">Inferred Type</p>
+            <p className="font-medium">{customer.inferred_business_type || '-'}</p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-500">Confidence</p>
+            <p className="font-medium">{customer.inferred_business_confidence != null ? `${(customer.inferred_business_confidence * 100).toFixed(0)}%` : '-'}</p>
+          </div>
+        </div>
+        {customer.inferred_topics && customer.inferred_topics.length > 0 && (
+          <div className="mb-4">
+            <p className="text-sm text-gray-500 mb-1">Topics</p>
+            <div className="flex flex-wrap gap-1">
+              {customer.inferred_topics.map((t, i) => (
+                <span key={i} className="inline-block bg-gray-100 text-gray-700 text-xs px-2 py-0.5 rounded">{t}</span>
+              ))}
+            </div>
+          </div>
+        )}
+        <Select
+          label="Override"
+          className="max-w-[240px]"
+          value={businessTypeOverride}
+          onChange={(e) => setBusinessTypeOverride(e.target.value)}
+        >
+          <option value="">Automatisch (inferred)</option>
+          <option value="hair_salon">Kapsalon</option>
+          <option value="dentist">Tandarts</option>
+          <option value="car_garage">Garage</option>
+          <option value="pizza_restaurant">Pizzeria</option>
+          <option value="restaurant">Restaurant</option>
+          <option value="ai_saas">AI / SaaS</option>
+          <option value="general">Algemeen</option>
+        </Select>
       </div>
 
       <hr />
@@ -525,7 +574,7 @@ function CustomerDetailContent({ customer, onSave, onSubscriptionSave, onDelete,
           {isDeleting ? 'Verwijderen...' : 'Klant Verwijderen'}
         </Button>
         <Button
-          onClick={() => onSave({ admin_overrides: overrides })}
+          onClick={() => onSave({ admin_overrides: overrides, business_type_override: businessTypeOverride || '' })}
           disabled={isSaving}
         >
           {isSaving ? 'Opslaan...' : 'Overrides Opslaan'}

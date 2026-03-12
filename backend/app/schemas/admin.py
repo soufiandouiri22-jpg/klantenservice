@@ -228,7 +228,13 @@ class CustomerDetail(BaseModel):
     # Admin controls
     feature_flags: Dict[str, Any]
     admin_overrides: Dict[str, Any]
-    
+
+    # Business type inference
+    inferred_business_type: Optional[str] = None
+    inferred_business_confidence: Optional[float] = None
+    inferred_topics: Optional[list] = None
+    business_type_override: Optional[str] = None
+
     # Stats
     stats: CustomerStats
     
@@ -243,6 +249,7 @@ class CustomerDetail(BaseModel):
 class CustomerOverridesUpdate(BaseModel):
     admin_overrides: Optional[Dict[str, Any]] = None
     feature_flags: Optional[Dict[str, Any]] = None
+    business_type_override: Optional[str] = None
 
 
 class SubscriptionUpdate(BaseModel):
