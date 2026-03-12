@@ -69,7 +69,9 @@ def score_candidates(
 
         c["is_junk"] = False
         boost = 0.0
-        base_score = c.get("rerank_score", c.get("vector_score", 0.0))
+        rerank = c.get("rerank_score", 0.0)
+        vector = c.get("vector_score", 0.0)
+        base_score = max(rerank, vector)
 
         chunk_type = c.get("chunk_type", "general")
         page_type = c.get("page_type", "unknown")

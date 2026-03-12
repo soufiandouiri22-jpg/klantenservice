@@ -76,7 +76,9 @@ def score_candidates(candidates, query_classification):
 
         c["is_junk"] = False
         boost = 0.0
-        base_score = c.get("rerank_score", c.get("vector_score", 0.0))
+        rerank = c.get("rerank_score", 0.0)
+        vector = c.get("vector_score", 0.0)
+        base_score = max(rerank, vector)
         chunk_type = c.get("chunk_type", "general")
         page_type = c.get("page_type", "unknown")
 
@@ -270,7 +272,88 @@ class TestPricingVsPolicy:
 
 
 # ---------------------------------------------------------------------------
-# 3. Scorer: general queries should not penalize policy
+# 3. Scorer: negative rerank scores must not kill results
+# ---------------------------------------------------------------------------
+
+class TestNegativeRerankScores:
+    """
+    Core regression: an English-only cross-encoder produces deeply negative
+    scores for Dutch text. The scorer must use max(rerank, vector) so the
+    vector score acts as a floor.
+    """
+
+    def test_negative_rerank_uses_vector_score(self):
+        """When rerank_score is negative, vector_score must be used as base."""
+        candidates = [
+            _chunk(
+                "Starter €149 /maand 14 dagen gratis Perfect voor kleine ondernemers "
+                "1 AI-medewerker 500 belminuten/maand Agenda integratie",
+                chunk_type="pricing", page_type="home",
+                vector_score=0.33, rerank_score=-0.50,
+            ),
+            _chunk(
+                "Artikel 7 - Tarieven en betaling De actuele tarieven staan vermeld "
+                "op de website. Alle genoemde prijzen zijn exclusief BTW.",
+                chunk_type="policy", page_type="policy",
+                vector_score=0.39, rerank_score=-0.50,
+            ),
+        ]
+        scored = score_candidates(candidates, "pricing")
+        pricing = [c for c in scored if c["chunk_type"] == "pricing"][0]
+        assert pricing["final_score"] > 0.15, (
+            f"Pricing chunk with negative rerank should still pass MIN_CONFIDENCE, "
+            f"got final_score={pricing['final_score']}"
+        )
+        assert scored[0]["chunk_type"] == "pricing", (
+            f"Pricing chunk should rank #1, got {scored[0]['chunk_type']}"
+        )
+
+    def test_deeply_negative_rerank_all_dutch(self):
+        """Simulate the exact production scenario: all rerank scores are -5 to -10."""
+        candidates = [
+            _chunk(
+                "Starter €149 /maand Perfect voor kleine ondernemers 1 AI-medewerker "
+                "500 belminuten/maand Agenda integratie CRM integratie",
+                chunk_type="pricing", page_type="home",
+                vector_score=0.33, rerank_score=-8.19,
+            ),
+            _chunk(
+                "Business €299 /maand Ideaal voor groeiende bedrijven 3 AI-medewerkers "
+                "2000 belminuten/maand Alles van Starter Prioriteit support",
+                chunk_type="pricing", page_type="home",
+                vector_score=0.33, rerank_score=-8.50,
+            ),
+            _chunk(
+                "Artikel 7 - Tarieven en betaling De actuele tarieven staan vermeld "
+                "op de website van Klantenservice.ai. Alle genoemde prijzen zijn exclusief BTW.",
+                chunk_type="policy", page_type="policy",
+                vector_score=0.39, rerank_score=-0.50,
+            ),
+            _chunk(
+                "Organisatorische maatregelen Naast technische maatregelen hebben wij "
+                "ook organisatorische maatregelen getroffen.",
+                chunk_type="general", page_type="general",
+                vector_score=0.27, rerank_score=-8.19,
+            ),
+        ]
+        scored = score_candidates(candidates, "pricing")
+
+        assert scored[0]["chunk_type"] == "pricing", (
+            f"Pricing chunk should rank #1 even with deeply negative rerank, "
+            f"got {scored[0]['chunk_type']} with score {scored[0]['final_score']}"
+        )
+        assert scored[1]["chunk_type"] == "pricing", (
+            f"Second pricing chunk should rank #2, got {scored[1]['chunk_type']}"
+        )
+        for c in scored:
+            if c["chunk_type"] == "pricing":
+                assert c["final_score"] > 0.15, (
+                    f"Pricing chunk must pass MIN_CONFIDENCE=0.15, got {c['final_score']}"
+                )
+
+
+# ---------------------------------------------------------------------------
+# 4. Scorer: general queries should not penalize policy
 # ---------------------------------------------------------------------------
 
 class TestGeneralQueryNoPenalty:
@@ -324,6 +407,7 @@ if __name__ == "__main__":
     test_classes = [
         TestQueryClassifier,
         TestPricingVsPolicy,
+        TestNegativeRerankScores,
         TestGeneralQueryNoPenalty,
         TestContactVsPolicy,
     ]

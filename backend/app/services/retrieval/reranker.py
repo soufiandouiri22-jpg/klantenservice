@@ -1,8 +1,10 @@
 """
 Reranking service – cross-encoder reranking of retrieval candidates.
 
-Uses ms-marco-TinyBERT-L-2-v2: fastest viable cross-encoder (~5x faster than
-MiniLM-L-6 on CPU) while still providing meaningful relevance ordering.
+Uses mmarco-mMiniLMv2-L12-H384-v1: multilingual cross-encoder trained on
+mMARCO data (including Dutch). Produces well-calibrated scores for non-English
+queries, unlike the English-only TinyBERT which outputs deeply negative logits
+for Dutch text and effectively breaks the confidence pipeline.
 
 Gracefully degrades: if the model cannot be loaded, returns candidates
 re-sorted by their existing vector_score.
@@ -12,6 +14,9 @@ import time
 from typing import List, Dict
 
 logger = logging.getLogger(__name__)
+
+MODEL_NAME = "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
+MAX_CONTENT_LEN = 512
 
 _reranker = None
 _reranker_loaded = False
@@ -26,10 +31,9 @@ def _load_reranker():
     _reranker_loaded = True
     try:
         from sentence_transformers import CrossEncoder
-        model_name = "cross-encoder/ms-marco-TinyBERT-L-2-v2"
-        logger.info("Loading cross-encoder model: %s", model_name)
+        logger.info("Loading cross-encoder model: %s", MODEL_NAME)
         t0 = time.time()
-        _reranker = CrossEncoder(model_name)
+        _reranker = CrossEncoder(MODEL_NAME)
         logger.info("Cross-encoder loaded in %.1fs", time.time() - t0)
     except Exception as exc:
         logger.warning("Cross-encoder not available, reranking disabled: %s", exc)
@@ -61,7 +65,7 @@ def rerank(
 
     try:
         t0 = time.time()
-        pairs = [[query, c.get("content", "")[:384]] for c in candidates]
+        pairs = [[query, c.get("content", "")[:MAX_CONTENT_LEN]] for c in candidates]
         scores = model.predict(pairs)
 
         for c, score in zip(candidates, scores):
