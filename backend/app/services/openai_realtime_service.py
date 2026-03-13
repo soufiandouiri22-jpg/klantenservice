@@ -294,17 +294,62 @@ def build_system_instructions(
     )
 
     tool_lines.append(
+        "## get_contact_info\n"
+        "Haal contactgegevens op (telefoon, email, whatsapp).\n\n"
+        "**Wanneer gebruiken:**\n"
+        "- Klant vraagt hoe ze contact kunnen opnemen\n"
+        "- Klant vraagt naar telefoonnummer, e-mail, of contactpagina\n"
+        "- Klant wil iemand bereiken\n\n"
+        "Geen parameters nodig. De tool retourneert beschikbare contactgegevens."
+    )
+
+    tool_lines.append(
+        "## get_opening_hours\n"
+        "Haal openingstijden op.\n\n"
+        "**Wanneer gebruiken:**\n"
+        "- Klant vraagt wanneer het bedrijf open of dicht is\n"
+        "- Klant vraagt naar openingstijden of bereikbaarheid\n"
+        "- Klant vraagt 'zijn jullie morgen open?'\n\n"
+        "Geen parameters nodig. De tool retourneert de weekschema openingstijden."
+    )
+
+    tool_lines.append(
+        "## get_services\n"
+        "Haal een lijst van aangeboden diensten/services op.\n\n"
+        "**Wanneer gebruiken:**\n"
+        "- Klant vraagt welke diensten of services worden aangeboden\n"
+        "- Klant vraagt 'wat voor services bieden jullie?'\n"
+        "- Klant vraagt naar specifieke mogelijkheden of aanbod\n\n"
+        "Geen parameters nodig. De tool retourneert een overzicht van diensten.\n"
+        "Let op: dit is anders dan get_company_overview. Overview = wie is het bedrijf, "
+        "services = concrete diensten/producten."
+    )
+
+    tool_lines.append(
+        "## get_location\n"
+        "Haal locatie- en adresgegevens op.\n\n"
+        "**Wanneer gebruiken:**\n"
+        "- Klant vraagt waar het bedrijf zit\n"
+        "- Klant vraagt naar het adres of de vestiging\n"
+        "- Klant vraagt hoe ze er kunnen komen\n\n"
+        "Geen parameters nodig. De tool retourneert adres, stad en eventueel meerdere vestigingen."
+    )
+
+    tool_lines.append(
         "## search_knowledge\n"
         "Zoek in de bedrijfskennisbank voor overige vragen. "
         "De resultaten bevatten bedrijfsinformatie, inclusief opgeslagen Q&A. "
         "Beantwoord nooit uit eigen kennis.\n\n"
         "**Wanneer gebruiken:**\n"
-        "- Openingstijden, contactgegevens, locatie\n"
         "- FAQ en beleid (retour, garantie, etc.)\n"
         "- Overige inhoudelijke vragen over het bedrijf\n\n"
         "**NIET gebruiken voor:**\n"
         "- Prijzen of pakketten (gebruik get_pricing)\n"
-        "- Bedrijfsoverzicht / 'wat doen jullie?' (gebruik get_company_overview)\n\n"
+        "- Bedrijfsoverzicht / 'wat doen jullie?' (gebruik get_company_overview)\n"
+        "- Contactgegevens (gebruik get_contact_info)\n"
+        "- Openingstijden (gebruik get_opening_hours)\n"
+        "- Diensten / services (gebruik get_services)\n"
+        "- Locatie / adres (gebruik get_location)\n\n"
         "**Foutafhandeling:**\n"
         'Als de tool faalt: "Dat heb ik even niet bij de hand. '
         'Zal ik een collega vragen om u terug te bellen?"\n'

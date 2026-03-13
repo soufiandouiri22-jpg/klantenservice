@@ -107,10 +107,11 @@ _QUERY_RULES: list[tuple[re.Pattern, str]] = [
         re.I,
     ), "company_overview"),
     (re.compile(r"\b(prij[sz]\w*|kost\w*|tariev\w*|tarief\w*|pakket\w*|plan\w*|abonnement\w*|euro|€|betaal\w*|goedkoop\w*|duur|budget\w*|belminut\w*|starter|business|enterprise)\b", re.I), "pricing"),
-    (re.compile(r"\b(openingstijd\w*|bereikbaar\w*|bellen|telefoon\w*|email\w*|e-mail\w*|contact\w*|adres\w*|locatie\w*|route\w*)\b", re.I), "contact"),
+    (re.compile(r"\b(openingstijd\w*|geopend|gesloten|wanneer\b.{0,20}\bopen|wanneer\b.{0,20}\bdicht|sluitingstijd\w*|opening\s*hours|when\s+(?:are\s+you\s+)?open)\b", re.I), "hours"),
+    (re.compile(r"\b(bellen|telefoon\w*|email\w*|e-mail\w*|contact\w*|bereik\w*|neem\s+contact|bel\s+(?:ons|jullie|je)|mail\w*)\b", re.I), "contact"),
     (re.compile(r"\b(retour\w*|terugsturen|annuleer\w*|annulering\w*|opzeg\w*|garantie\w*|verzend\w*|lever\w*|bezorg\w*)\b", re.I), "policy"),
-    (re.compile(r"\b(locatie\w*|vestiging\w*|filiaal\w*|kantoor\w*|winkel\w*|route\w*|parkeer\w*)\b", re.I), "location"),
-    (re.compile(r"\b(product\w*|dienst\w*|service\w*|aanbod\w*|oplossing\w*|feature\w*|functie\w*|mogelijkheid\w*)\b", re.I), "service"),
+    (re.compile(r"\b(locatie\w*|vestiging\w*|filiaal\w*|kantoor\w*|winkel\w*|adres\w*|route\w*|parkeer\w*|waar\s+(?:zitten|zijn)\s+jullie)\b", re.I), "location"),
+    (re.compile(r"\b(product\w*|dienst\w*|service\w*|aanbod\w*|oplossing\w*|feature\w*|functie\w*|mogelijkhe\w*)\b", re.I), "service"),
 ]
 
 
@@ -537,9 +538,21 @@ class TestQueryClassification:
     def test_contact_queries():
         queries = [
             ("Wat is jullie telefoonnummer?", "contact"),
-            ("Wat zijn de openingstijden?", "contact"),
             ("Hoe kan ik contact opnemen?", "contact"),
-            ("Wat is het adres?", "contact"),
+            ("Kan ik jullie bellen?", "contact"),
+            ("Stuur een email", "contact"),
+        ]
+        for q, expected in queries:
+            result = classify_query(q)
+            _assert(result == expected, f"classify: '{q}' -> {expected}", f"got {result}")
+
+    @staticmethod
+    def test_hours_queries():
+        queries = [
+            ("Wat zijn de openingstijden?", "hours"),
+            ("Wanneer zijn jullie open?", "hours"),
+            ("Zijn jullie gesloten op zondag?", "hours"),
+            ("Sluitingstijd?", "hours"),
         ]
         for q, expected in queries:
             result = classify_query(q)
@@ -2057,13 +2070,17 @@ class TestClosingIntentDetection:
 
 def _route_tool(query: str) -> str:
     """Simulate the routing logic: classification -> dedicated tool name.
-    Mirrors the split between get_pricing, get_company_overview, and search_knowledge."""
+    Mirrors the mapping from query classification to dedicated tools."""
+    _TOOL_MAP = {
+        "pricing": "get_pricing",
+        "company_overview": "get_company_overview",
+        "contact": "get_contact_info",
+        "hours": "get_opening_hours",
+        "service": "get_services",
+        "location": "get_location",
+    }
     c = classify_query(query)
-    if c == "pricing":
-        return "get_pricing"
-    if c == "company_overview":
-        return "get_company_overview"
-    return "search_knowledge"
+    return _TOOL_MAP.get(c, "search_knowledge")
 
 
 @dataclass
@@ -2149,11 +2166,9 @@ class TestDedicatedToolRouting:
     @staticmethod
     def test_other_queries_route_to_search_knowledge():
         queries = [
-            "Wat zijn jullie openingstijden?",
             "Hoe kan ik retourneren?",
-            "Waar zijn jullie gevestigd?",
-            "Hoe bereik ik jullie?",
             "Wat is het retourbeleid?",
+            "Hoe werkt de garantie?",
         ]
         for q in queries:
             tool = _route_tool(q)
@@ -2239,14 +2254,130 @@ class TestDedicatedToolRouting:
         _assert("op aanvraag" in result["message"].lower(),
                 "enterprise: 'op aanvraag' is shown for Enterprise")
 
-    # ── search_knowledge no longer handles pricing/overview ──
+    # ── Contact routing ──
 
     @staticmethod
-    def test_search_knowledge_excludes_pricing_and_overview():
-        """Pricing and overview classifications should NOT route to search_knowledge."""
-        pricing_qs = ["Wat zijn jullie prijzen?", "Hoeveel kost starter?"]
-        overview_qs = ["Wat doen jullie?", "What does your company do?"]
-        for q in pricing_qs + overview_qs:
+    def test_contact_queries_route_to_get_contact_info():
+        queries = [
+            "Hoe bereik ik jullie?",
+            "Wat is jullie telefoonnummer?",
+            "Kan ik jullie mailen?",
+            "Hoe kan ik contact opnemen?",
+            "What is your email?",
+            "Neem contact met ons op",
+        ]
+        for q in queries:
+            tool = _route_tool(q)
+            _assert(
+                tool == "get_contact_info",
+                f"route-contact: '{q}' → get_contact_info",
+                f"got {tool}",
+            )
+
+    # ── Opening hours routing ──
+
+    @staticmethod
+    def test_hours_queries_route_to_get_opening_hours():
+        queries = [
+            "Wat zijn jullie openingstijden?",
+            "Wanneer zijn jullie open?",
+            "Zijn jullie morgen geopend?",
+            "Wanneer gaat de winkel dicht?",
+            "When are you open?",
+            "Sluitingstijd?",
+        ]
+        for q in queries:
+            tool = _route_tool(q)
+            _assert(
+                tool == "get_opening_hours",
+                f"route-hours: '{q}' → get_opening_hours",
+                f"got {tool}",
+            )
+
+    # ── Services routing ──
+
+    @staticmethod
+    def test_services_queries_route_to_get_services():
+        queries = [
+            "Welke diensten bieden jullie aan?",
+            "Wat voor services hebben jullie?",
+            "Welke producten hebben jullie?",
+            "Wat zijn jullie mogelijkheden?",
+        ]
+        for q in queries:
+            tool = _route_tool(q)
+            _assert(
+                tool == "get_services",
+                f"route-services: '{q}' → get_services",
+                f"got {tool}",
+            )
+
+    # ── Location routing ──
+
+    @staticmethod
+    def test_location_queries_route_to_get_location():
+        queries = [
+            "Waar zijn jullie gevestigd?",
+            "Wat is het adres?",
+            "Hebben jullie meerdere vestigingen?",
+            "Waar zit jullie kantoor?",
+            "Waar zitten jullie?",
+        ]
+        for q in queries:
+            tool = _route_tool(q)
+            _assert(
+                tool == "get_location",
+                f"route-location: '{q}' → get_location",
+                f"got {tool}",
+            )
+
+    # ── Multi-turn across all tools ──
+
+    @staticmethod
+    def test_multi_turn_overview_pricing_contact_hours():
+        """Full multi-turn: overview → pricing → contact → hours."""
+        turns = [
+            ("Wat doen jullie?", "get_company_overview"),
+            ("Wat zijn de prijzen?", "get_pricing"),
+            ("Hoe bereik ik jullie?", "get_contact_info"),
+            ("Wat zijn de openingstijden?", "get_opening_hours"),
+        ]
+        for i, (q, expected) in enumerate(turns, 1):
+            tool = _route_tool(q)
+            _assert(
+                tool == expected,
+                f"multi-turn-4-{i}: '{q}' → {expected}",
+                f"got {tool}",
+            )
+
+    @staticmethod
+    def test_multi_turn_location_services():
+        """Location then services routing."""
+        tool1 = _route_tool("Waar zitten jullie?")
+        tool2 = _route_tool("Welke diensten bieden jullie?")
+        _assert(tool1 == "get_location",
+                "multi-turn-loc: location → get_location", f"got {tool1}")
+        _assert(tool2 == "get_services",
+                "multi-turn-svc: services → get_services", f"got {tool2}")
+
+    # ── search_knowledge no longer handles ANY dedicated intent ──
+
+    @staticmethod
+    def test_search_knowledge_excludes_all_dedicated():
+        """All dedicated intent types should NOT route to search_knowledge."""
+        dedicated_qs = [
+            "Wat zijn jullie prijzen?",
+            "Hoeveel kost starter?",
+            "Wat doen jullie?",
+            "What does your company do?",
+            "Hoe bereik ik jullie?",
+            "Wat is jullie telefoonnummer?",
+            "Wat zijn jullie openingstijden?",
+            "Wanneer zijn jullie open?",
+            "Welke diensten bieden jullie?",
+            "Waar zijn jullie gevestigd?",
+        ]
+        for q in dedicated_qs:
             tool = _route_tool(q)
             _assert(
                 tool != "search_knowledge",

@@ -30,12 +30,14 @@ _RULES: list[tuple[re.Pattern, str]] = [
         re.I,
     ), "company_overview"),
     (re.compile(r"\b(prij[sz]\w*|kost\w*|tariev\w*|tarief\w*|pakket\w*|plan\w*|abonnement\w*|euro|€|betaal\w*|goedkoop\w*|duur|budget\w*|belminut\w*|starter|business|enterprise)\b", re.I), "pricing"),
-    (re.compile(r"\b(openingstijd\w*|bereikbaar\w*|bellen|telefoon\w*|email\w*|e-mail\w*|contact\w*|adres\w*|locatie\w*|route\w*)\b", re.I), "contact"),
+    # Hours — checked before contact so "openingstijden" routes to get_opening_hours
+    (re.compile(r"\b(openingstijd\w*|geopend|gesloten|wanneer\b.{0,20}\bopen|wanneer\b.{0,20}\bdicht|sluitingstijd\w*|opening\s*hours|when\s+(?:are\s+you\s+)?open)\b", re.I), "hours"),
+    (re.compile(r"\b(bellen|telefoon\w*|email\w*|e-mail\w*|contact\w*|bereik\w*|neem\s+contact|bel\s+(?:ons|jullie|je)|mail\w*)\b", re.I), "contact"),
     (re.compile(r"\b(retour\w*|terugsturen|annuleer\w*|annulering\w*|opzeg\w*|garantie\w*|verzend\w*|lever\w*|bezorg\w*)\b", re.I), "policy"),
     (re.compile(r"\b(faq|veelgesteld\w*|vraag en antwoord)\b", re.I), "faq"),
-    (re.compile(r"\b(locatie\w*|vestiging\w*|filiaal\w*|kantoor\w*|winkel\w*|route\w*|parkeer\w*)\b", re.I), "location"),
+    (re.compile(r"\b(locatie\w*|vestiging\w*|filiaal\w*|kantoor\w*|winkel\w*|adres\w*|route\w*|parkeer\w*|waar\s+(?:zitten|zijn)\s+jullie)\b", re.I), "location"),
     (re.compile(r"\b(blog\w*|artikel\w*|nieuws\w*)\b", re.I), "blog"),
-    (re.compile(r"\b(product\w*|dienst\w*|service\w*|aanbod\w*|oplossing\w*|feature\w*|functie\w*|mogelijkheid\w*)\b", re.I), "service"),
+    (re.compile(r"\b(product\w*|dienst\w*|service\w*|aanbod\w*|oplossing\w*|feature\w*|functie\w*|mogelijkhe\w*)\b", re.I), "service"),
 ]
 
 

@@ -307,38 +307,14 @@ def _try_structured_facts(
     db: Session, company_id: str, query: str,
 ) -> Optional[Dict[str, Any]]:
     """
-    Check structured business fact tables *before* RAG.
+    Legacy structured-facts hook inside search_knowledge.
 
-    Returns a tool-result dict if structured data can answer the query,
-    or None to fall through to the retrieval pipeline.
+    All structured intents are now served by dedicated tools:
+      get_pricing, get_company_overview, get_contact_info,
+      get_opening_hours, get_services, get_location.
 
-    NOTE: pricing and company_overview are handled by dedicated tools
-    (tool_get_pricing, tool_get_company_overview) and are no longer
-    checked here.
+    This function is kept as a no-op for backward compatibility.
     """
-    classification = classify_query(query)
-    logger.info("[structured_facts] query=%r classification=%s", query, classification)
-
-    if classification == "contact":
-        contacts = db.query(ContactInfo).filter_by(company_id=company_id).all()
-        if contacts:
-            return _format_contact_response(contacts)
-
-        hours = db.query(OpeningHours).filter_by(company_id=company_id).order_by(OpeningHours.weekday).all()
-        if hours:
-            return _format_hours_response(hours)
-
-    if classification == "location":
-        locations = db.query(BusinessLocation).filter_by(company_id=company_id).all()
-        hours = db.query(OpeningHours).filter_by(company_id=company_id).order_by(OpeningHours.weekday).all()
-        if locations or hours:
-            return _format_location_response(locations, hours)
-
-    if classification == "service":
-        services = db.query(BusinessService).filter_by(company_id=company_id).all()
-        if services:
-            return _format_service_response(services)
-
     return None
 
 
@@ -665,6 +641,121 @@ def tool_get_company_overview(
     elapsed_ms = int((_time.time() - t0) * 1000)
     logger.info("[tool_get_company_overview] returning overview in %dms (%d chars)",
                 elapsed_ms, len(result.get("message", "")))
+    return result
+
+
+def tool_get_contact_info(
+    db: Session,
+    company_id: str,
+) -> Dict[str, Any]:
+    """
+    Dedicated contact info tool — reads directly from ContactInfo.
+
+    Returns phone, email, whatsapp, contact_url.
+    Falls back to search_knowledge when no structured contact data exists.
+    """
+    import time as _time
+    t0 = _time.time()
+    logger.info("[tool_get_contact_info] START company=%s", company_id)
+
+    contacts = db.query(ContactInfo).filter_by(company_id=company_id).all()
+
+    if not contacts:
+        logger.info("[tool_get_contact_info] no structured contacts — falling back to search_knowledge")
+        return tool_search_knowledge(db, company_id, "contact telefoon email", limit=5)
+
+    result = _format_contact_response(contacts)
+    elapsed_ms = int((_time.time() - t0) * 1000)
+    logger.info("[tool_get_contact_info] returning %d contact(s) in %dms", len(contacts), elapsed_ms)
+    return result
+
+
+def tool_get_opening_hours(
+    db: Session,
+    company_id: str,
+) -> Dict[str, Any]:
+    """
+    Dedicated opening hours tool — reads directly from OpeningHours.
+
+    Returns weekday schedule with open/close times.
+    Falls back to search_knowledge when no structured hours exist.
+    """
+    import time as _time
+    t0 = _time.time()
+    logger.info("[tool_get_opening_hours] START company=%s", company_id)
+
+    hours = (
+        db.query(OpeningHours)
+        .filter_by(company_id=company_id)
+        .order_by(OpeningHours.weekday)
+        .all()
+    )
+
+    if not hours:
+        logger.info("[tool_get_opening_hours] no structured hours — falling back to search_knowledge")
+        return tool_search_knowledge(db, company_id, "openingstijden bereikbaar", limit=5)
+
+    result = _format_hours_response(hours)
+    elapsed_ms = int((_time.time() - t0) * 1000)
+    logger.info("[tool_get_opening_hours] returning %d day(s) in %dms", len(hours), elapsed_ms)
+    return result
+
+
+def tool_get_services(
+    db: Session,
+    company_id: str,
+) -> Dict[str, Any]:
+    """
+    Dedicated services tool — reads directly from BusinessService.
+
+    Returns a concise list of offered services/capabilities.
+    Falls back to search_knowledge when no structured services exist.
+    """
+    import time as _time
+    t0 = _time.time()
+    logger.info("[tool_get_services] START company=%s", company_id)
+
+    services = db.query(BusinessService).filter_by(company_id=company_id).all()
+
+    if not services:
+        logger.info("[tool_get_services] no structured services — falling back to search_knowledge")
+        return tool_search_knowledge(db, company_id, "diensten services aanbod", limit=5)
+
+    result = _format_service_response(services)
+    elapsed_ms = int((_time.time() - t0) * 1000)
+    logger.info("[tool_get_services] returning %d service(s) in %dms", len(services), elapsed_ms)
+    return result
+
+
+def tool_get_location(
+    db: Session,
+    company_id: str,
+) -> Dict[str, Any]:
+    """
+    Dedicated location tool — reads directly from BusinessLocation.
+
+    Returns address, city, postal code. Includes opening hours if available.
+    Falls back to search_knowledge when no structured location data exists.
+    """
+    import time as _time
+    t0 = _time.time()
+    logger.info("[tool_get_location] START company=%s", company_id)
+
+    locations = db.query(BusinessLocation).filter_by(company_id=company_id).all()
+    hours = (
+        db.query(OpeningHours)
+        .filter_by(company_id=company_id)
+        .order_by(OpeningHours.weekday)
+        .all()
+    )
+
+    if not locations and not hours:
+        logger.info("[tool_get_location] no structured location — falling back to search_knowledge")
+        return tool_search_knowledge(db, company_id, "locatie adres vestiging", limit=5)
+
+    result = _format_location_response(locations, hours)
+    elapsed_ms = int((_time.time() - t0) * 1000)
+    logger.info("[tool_get_location] returning %d location(s) in %dms", len(locations), elapsed_ms)
     return result
 
 

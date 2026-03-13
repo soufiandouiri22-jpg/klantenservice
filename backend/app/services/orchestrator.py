@@ -27,6 +27,10 @@ from app.services.call_tools import (
     tool_search_knowledge,
     tool_get_pricing,
     tool_get_company_overview,
+    tool_get_contact_info,
+    tool_get_opening_hours,
+    tool_get_services,
+    tool_get_location,
     tool_create_note,
     tool_flag_unknown,
     tool_transfer_call,
@@ -68,7 +72,11 @@ Jij bepaalt de waarheid; de spraakassistent spreekt alleen jouw feiten uit.
 BELANGRIJKE REGELS:
 - Bij prijzen, pakketten, abonnementen: gebruik get_pricing tool. NIET search_knowledge.
 - Bij "wat doen jullie?" / bedrijfsoverzicht: gebruik get_company_overview tool. NIET search_knowledge.
-- Bij openingstijden, contact, beleid, FAQ: gebruik search_knowledge tool.
+- Bij contact, telefoon, email: gebruik get_contact_info tool. NIET search_knowledge.
+- Bij openingstijden, wanneer open/dicht: gebruik get_opening_hours tool. NIET search_knowledge.
+- Bij diensten, services, aanbod: gebruik get_services tool. NIET search_knowledge.
+- Bij locatie, adres, vestiging: gebruik get_location tool. NIET search_knowledge.
+- Bij beleid, FAQ, retour, garantie, overige vragen: gebruik search_knowledge tool.
 - Bij afspraakvragen: gebruik check_availability en book_appointment tools.
 - Als je een vraag NIET kunt beantwoorden: gebruik flag_unknown tool EN maak een notitie.
 - Voor terugbelverzoeken of notities: gebruik create_note tool.
@@ -170,8 +178,56 @@ TOOLS_OPENAI = [
     {
         "type": "function",
         "function": {
+            "name": "get_contact_info",
+            "description": "Haal contactgegevens op (telefoon, email, whatsapp). Gebruik als de klant vraagt hoe ze contact kunnen opnemen. NIET search_knowledge gebruiken voor contactgegevens.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_opening_hours",
+            "description": "Haal openingstijden op. Gebruik als de klant vraagt wanneer het bedrijf open/dicht is of bereikbaar is. NIET search_knowledge gebruiken voor openingstijden.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_services",
+            "description": "Haal een lijst van diensten/services op. Gebruik als de klant vraagt welke diensten of services worden aangeboden. NIET search_knowledge gebruiken voor diensten.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_location",
+            "description": "Haal locatie/adresgegevens op. Gebruik als de klant vraagt waar het bedrijf zit, het adres, of de vestiging. NIET search_knowledge gebruiken voor locatie.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "search_knowledge",
-            "description": "Zoek in de bedrijfskennisbank. Gebruik voor openingstijden, contact, FAQ, beleid, en overige vragen. NIET gebruiken voor prijzen (gebruik get_pricing) of bedrijfsoverzicht (gebruik get_company_overview).",
+            "description": "Zoek in de bedrijfskennisbank voor overige vragen. Gebruik voor FAQ, beleid (retour, garantie), en vragen die niet door een dedicated tool worden afgehandeld. NIET gebruiken voor: prijzen (get_pricing), bedrijfsoverzicht (get_company_overview), contact (get_contact_info), openingstijden (get_opening_hours), diensten (get_services), locatie (get_location).",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -348,6 +404,18 @@ async def _run_tool(
 
         if name == "get_company_overview":
             return tool_get_company_overview(db, company_id)
+
+        if name == "get_contact_info":
+            return tool_get_contact_info(db, company_id)
+
+        if name == "get_opening_hours":
+            return tool_get_opening_hours(db, company_id)
+
+        if name == "get_services":
+            return tool_get_services(db, company_id)
+
+        if name == "get_location":
+            return tool_get_location(db, company_id)
 
         if name == "search_knowledge":
             return tool_search_knowledge(

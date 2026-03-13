@@ -43,7 +43,11 @@ CONTEXT_FIELDS = {
 _SKIP_AUTO_POLICY = {"check_policy"}
 
 # Tools that should be blocked when a closing utterance is detected
-_CLOSEABLE_TOOLS = {"check_availability", "book_appointment", "search_knowledge", "get_pricing", "get_company_overview"}
+_CLOSEABLE_TOOLS = {
+    "check_availability", "book_appointment", "search_knowledge",
+    "get_pricing", "get_company_overview",
+    "get_contact_info", "get_opening_hours", "get_services", "get_location",
+}
 
 _CLOSING_RE = re.compile(
     # Dutch closing / satisfied signals
@@ -229,6 +233,26 @@ async def ep_get_pricing(request: Request):
 @router.post("/get_company_overview")
 async def ep_get_company_overview(request: Request):
     return await _handle_tool(request, "get_company_overview")
+
+
+@router.post("/get_contact_info")
+async def ep_get_contact_info(request: Request):
+    return await _handle_tool(request, "get_contact_info")
+
+
+@router.post("/get_opening_hours")
+async def ep_get_opening_hours(request: Request):
+    return await _handle_tool(request, "get_opening_hours")
+
+
+@router.post("/get_services")
+async def ep_get_services(request: Request):
+    return await _handle_tool(request, "get_services")
+
+
+@router.post("/get_location")
+async def ep_get_location(request: Request):
+    return await _handle_tool(request, "get_location")
 
 
 @router.post("/create_note")
