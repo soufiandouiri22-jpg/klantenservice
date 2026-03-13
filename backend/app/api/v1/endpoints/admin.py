@@ -61,6 +61,15 @@ from app.schemas.admin import (
 )
 from app.services.pii_masker import mask_transcript
 from app.models.billing_run import BillingRun, BillingRunStatus
+from app.models.call_evaluation import CallEvaluation
+from app.schemas.evaluation import (
+    EvaluationResponse,
+    EvaluationDetailResponse,
+    EvaluationListResponse,
+    EvaluationSummaryResponse,
+    EvaluationSyncRequest,
+    TranscriptEntryResponse,
+)
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
@@ -2030,3 +2039,212 @@ async def retry_billing_run(
         db.commit()
         logger.error(f"[BILLING RETRY] Failed for billing_run {run_id}: {e}")
         raise HTTPException(status_code=502, detail=f"Stripe error: {e}")
+
+
+# ==================== Evaluations ====================
+
+def _evaluation_to_response(ev: CallEvaluation, db: Session) -> dict:
+    """Convert a CallEvaluation + joined CallLog data into a response dict."""
+    call = ev.call_log
+    worker_name = None
+    if call and call.ai_worker_id:
+        worker = db.query(AIWorker).filter(AIWorker.id == call.ai_worker_id).first()
+        if worker:
+            worker_name = worker.name
+
+    company_name = None
+    if ev.company_id:
+        company = db.query(Company).filter(Company.id == ev.company_id).first()
+        if company:
+            company_name = company.name
+
+    return {
+        "id": ev.id,
+        "call_log_id": ev.call_log_id,
+        "company_id": ev.company_id,
+        "quality_score": ev.quality_score,
+        "hallucination_detected": ev.hallucination_detected,
+        "wrong_tool_detected": ev.wrong_tool_detected,
+        "customer_helped": ev.customer_helped,
+        "needs_review": ev.needs_review,
+        "latency_ms": ev.latency_ms,
+        "summary": ev.summary,
+        "issues": ev.issues or [],
+        "tool_usage": ev.tool_usage or [],
+        "langsmith_run_id": ev.langsmith_run_id,
+        "evaluator_model": ev.evaluator_model,
+        "evaluated_at": ev.evaluated_at,
+        "created_at": ev.created_at,
+        "caller_number": call.caller_number if call else None,
+        "called_number": call.called_number if call else None,
+        "call_started_at": call.started_at if call else None,
+        "call_duration_seconds": call.duration_seconds if call else None,
+        "ai_worker_name": worker_name,
+        "company_name": company_name,
+    }
+
+
+@router.get("/evaluations/summary")
+async def get_evaluation_summary(
+    company_id: Optional[UUID] = None,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_superadmin),
+):
+    """Get aggregate KPI metrics for evaluations."""
+    query = db.query(CallEvaluation)
+
+    if company_id:
+        query = query.filter(CallEvaluation.company_id == company_id)
+    if date_from:
+        query = query.filter(CallEvaluation.evaluated_at >= datetime.combine(date_from, datetime.min.time()))
+    if date_to:
+        query = query.filter(CallEvaluation.evaluated_at <= datetime.combine(date_to, datetime.max.time()))
+
+    total = query.count()
+    if total == 0:
+        return EvaluationSummaryResponse()
+
+    avg_score = db.query(func.avg(CallEvaluation.quality_score)).filter(
+        CallEvaluation.id.in_(query.with_entities(CallEvaluation.id))
+    ).scalar()
+
+    hallucination_count = query.filter(CallEvaluation.hallucination_detected == True).count()
+    wrong_tool_count = query.filter(CallEvaluation.wrong_tool_detected == True).count()
+    helped_count = query.filter(CallEvaluation.customer_helped == True).count()
+    review_count = query.filter(CallEvaluation.needs_review == True).count()
+
+    return EvaluationSummaryResponse(
+        total_evaluated=total,
+        average_score=round(float(avg_score), 1) if avg_score else None,
+        hallucination_rate=round(hallucination_count / total * 100, 1) if total else None,
+        wrong_tool_rate=round(wrong_tool_count / total * 100, 1) if total else None,
+        customer_helped_rate=round(helped_count / total * 100, 1) if total else None,
+        needs_review_count=review_count,
+    )
+
+
+@router.get("/evaluations/{evaluation_id}")
+async def get_evaluation_detail(
+    evaluation_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_superadmin),
+):
+    """Get detailed evaluation including transcript."""
+    ev = db.query(CallEvaluation).filter(CallEvaluation.id == evaluation_id).first()
+    if not ev:
+        raise HTTPException(status_code=404, detail="Evaluation not found")
+
+    data = _evaluation_to_response(ev, db)
+
+    transcripts = db.query(CallTranscript).filter(
+        CallTranscript.call_log_id == ev.call_log_id
+    ).order_by(CallTranscript.timestamp).all()
+
+    data["transcript"] = [
+        TranscriptEntryResponse(
+            speaker=t.speaker,
+            message=t.message,
+            timestamp=t.timestamp,
+        ).model_dump()
+        for t in transcripts
+    ]
+
+    return data
+
+
+@router.get("/evaluations")
+async def list_evaluations(
+    page: int = 1,
+    page_size: int = 20,
+    company_id: Optional[UUID] = None,
+    min_score: Optional[int] = None,
+    max_score: Optional[int] = None,
+    hallucination_only: bool = False,
+    wrong_tool_only: bool = False,
+    needs_review_only: bool = False,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    sort_by: str = "evaluated_at",
+    sort_dir: str = "desc",
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_superadmin),
+):
+    """List evaluations with filtering, sorting, pagination."""
+    query = db.query(CallEvaluation)
+
+    if company_id:
+        query = query.filter(CallEvaluation.company_id == company_id)
+    if min_score is not None:
+        query = query.filter(CallEvaluation.quality_score >= min_score)
+    if max_score is not None:
+        query = query.filter(CallEvaluation.quality_score <= max_score)
+    if hallucination_only:
+        query = query.filter(CallEvaluation.hallucination_detected == True)
+    if wrong_tool_only:
+        query = query.filter(CallEvaluation.wrong_tool_detected == True)
+    if needs_review_only:
+        query = query.filter(CallEvaluation.needs_review == True)
+    if date_from:
+        query = query.filter(CallEvaluation.evaluated_at >= datetime.combine(date_from, datetime.min.time()))
+    if date_to:
+        query = query.filter(CallEvaluation.evaluated_at <= datetime.combine(date_to, datetime.max.time()))
+
+    _sortable = {
+        "evaluated_at": CallEvaluation.evaluated_at,
+        "quality_score": CallEvaluation.quality_score,
+        "created_at": CallEvaluation.created_at,
+    }
+    sort_col = _sortable.get(sort_by, CallEvaluation.evaluated_at)
+    order = sort_col.desc() if sort_dir == "desc" else sort_col.asc()
+
+    total = query.count()
+    total_pages = max(1, (total + page_size - 1) // page_size)
+
+    evaluations = query.order_by(order).offset((page - 1) * page_size).limit(page_size).all()
+
+    items = [_evaluation_to_response(ev, db) for ev in evaluations]
+
+    return EvaluationListResponse(
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
+    )
+
+
+@router.post("/evaluations/sync")
+async def sync_evaluations_endpoint(
+    body: EvaluationSyncRequest = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_superadmin),
+):
+    """Trigger batch evaluation of calls that haven't been evaluated yet."""
+    from app.services.langsmith_service import sync_evaluations
+
+    company_id = str(body.company_id) if body and body.company_id else None
+    limit = body.limit if body else 50
+
+    asyncio.create_task(_run_sync_evaluations(company_id, limit))
+
+    return {
+        "status": "started",
+        "message": f"Evaluatie gestart voor maximaal {limit} gesprekken.",
+    }
+
+
+async def _run_sync_evaluations(company_id: Optional[str], limit: int):
+    """Background task for batch evaluation sync."""
+    from app.core.database import SessionLocal
+    from app.services.langsmith_service import sync_evaluations
+
+    db = SessionLocal()
+    try:
+        result = await sync_evaluations(db, company_id=company_id, limit=limit)
+        logger.info("[EVAL SYNC] Complete: %s", result)
+    except Exception as e:
+        logger.error("[EVAL SYNC] Failed: %s", e, exc_info=True)
+    finally:
+        db.close()

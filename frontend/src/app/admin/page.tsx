@@ -9,7 +9,8 @@ import {
   ShieldCheck,
   Mic,
   FileText,
-  BarChart3
+  BarChart3,
+  ClipboardCheck,
 } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { Header } from '@/components/layout/Header'
@@ -23,6 +24,7 @@ import { PoliciesTab } from './components/PoliciesTab'
 import { VoiceTab } from './components/VoiceTab'
 import { LogsTab } from './components/LogsTab'
 import { PolicyTraceTab } from './components/PolicyTraceTab'
+import { EvaluationsTab } from './components/EvaluationsTab'
 
 const tabs = [
   { id: 'overview', name: 'Overzicht', icon: LayoutDashboard },
@@ -30,6 +32,7 @@ const tabs = [
   { id: 'customers', name: 'Klanten', icon: Users },
   { id: 'policies', name: 'Policies', icon: Shield },
   { id: 'policy-trace', name: 'Call Control', icon: ShieldCheck },
+  { id: 'evaluations', name: 'Evaluaties', icon: ClipboardCheck },
   { id: 'voice', name: 'Realtime Voice', icon: Mic },
   { id: 'logs', name: 'Logs & Debug', icon: FileText },
 ]
@@ -72,6 +75,8 @@ export default function AdminPage() {
         return <PoliciesTab />
       case 'policy-trace':
         return <PolicyTraceTab />
+      case 'evaluations':
+        return <EvaluationsTab />
       case 'voice':
         return <VoiceTab />
       case 'logs':

@@ -1015,6 +1015,27 @@ export const adminApi = {
     const response = await api.get(`/admin/voice/calls/${callId}/policy-trace`)
     return response.data
   },
+
+  // Evaluations
+  getEvaluationSummary: async (params?: { company_id?: string; date_from?: string; date_to?: string }) => {
+    const response = await api.get('/admin/evaluations/summary', { params })
+    return response.data
+  },
+
+  getEvaluations: async (params?: Record<string, any>) => {
+    const response = await api.get('/admin/evaluations', { params })
+    return response.data
+  },
+
+  getEvaluationDetail: async (id: string) => {
+    const response = await api.get(`/admin/evaluations/${id}`)
+    return response.data
+  },
+
+  syncEvaluations: async (data?: { company_id?: string; limit?: number }) => {
+    const response = await api.post('/admin/evaluations/sync', data || {})
+    return response.data
+  },
 }
 
 // Payments API (Stripe)

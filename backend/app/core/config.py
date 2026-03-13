@@ -107,6 +107,11 @@ class Settings(BaseSettings):
     # Mailchimp
     MAILCHIMP_API_KEY: str = ""
     MAILCHIMP_AUDIENCE_ID: str = ""
+
+    # LangSmith (call evaluation observability)
+    LANGSMITH_API_KEY: str = ""
+    LANGSMITH_PROJECT: str = "klantenservice-ai"
+    LANGSMITH_ENDPOINT: str = "https://api.smith.langchain.com"
     
     # Frontend URL (for invite links)
     FRONTEND_URL: str = "http://localhost:3000"

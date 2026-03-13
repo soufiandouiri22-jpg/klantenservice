@@ -390,6 +390,13 @@ async def fetch_and_process_transcript(
                         exc_info=True,
                     )
 
+            # Run call quality evaluation (non-blocking)
+            try:
+                from app.services.langsmith_service import evaluate_call
+                await evaluate_call(db, call_log)
+            except Exception:
+                logger.warning("[TRANSCRIPT] Call evaluation failed (non-blocking)", exc_info=True)
+
             return sentiment
     except Exception as e:
         logger.warning("[TRANSCRIPT] Sentiment analysis failed: %s", e)
