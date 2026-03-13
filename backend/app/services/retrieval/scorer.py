@@ -23,6 +23,8 @@ GENERIC_PENALTY = -0.12
 LOW_INFO_PENALTY = -0.10
 JUNK_PENALTY = -0.40
 POLICY_CROSSTALK_PENALTY = -0.25
+OVERVIEW_BOOST = 0.25
+OVERVIEW_EXCLUDE_PENALTY = -0.35
 
 # Patterns that indicate junk / non-informational content
 _JUNK_PATTERNS = [
@@ -37,6 +39,8 @@ _JUNK_PATTERNS = [
 
 
 _POLICY_TYPES = {"policy", "terms", "privacy", "voorwaarden"}
+_OVERVIEW_PREFERRED = {"home", "about", "service"}
+_OVERVIEW_EXCLUDED = {"policy", "terms", "privacy", "voorwaarden", "register", "account", "payment", "legal", "compliance"}
 
 
 def _is_policy_chunk(chunk_type: str, page_type: str) -> bool:
@@ -108,6 +112,13 @@ def score_candidates(
         # user asks about pricing/contact/faq/etc., these are misleading.
         if query_classification not in ("general", "policy") and _is_policy_chunk(chunk_type, page_type):
             boost += POLICY_CROSSTALK_PENALTY
+
+        # Company overview: boost homepage/about/service, exclude legal/register
+        if query_classification == "company_overview":
+            if page_type in _OVERVIEW_PREFERRED or chunk_type in _OVERVIEW_PREFERRED:
+                boost += OVERVIEW_BOOST
+            if page_type in _OVERVIEW_EXCLUDED or chunk_type in _OVERVIEW_EXCLUDED:
+                boost += OVERVIEW_EXCLUDE_PENALTY
 
         # Low info penalty
         if (c.get("token_count") or 0) < 50:

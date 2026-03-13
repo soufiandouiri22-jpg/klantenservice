@@ -7,12 +7,28 @@ Queried at runtime *before* RAG for pricing, contact, hours, etc.
 from datetime import datetime
 from sqlalchemy import (
     Column, String, DateTime, Boolean, Integer, Text, Float,
-    ForeignKey, JSON, Numeric, Time,
+    ForeignKey, JSON, Numeric, Time, UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
 
 from app.core.database import Base
+
+
+class CompanyOverview(Base):
+    """One-row-per-company business summary, extracted from homepage/about pages."""
+    __tablename__ = "business_company_overviews"
+    __table_args__ = (UniqueConstraint("company_id", name="uq_overview_company"),)
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    company_id = Column(UUID(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), nullable=False, index=True)
+    site_id = Column(UUID(as_uuid=True), ForeignKey("idx_sites.id", ondelete="SET NULL"), nullable=True)
+    summary = Column(Text, nullable=False)
+    target_audience = Column(Text, nullable=True)
+    capabilities = Column(JSON, nullable=True)
+    source_url = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class PricingPlan(Base):

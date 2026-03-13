@@ -26,7 +26,8 @@ from app.models.appointment import Appointment, AppointmentStatus
 from app.models.internal_note import InternalNote, NotePriority
 from app.models.training import ExampleAnswer
 from app.models.business_facts import (
-    PricingPlan, ContactInfo, OpeningHours, BusinessLocation, BusinessService,
+    CompanyOverview, PricingPlan, ContactInfo, OpeningHours,
+    BusinessLocation, BusinessService,
 )
 from app.services.retrieval import RetrievalService
 from app.services.retrieval.query_classifier import classify_query
@@ -314,6 +315,11 @@ def _try_structured_facts(
     classification = classify_query(query)
     logger.info("[structured_facts] query=%r classification=%s", query, classification)
 
+    if classification == "company_overview":
+        overview = db.query(CompanyOverview).filter_by(company_id=company_id).first()
+        if overview:
+            return _format_overview_response(overview)
+
     if classification == "pricing":
         plans = (
             db.query(PricingPlan)
@@ -348,6 +354,32 @@ def _try_structured_facts(
 
 
 _WEEKDAY_NAMES = ["Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag", "Zondag"]
+
+
+def _format_overview_response(overview) -> Dict[str, Any]:
+    """Format a CompanyOverview into a tool result for the voice agent."""
+    lines = [overview.summary]
+
+    if overview.capabilities:
+        caps = overview.capabilities if isinstance(overview.capabilities, list) else []
+        if caps:
+            lines.append("")
+            for cap in caps[:8]:
+                lines.append(f"  - {cap}")
+
+    if overview.target_audience:
+        lines.append(f"\nDoelgroep: {overview.target_audience}")
+
+    content = "\n".join(lines)
+    source_url = overview.source_url or ""
+    logger.info("[structured_facts] returning company overview (%d chars)", len(content))
+    return {
+        "ok": True,
+        "results": [{"content": content, "url": source_url, "title": "Bedrijfsoverzicht", "chunk_type": "about", "score": 1.0}],
+        "top_retrieval_score": 1.0,
+        "message": content,
+        "source": "structured_facts",
+    }
 
 
 def _format_price_str(price) -> str:

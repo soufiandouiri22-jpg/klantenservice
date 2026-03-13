@@ -88,11 +88,6 @@ _CLOSED_LINE_RE = re.compile(
 )
 
 _QUERY_RULES: list[tuple[re.Pattern, str]] = [
-    (re.compile(r"\b(prij[sz]\w*|kost\w*|tariev\w*|tarief\w*|pakket\w*|plan\w*|abonnement\w*|euro|€|betaal\w*|goedkoop\w*|duur|budget\w*|belminut\w*|starter|business|enterprise)\b", re.I), "pricing"),
-    (re.compile(r"\b(openingstijd\w*|bereikbaar\w*|bellen|telefoon\w*|email\w*|e-mail\w*|contact\w*|adres\w*|locatie\w*|route\w*)\b", re.I), "contact"),
-    (re.compile(r"\b(retour\w*|terugsturen|annuleer\w*|annulering\w*|opzeg\w*|garantie\w*|verzend\w*|lever\w*|bezorg\w*)\b", re.I), "policy"),
-    (re.compile(r"\b(locatie\w*|vestiging\w*|filiaal\w*|kantoor\w*|winkel\w*|route\w*|parkeer\w*)\b", re.I), "location"),
-    (re.compile(r"\b(product\w*|dienst\w*|service\w*|aanbod\w*|oplossing\w*|feature\w*|functie\w*|mogelijkheid\w*)\b", re.I), "service"),
     (re.compile(
         r"wat\s+(?:doen|doet|bieden|biedt)\s+(?:jullie|je|u|uw|\w+\.?\w*)"
         r"|jullie\s+(?:allemaal\s+)?doen"
@@ -103,9 +98,19 @@ _QUERY_RULES: list[tuple[re.Pattern, str]] = [
         r"|wat\s+is\s+\S+\s+(?:precies|eigenlijk|voor\s+(?:bedrijf|dienst))"
         r"|waar\s+(?:gaat|staat)\s+\S+\s+voor"
         r"|wie\s+(?:is|zijn)\s+(?:jullie|je|uw)"
-        r"|wat\s+houdt\s+\S+\s+in",
+        r"|wat\s+houdt\s+\S+\s+in"
+        r"|what\s+(?:do(?:es)?|is)\s+(?:your|the)\s+(?:company|business|organization)"
+        r"|what\s+do\s+you\s+(?:do|offer|provide)"
+        r"|tell\s+me\s+about\s+(?:your|the)\s+(?:company|business)"
+        r"|can\s+you\s+explain\s+what\s+you\s+do"
+        r"|what\s+(?:does|is)\s+\S+\s+(?:about|do|offer)",
         re.I,
-    ), "service"),
+    ), "company_overview"),
+    (re.compile(r"\b(prij[sz]\w*|kost\w*|tariev\w*|tarief\w*|pakket\w*|plan\w*|abonnement\w*|euro|€|betaal\w*|goedkoop\w*|duur|budget\w*|belminut\w*|starter|business|enterprise)\b", re.I), "pricing"),
+    (re.compile(r"\b(openingstijd\w*|bereikbaar\w*|bellen|telefoon\w*|email\w*|e-mail\w*|contact\w*|adres\w*|locatie\w*|route\w*)\b", re.I), "contact"),
+    (re.compile(r"\b(retour\w*|terugsturen|annuleer\w*|annulering\w*|opzeg\w*|garantie\w*|verzend\w*|lever\w*|bezorg\w*)\b", re.I), "policy"),
+    (re.compile(r"\b(locatie\w*|vestiging\w*|filiaal\w*|kantoor\w*|winkel\w*|route\w*|parkeer\w*)\b", re.I), "location"),
+    (re.compile(r"\b(product\w*|dienst\w*|service\w*|aanbod\w*|oplossing\w*|feature\w*|functie\w*|mogelijkheid\w*)\b", re.I), "service"),
 ]
 
 
@@ -1246,8 +1251,8 @@ class TestCompanyNameClassifier:
         for q in queries_expected_service:
             c = classify_query(q)
             _assert(
-                c == "service",
-                f"company-classifier: '{q}' must be service",
+                c == "company_overview",
+                f"company-classifier: '{q}' must be company_overview",
                 f"got '{c}'",
             )
 
@@ -1301,7 +1306,7 @@ class TestMultiTurnContamination:
         """
         q1 = "Wat doen jullie?"
         c1 = classify_query(q1)
-        _assert(c1 == "service", "multiturn-1: turn1 classified as service", f"got '{c1}'")
+        _assert(c1 == "company_overview", "multiturn-1: turn1 classified as company_overview", f"got '{c1}'")
 
         q2 = "Wat zijn jullie prijzen?"
         c2 = classify_query(q2)
@@ -1323,7 +1328,7 @@ class TestMultiTurnContamination:
         """
         q1 = "Wat doet Klantenservice.ai?"
         c1 = classify_query(q1)
-        _assert(c1 == "service", "multiturn-2: turn1 classified as service", f"got '{c1}'")
+        _assert(c1 == "company_overview", "multiturn-2: turn1 classified as company_overview", f"got '{c1}'")
 
         q2 = "Wat kost het starter pakket?"
         c2 = classify_query(q2)
@@ -1340,7 +1345,7 @@ class TestMultiTurnContamination:
         Turn 2: 'Wat zijn jullie prijzen?' -> pricing
         """
         c1 = classify_query("Vertel eens over jullie")
-        _assert(c1 == "service", "multiturn-3: 'Vertel eens over jullie' = service", f"got '{c1}'")
+        _assert(c1 == "company_overview", "multiturn-3: 'Vertel eens over jullie' = company_overview", f"got '{c1}'")
 
         c2 = classify_query("Wat zijn jullie prijzen?")
         _assert(c2 == "pricing", "multiturn-3: pricing query = pricing", f"got '{c2}'")
@@ -1423,6 +1428,456 @@ def _mock_format_pricing_response(plans: list) -> dict:
     }
 
 
+# ── 18. Overview extraction helpers (mirrored from fact_extractor) ─
+
+_BOILERPLATE_RE = re.compile(
+    r"cookie|privacy\s*(?:beleid|policy)|algemene\s+voorwaarden"
+    r"|terms\s+(?:of|and)\s+(?:service|use)|inloggen|registr"
+    r"|sign\s+(?:up|in)|log\s+in|wachtwoord|password"
+    r"|©\s*\d{4}|all\s+rights\s+reserved",
+    re.I,
+)
+
+_AUDIENCE_RE = re.compile(
+    r"(?:voor|for|gericht\s+op|designed\s+for|helps?|helping)"
+    r"\s+(.{5,120}?)(?:\.|$)",
+    re.I | re.MULTILINE,
+)
+
+_CAPABILITY_BULLET_RE = re.compile(
+    r"^[\s]*[-•✓*]\s+(.{5,120})$",
+    re.MULTILINE,
+)
+
+
+def _extract_overview_paragraphs(text: str) -> List[str]:
+    paragraphs: List[str] = []
+    for raw_para in re.split(r"\n\s*\n", text):
+        para = raw_para.strip()
+        if len(para) < 30:
+            continue
+        if _BOILERPLATE_RE.search(para):
+            continue
+        if para.count("€") >= 2:
+            continue
+        words = para.split()
+        if len(words) < 6:
+            continue
+        paragraphs.append(para)
+    return paragraphs
+
+
+def _extract_capabilities(text: str) -> List[str]:
+    caps: List[str] = []
+    seen: set = set()
+    for m in _CAPABILITY_BULLET_RE.finditer(text):
+        item = m.group(1).strip()
+        key = item.lower()
+        if key in seen or _BOILERPLATE_RE.search(item):
+            continue
+        seen.add(key)
+        caps.append(item)
+    return caps
+
+
+def _extract_audience(text: str) -> Optional[str]:
+    m = _AUDIENCE_RE.search(text)
+    if m:
+        audience = m.group(1).strip()
+        if len(audience) > 5 and not _BOILERPLATE_RE.search(audience):
+            return audience[:200]
+    return None
+
+
+def _simulate_overview_extraction(homepage_text: str) -> Dict:
+    """Simulate the full overview extraction pipeline."""
+    paragraphs = _extract_overview_paragraphs(homepage_text)
+    summary = " ".join(paragraphs[:3])[:800] if paragraphs else ""
+    capabilities = _extract_capabilities(homepage_text)
+    audience = _extract_audience(homepage_text)
+    return {
+        "summary": summary,
+        "capabilities": capabilities[:15],
+        "target_audience": audience,
+        "has_content": bool(summary),
+    }
+
+
+# ── 19. Scorer helpers (mirrored from scorer.py) ─────────────────
+
+OVERVIEW_BOOST = 0.25
+OVERVIEW_EXCLUDE_PENALTY = -0.35
+_OVERVIEW_PREFERRED = {"home", "about", "service"}
+_OVERVIEW_EXCLUDED = {"policy", "terms", "privacy", "voorwaarden", "register", "account", "payment", "legal", "compliance"}
+
+
+def _score_for_overview(page_type: str, chunk_type: str) -> float:
+    """Compute the overview-specific boost/penalty for a chunk."""
+    boost = 0.0
+    if page_type in _OVERVIEW_PREFERRED or chunk_type in _OVERVIEW_PREFERRED:
+        boost += OVERVIEW_BOOST
+    if page_type in _OVERVIEW_EXCLUDED or chunk_type in _OVERVIEW_EXCLUDED:
+        boost += OVERVIEW_EXCLUDE_PENALTY
+    return boost
+
+
+# ── 20. Multi-vertical overview tests ────────────────────────────
+
+# Generic test data for 5 different business types
+
+_VERTICAL_SAAS_NL = """
+Welkom bij CloudCRM — het slimste CRM-platform voor het MKB.
+
+Wij helpen kleine en middelgrote bedrijven hun klantrelaties te beheren met
+krachtige automatisering, inzichtelijke dashboards en naadloze integraties.
+
+Onze oplossing is ontworpen voor verkoopteams die meer deals willen sluiten
+zonder extra administratie. Van leadbeheer tot facturatie, alles in één platform.
+
+- Leadbeheer en pipeline management
+- Automatische e-mail opvolging
+- Rapportages en dashboards
+- Integraties met 100+ tools
+- GDPR-compliant dataopslag
+"""
+
+_VERTICAL_SAAS_EN = """
+Welcome to TaskFlow — project management for modern teams.
+
+TaskFlow helps distributed teams stay organized with real-time collaboration,
+automated workflows, and powerful reporting. Designed for teams of 5 to 5000.
+
+Our platform is built for product teams, agencies, and enterprises that need
+visibility across projects without the overhead of complex tools.
+
+- Real-time task boards
+- Automated status updates
+- Time tracking and billing
+- Custom dashboards
+- Enterprise SSO and compliance
+"""
+
+_VERTICAL_SALON = """
+Welkom bij Salon Rosé — uw kapsalon in het hart van Amsterdam.
+
+Bij Salon Rosé staan wij klaar om u de beste haarervaring te geven. Of u nu
+komt voor een simpele knipbeurt, een nieuwe kleur, of een compleet nieuwe look,
+ons team van ervaren stylisten helpt u graag.
+
+Wij zijn gespecialiseerd in balayage, highlights en kleurbehandelingen voor
+alle haartypes. Ook voor bruidskapsels en speciale gelegenheden kunt u bij ons terecht.
+
+- Knippen dames en heren
+- Kleuren en highlights
+- Balayage specialist
+- Bruidskapsels
+- Keratine behandeling
+"""
+
+_VERTICAL_GARAGE = """
+AutoService Jansen — uw betrouwbare garage in Utrecht.
+
+Wij zijn een allround autobedrijf gespecialiseerd in onderhoud en reparatie
+van alle automerken. Of het nu gaat om een APK-keuring, een grote beurt, of
+een complexe motorstoring, ons team staat voor u klaar.
+
+Met meer dan 25 jaar ervaring bieden wij eerlijk advies en transparante prijzen.
+Wij werken voor particulieren en zakelijke klanten.
+
+- APK-keuring
+- Grote en kleine beurt
+- Bandenservice
+- Airco onderhoud
+- Diagnose en storing verhelpen
+- Schade reparatie
+"""
+
+_VERTICAL_RESTAURANT = """
+Welcome to Trattoria Bella — authentic Italian dining in the heart of London.
+
+We serve traditional Italian cuisine made with fresh, locally sourced ingredients.
+Our chef brings 20 years of experience from Naples to create dishes that
+transport you to Italy with every bite.
+
+Whether you are joining us for a romantic dinner, a family celebration, or
+a quick lunch, our warm atmosphere and attentive service make every visit special.
+
+- Fresh pasta made daily
+- Wood-fired pizza
+- Seasonal specials
+- Private dining available
+- Takeaway and delivery
+"""
+
+_VERTICAL_DATA = [
+    ("Dutch SaaS (CloudCRM)", _VERTICAL_SAAS_NL),
+    ("English SaaS (TaskFlow)", _VERTICAL_SAAS_EN),
+    ("Hair Salon (Salon Rosé)", _VERTICAL_SALON),
+    ("Car Garage (AutoService Jansen)", _VERTICAL_GARAGE),
+    ("Restaurant (Trattoria Bella)", _VERTICAL_RESTAURANT),
+]
+
+
+class TestMultiVerticalOverview:
+    """Prove overview extraction works generically across 5 different business types."""
+
+    @staticmethod
+    def test_all_verticals_produce_summary():
+        for name, text in _VERTICAL_DATA:
+            result = _simulate_overview_extraction(text)
+            _assert(
+                result["has_content"],
+                f"vertical-summary: {name} produces a summary",
+                f"got empty summary",
+            )
+            _assert(
+                len(result["summary"]) >= 50,
+                f"vertical-summary: {name} summary >= 50 chars",
+                f"got {len(result['summary'])} chars",
+            )
+
+    @staticmethod
+    def test_all_verticals_extract_capabilities():
+        for name, text in _VERTICAL_DATA:
+            result = _simulate_overview_extraction(text)
+            _assert(
+                len(result["capabilities"]) >= 3,
+                f"vertical-caps: {name} has >= 3 capabilities",
+                f"got {len(result['capabilities'])}",
+            )
+
+    @staticmethod
+    def test_saas_nl_content():
+        result = _simulate_overview_extraction(_VERTICAL_SAAS_NL)
+        summary_lower = result["summary"].lower()
+        _assert("crm" in summary_lower or "klant" in summary_lower,
+                "vertical-nl: CloudCRM summary mentions CRM or klant")
+        caps_lower = " ".join(result["capabilities"]).lower()
+        _assert("lead" in caps_lower or "pipeline" in caps_lower or "dashboard" in caps_lower,
+                "vertical-nl: CloudCRM capabilities include relevant items")
+
+    @staticmethod
+    def test_saas_en_content():
+        result = _simulate_overview_extraction(_VERTICAL_SAAS_EN)
+        summary_lower = result["summary"].lower()
+        _assert("team" in summary_lower or "project" in summary_lower,
+                "vertical-en: TaskFlow summary mentions teams or projects")
+
+    @staticmethod
+    def test_salon_content():
+        result = _simulate_overview_extraction(_VERTICAL_SALON)
+        summary_lower = result["summary"].lower()
+        _assert("salon" in summary_lower or "haar" in summary_lower or "kap" in summary_lower,
+                "vertical-salon: mentions salon/haar/kap")
+        caps_lower = " ".join(result["capabilities"]).lower()
+        _assert("knippen" in caps_lower or "kleuren" in caps_lower,
+                "vertical-salon: capabilities include knippen or kleuren")
+
+    @staticmethod
+    def test_garage_content():
+        result = _simulate_overview_extraction(_VERTICAL_GARAGE)
+        summary_lower = result["summary"].lower()
+        _assert("auto" in summary_lower or "garage" in summary_lower or "reparatie" in summary_lower,
+                "vertical-garage: mentions auto/garage/reparatie")
+        caps_lower = " ".join(result["capabilities"]).lower()
+        _assert("apk" in caps_lower or "beurt" in caps_lower or "banden" in caps_lower,
+                "vertical-garage: capabilities include APK/beurt/banden")
+
+    @staticmethod
+    def test_restaurant_content():
+        result = _simulate_overview_extraction(_VERTICAL_RESTAURANT)
+        summary_lower = result["summary"].lower()
+        _assert("italian" in summary_lower or "restaurant" in summary_lower or "dining" in summary_lower,
+                "vertical-restaurant: mentions italian/restaurant/dining")
+        caps_lower = " ".join(result["capabilities"]).lower()
+        _assert("pasta" in caps_lower or "pizza" in caps_lower,
+                "vertical-restaurant: capabilities include pasta or pizza")
+
+    @staticmethod
+    def test_boilerplate_excluded():
+        """Boilerplate text (privacy, terms, cookies) must not appear in summaries."""
+        boilerplate_text = """
+Cookie policy — we use cookies to improve your experience.
+By using our site, you agree to our terms of service.
+Sign up for a free account. Log in to your dashboard.
+© 2026 All rights reserved.
+
+Welkom bij TestBedrijf. Wij bieden geweldige diensten aan voor iedereen.
+Ons team helpt u graag met al uw vragen en behoeften. Neem contact op.
+
+- Dienst A
+- Dienst B
+- Dienst C
+"""
+        result = _simulate_overview_extraction(boilerplate_text)
+        if result["has_content"]:
+            _assert("cookie" not in result["summary"].lower(), "boilerplate: no 'cookie' in summary")
+            _assert("sign up" not in result["summary"].lower(), "boilerplate: no 'sign up' in summary")
+            _assert("terms of service" not in result["summary"].lower(), "boilerplate: no 'terms' in summary")
+
+
+# ── 21. Classifier: company_overview for all languages ───────────
+
+class TestOverviewClassifierGlobal:
+    """Verify company_overview classification for Dutch and English queries."""
+
+    @staticmethod
+    def test_dutch_overview_queries():
+        queries = [
+            "Wat doen jullie?",
+            "Wat doet dit bedrijf?",
+            "Wat bieden jullie aan?",
+            "Vertel eens over jullie",
+            "Ik vroeg me af wat jullie allemaal doen",
+            "Wat voor bedrijf zijn jullie?",
+            "Wie zijn jullie?",
+            "Wat doet CloudCRM?",
+        ]
+        for q in queries:
+            c = classify_query(q)
+            _assert(c == "company_overview", f"global-nl: '{q}' = company_overview", f"got '{c}'")
+
+    @staticmethod
+    def test_english_overview_queries():
+        queries = [
+            "What do you do?",
+            "What does your company do?",
+            "What does TaskFlow do?",
+            "Tell me about your business",
+            "Can you explain what you do?",
+            "What is your company about?",
+            "What do you offer?",
+        ]
+        for q in queries:
+            c = classify_query(q)
+            _assert(c == "company_overview", f"global-en: '{q}' = company_overview", f"got '{c}'")
+
+    @staticmethod
+    def test_specific_queries_not_overview():
+        """Specific intent queries must NOT be classified as company_overview."""
+        queries = [
+            ("Wat zijn de prijzen?", "pricing"),
+            ("Hoeveel kost het?", "pricing"),
+            ("Wat is jullie telefoonnummer?", "contact"),
+            ("Waar is jullie vestiging?", "location"),
+        ]
+        for q, expected in queries:
+            c = classify_query(q)
+            _assert(c == expected, f"global-specific: '{q}' = {expected}", f"got '{c}'")
+
+
+# ── 22. Scorer tests for company_overview ────────────────────────
+
+class TestOverviewScoring:
+    """Verify that the scorer boosts homepage/about and penalizes policy for overview queries."""
+
+    @staticmethod
+    def test_homepage_boosted():
+        boost = _score_for_overview("home", "general")
+        _assert(boost > 0, "scorer-overview: homepage gets positive boost", f"got {boost}")
+
+    @staticmethod
+    def test_about_boosted():
+        boost = _score_for_overview("about", "general")
+        _assert(boost > 0, "scorer-overview: about page gets positive boost", f"got {boost}")
+
+    @staticmethod
+    def test_service_page_boosted():
+        boost = _score_for_overview("service", "general")
+        _assert(boost > 0, "scorer-overview: service page gets positive boost", f"got {boost}")
+
+    @staticmethod
+    def test_policy_penalized():
+        boost = _score_for_overview("policy", "general")
+        _assert(boost < 0, "scorer-overview: policy page gets negative penalty", f"got {boost}")
+
+    @staticmethod
+    def test_terms_penalized():
+        boost = _score_for_overview("terms", "general")
+        _assert(boost < 0, "scorer-overview: terms page gets penalty", f"got {boost}")
+
+    @staticmethod
+    def test_privacy_penalized():
+        boost = _score_for_overview("privacy", "general")
+        _assert(boost < 0, "scorer-overview: privacy page gets penalty", f"got {boost}")
+
+    @staticmethod
+    def test_register_penalized():
+        boost = _score_for_overview("register", "general")
+        _assert(boost < 0, "scorer-overview: register page gets penalty", f"got {boost}")
+
+    @staticmethod
+    def test_account_penalized():
+        boost = _score_for_overview("account", "general")
+        _assert(boost < 0, "scorer-overview: account page gets penalty", f"got {boost}")
+
+    @staticmethod
+    def test_homepage_beats_policy():
+        home_boost = _score_for_overview("home", "general")
+        policy_boost = _score_for_overview("policy", "general")
+        _assert(home_boost > policy_boost, "scorer-overview: homepage score > policy score",
+                f"home={home_boost}, policy={policy_boost}")
+
+    @staticmethod
+    def test_neutral_page_no_special_scoring():
+        boost = _score_for_overview("blog", "general")
+        _assert(boost == 0, "scorer-overview: blog page gets no special scoring", f"got {boost}")
+
+
+# ── 23. No hardcoded domain audit ────────────────────────────────
+
+class TestNoHardcodedDomains:
+    """Verify there are no domain-specific patterns in the extraction or classification."""
+
+    @staticmethod
+    def test_classifier_no_klantenservice():
+        """No 'klantenservice' substring in any classifier pattern."""
+        for pattern, _ in _QUERY_RULES:
+            _assert(
+                "klantenservice" not in pattern.pattern.lower(),
+                "audit: no 'klantenservice' in classifier patterns",
+                f"found in: {pattern.pattern[:80]}",
+            )
+
+    @staticmethod
+    def test_boilerplate_regex_no_domains():
+        _assert(
+            "klantenservice" not in _BOILERPLATE_RE.pattern.lower(),
+            "audit: no 'klantenservice' in boilerplate regex",
+        )
+
+    @staticmethod
+    def test_extraction_works_without_specific_text():
+        """Overview extraction works for completely novel business text."""
+        novel_text = """
+SpaceWidget Corp bouwt innovatieve widgets voor de ruimtevaartindustrie.
+Onze klanten zijn onder andere NASA, ESA en commerciële raketbedrijven.
+Met geavanceerde productietechnieken leveren wij onderdelen die bestand
+zijn tegen extreme temperaturen en drukken.
+
+- Thermische schilden
+- Brandstofkleppen
+- Sensorkalibratie
+- Kwaliteitscontrole
+"""
+        result = _simulate_overview_extraction(novel_text)
+        _assert(result["has_content"], "audit-novel: novel text produces summary")
+        _assert(len(result["capabilities"]) >= 3, "audit-novel: novel text produces capabilities")
+
+    @staticmethod
+    def test_classifier_generic_across_domains():
+        """The same overview query pattern works with any company name."""
+        companies = ["Google", "IKEA", "Bol.com", "Bakkerij De Vries", "SpaceX"]
+        for company in companies:
+            q = f"Wat doet {company}?"
+            c = classify_query(q)
+            _assert(
+                c == "company_overview",
+                f"audit-generic: 'Wat doet {company}?' = company_overview",
+                f"got '{c}'",
+            )
+
+
 # ═══════════════════════════════════════════════════════════════════
 # Runner
 # ═══════════════════════════════════════════════════════════════════
@@ -1445,6 +1900,10 @@ test_classes = [
     TestFull145BugProof,
     TestCompanyNameClassifier,
     TestMultiTurnContamination,
+    TestMultiVerticalOverview,
+    TestOverviewClassifierGlobal,
+    TestOverviewScoring,
+    TestNoHardcodedDomains,
 ]
 
 

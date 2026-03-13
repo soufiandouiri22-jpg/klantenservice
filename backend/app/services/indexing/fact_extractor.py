@@ -18,6 +18,7 @@ from uuid import uuid4
 from sqlalchemy.orm import Session
 
 from app.models.business_facts import (
+    CompanyOverview,
     PricingPlan,
     ContactInfo,
     OpeningHours,
@@ -150,6 +151,7 @@ def extract_business_facts(
     counts["hours"] = _extract_hours(db, company_id, site_id, all_text_blocks)
     counts["locations"] = _extract_locations(db, company_id, site_id, all_text_blocks)
     counts["services"] = _extract_services(db, company_id, site_id, all_text_blocks)
+    counts["overview"] = _extract_overview(db, company_id, site_id, all_text_blocks)
 
     db.flush()
     logger.info(
@@ -162,7 +164,7 @@ def extract_business_facts(
 # ── Helpers ───────────────────────────────────────────────────────
 
 def _delete_existing(db: Session, company_id: str, site_id: str) -> None:
-    for model in (PricingPlan, ContactInfo, OpeningHours, BusinessLocation, BusinessService):
+    for model in (CompanyOverview, PricingPlan, ContactInfo, OpeningHours, BusinessLocation, BusinessService):
         db.query(model).filter_by(company_id=company_id).delete()
 
 
@@ -653,3 +655,115 @@ def _extract_services(
         ))
 
     return len(service_names)
+
+
+# ── Company overview ─────────────────────────────────────────────
+
+_OVERVIEW_PAGE_TYPES = {"home", "about", "service"}
+
+_BOILERPLATE_RE = re.compile(
+    r"cookie|privacy\s*(?:beleid|policy)|algemene\s+voorwaarden"
+    r"|terms\s+(?:of|and)\s+(?:service|use)|inloggen|registr"
+    r"|sign\s+(?:up|in)|log\s+in|wachtwoord|password"
+    r"|©\s*\d{4}|all\s+rights\s+reserved",
+    re.I,
+)
+
+_AUDIENCE_RE = re.compile(
+    r"(?:voor|for|gericht\s+op|designed\s+for|helps?|helping)"
+    r"\s+(.{5,120}?)(?:\.|$)",
+    re.I | re.MULTILINE,
+)
+
+_CAPABILITY_BULLET_RE = re.compile(
+    r"^[\s]*[-•✓*]\s+(.{5,120})$",
+    re.MULTILINE,
+)
+
+
+def _extract_overview(
+    db: Session, company_id: str, site_id: str, blocks: List[Dict],
+) -> int:
+    """Extract a generic company overview from homepage / about-page text.
+
+    Strategy (generic, no domain-specific logic):
+    1. Collect text from homepage and about pages
+    2. Split into paragraphs, discard boilerplate
+    3. Take the top paragraphs as summary
+    4. Extract bullet-list items as capabilities
+    5. Look for audience phrases
+    """
+    overview_texts: List[Tuple[str, str]] = []
+
+    for b in blocks:
+        pt = (b.get("page_type") or "").lower()
+        ct = (b.get("chunk_type") or "").lower()
+        if pt in _OVERVIEW_PAGE_TYPES or ct in ("service", "about"):
+            overview_texts.append((b["text"], b["url"]))
+
+    if not overview_texts:
+        return 0
+
+    combined = "\n\n".join(t for t, _ in overview_texts)
+    source_url = overview_texts[0][1]
+
+    paragraphs = _extract_overview_paragraphs(combined)
+    if not paragraphs:
+        return 0
+
+    summary = " ".join(paragraphs[:3])[:800]
+    capabilities = _extract_capabilities(combined)
+    audience = _extract_audience(combined)
+
+    db.add(CompanyOverview(
+        id=uuid4(),
+        company_id=company_id,
+        site_id=site_id,
+        summary=summary,
+        target_audience=audience,
+        capabilities=capabilities[:15] if capabilities else None,
+        source_url=source_url,
+    ))
+    return 1
+
+
+def _extract_overview_paragraphs(text: str) -> List[str]:
+    """Extract substantive paragraphs, filtering out boilerplate."""
+    paragraphs: List[str] = []
+    for raw_para in re.split(r"\n\s*\n", text):
+        para = raw_para.strip()
+        if len(para) < 30:
+            continue
+        if _BOILERPLATE_RE.search(para):
+            continue
+        if para.count("€") >= 2:
+            continue
+        words = para.split()
+        if len(words) < 6:
+            continue
+        paragraphs.append(para)
+    return paragraphs
+
+
+def _extract_capabilities(text: str) -> List[str]:
+    """Extract bullet-list items as capabilities from overview text."""
+    caps: List[str] = []
+    seen: set = set()
+    for m in _CAPABILITY_BULLET_RE.finditer(text):
+        item = m.group(1).strip()
+        key = item.lower()
+        if key in seen or _BOILERPLATE_RE.search(item):
+            continue
+        seen.add(key)
+        caps.append(item)
+    return caps
+
+
+def _extract_audience(text: str) -> Optional[str]:
+    """Try to find a target audience phrase."""
+    m = _AUDIENCE_RE.search(text)
+    if m:
+        audience = m.group(1).strip()
+        if len(audience) > 5 and not _BOILERPLATE_RE.search(audience):
+            return audience[:200]
+    return None
