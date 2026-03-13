@@ -410,6 +410,68 @@ class TestModelRegistration:
 #  RUN
 # ═══════════════════════════════════════════════════════════════════
 
+# ═══════════════════════════════════════════════════════════════════
+#  9. Query optimization tests
+# ═══════════════════════════════════════════════════════════════════
+
+class TestQueryOptimization:
+
+    @staticmethod
+    def test_list_uses_eager_loading():
+        src = _read(_admin_path)
+        section = src[src.index("# ==================== Evaluations"):]
+        _assert("joinedload" in section, "optimization: list uses joinedload")
+        _assert("_eval_eager_options" in section,
+                "optimization: shared eager-load helper defined")
+
+    @staticmethod
+    def test_list_no_per_row_queries():
+        src = _read(_admin_path)
+        section = src[src.index("async def list_evaluations"):]
+        section = section[:section.index("@router.")]
+        _assert("db.query(AIWorker)" not in section,
+                "optimization: list does not query AIWorker per row")
+        _assert("db.query(Company)" not in section,
+                "optimization: list does not query Company per row")
+
+    @staticmethod
+    def test_response_helper_no_db_param():
+        src = _read(_admin_path)
+        _assert("def _evaluation_to_response(ev: CallEvaluation)" in src,
+                "optimization: response helper takes no db parameter")
+
+    @staticmethod
+    def test_detail_uses_eager_loading():
+        src = _read(_admin_path)
+        section = src[src.index("async def get_evaluation_detail"):]
+        section = section[:section.index("@router.")]
+        _assert("_eval_eager_options" in section,
+                "optimization: detail uses eager-load options")
+
+    @staticmethod
+    def test_summary_single_query():
+        src = _read(_admin_path)
+        section = src[src.index("async def get_evaluation_summary"):]
+        section = section[:section.index("@router.")]
+        _assert("case(" in section or "case (" in section,
+                "optimization: summary uses CASE WHEN aggregation")
+        count_calls = section.count(".count()")
+        _assert(count_calls == 0,
+                f"optimization: summary does not use multiple .count() calls (found {count_calls})")
+
+    @staticmethod
+    def test_eager_options_chains_ai_worker():
+        src = _read(_admin_path)
+        _assert("CallLog.ai_worker" in src,
+                "optimization: eager load chains through CallLog.ai_worker")
+
+    @staticmethod
+    def test_eager_options_loads_company():
+        src = _read(_admin_path)
+        _assert("CallEvaluation.company" in src,
+                "optimization: eager load includes company")
+
+
 test_classes = [
     TestSourceStructure,
     TestEvaluatorParsing,
@@ -419,6 +481,7 @@ test_classes = [
     TestEndpointFiltering,
     TestMigration,
     TestModelRegistration,
+    TestQueryOptimization,
 ]
 
 

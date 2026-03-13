@@ -12,8 +12,8 @@ import logging
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, case, or_
+from sqlalchemy.orm import Session, joinedload, selectinload
+from sqlalchemy import func, and_, case, or_, literal
 
 from app.api.deps import get_db, get_current_user
 from app.core.config import get_settings, settings
@@ -2043,20 +2043,14 @@ async def retry_billing_run(
 
 # ==================== Evaluations ====================
 
-def _evaluation_to_response(ev: CallEvaluation, db: Session) -> dict:
-    """Convert a CallEvaluation + joined CallLog data into a response dict."""
-    call = ev.call_log
-    worker_name = None
-    if call and call.ai_worker_id:
-        worker = db.query(AIWorker).filter(AIWorker.id == call.ai_worker_id).first()
-        if worker:
-            worker_name = worker.name
+def _evaluation_to_response(ev: CallEvaluation) -> dict:
+    """Convert a CallEvaluation with preloaded relationships into a response dict.
 
-    company_name = None
-    if ev.company_id:
-        company = db.query(Company).filter(Company.id == ev.company_id).first()
-        if company:
-            company_name = company.name
+    Expects call_log (with ai_worker) and company to be eagerly loaded.
+    """
+    call = ev.call_log
+    worker = call.ai_worker if call else None
+    company = ev.company
 
     return {
         "id": ev.id,
@@ -2079,9 +2073,17 @@ def _evaluation_to_response(ev: CallEvaluation, db: Session) -> dict:
         "called_number": call.called_number if call else None,
         "call_started_at": call.started_at if call else None,
         "call_duration_seconds": call.duration_seconds if call else None,
-        "ai_worker_name": worker_name,
-        "company_name": company_name,
+        "ai_worker_name": worker.name if worker else None,
+        "company_name": company.name if company else None,
     }
+
+
+def _eval_eager_options():
+    """Shared eager-load options for evaluation queries."""
+    return [
+        joinedload(CallEvaluation.call_log).joinedload(CallLog.ai_worker),
+        joinedload(CallEvaluation.company),
+    ]
 
 
 @router.get("/evaluations/summary")
@@ -2092,36 +2094,35 @@ async def get_evaluation_summary(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_superadmin),
 ):
-    """Get aggregate KPI metrics for evaluations."""
-    query = db.query(CallEvaluation)
-
+    """Get aggregate KPI metrics for evaluations in a single query."""
+    filters = []
     if company_id:
-        query = query.filter(CallEvaluation.company_id == company_id)
+        filters.append(CallEvaluation.company_id == company_id)
     if date_from:
-        query = query.filter(CallEvaluation.evaluated_at >= datetime.combine(date_from, datetime.min.time()))
+        filters.append(CallEvaluation.evaluated_at >= datetime.combine(date_from, datetime.min.time()))
     if date_to:
-        query = query.filter(CallEvaluation.evaluated_at <= datetime.combine(date_to, datetime.max.time()))
+        filters.append(CallEvaluation.evaluated_at <= datetime.combine(date_to, datetime.max.time()))
 
-    total = query.count()
+    row = db.query(
+        func.count(CallEvaluation.id).label("total"),
+        func.avg(CallEvaluation.quality_score).label("avg_score"),
+        func.sum(case((CallEvaluation.hallucination_detected == True, 1), else_=0)).label("hallucinations"),
+        func.sum(case((CallEvaluation.wrong_tool_detected == True, 1), else_=0)).label("wrong_tools"),
+        func.sum(case((CallEvaluation.customer_helped == True, 1), else_=0)).label("helped"),
+        func.sum(case((CallEvaluation.needs_review == True, 1), else_=0)).label("reviews"),
+    ).filter(*filters).one()
+
+    total = row.total or 0
     if total == 0:
         return EvaluationSummaryResponse()
 
-    avg_score = db.query(func.avg(CallEvaluation.quality_score)).filter(
-        CallEvaluation.id.in_(query.with_entities(CallEvaluation.id))
-    ).scalar()
-
-    hallucination_count = query.filter(CallEvaluation.hallucination_detected == True).count()
-    wrong_tool_count = query.filter(CallEvaluation.wrong_tool_detected == True).count()
-    helped_count = query.filter(CallEvaluation.customer_helped == True).count()
-    review_count = query.filter(CallEvaluation.needs_review == True).count()
-
     return EvaluationSummaryResponse(
         total_evaluated=total,
-        average_score=round(float(avg_score), 1) if avg_score else None,
-        hallucination_rate=round(hallucination_count / total * 100, 1) if total else None,
-        wrong_tool_rate=round(wrong_tool_count / total * 100, 1) if total else None,
-        customer_helped_rate=round(helped_count / total * 100, 1) if total else None,
-        needs_review_count=review_count,
+        average_score=round(float(row.avg_score), 1) if row.avg_score else None,
+        hallucination_rate=round(int(row.hallucinations) / total * 100, 1),
+        wrong_tool_rate=round(int(row.wrong_tools) / total * 100, 1),
+        customer_helped_rate=round(int(row.helped) / total * 100, 1),
+        needs_review_count=int(row.reviews),
     )
 
 
@@ -2132,11 +2133,16 @@ async def get_evaluation_detail(
     current_user: User = Depends(require_superadmin),
 ):
     """Get detailed evaluation including transcript."""
-    ev = db.query(CallEvaluation).filter(CallEvaluation.id == evaluation_id).first()
+    ev = (
+        db.query(CallEvaluation)
+        .options(*_eval_eager_options())
+        .filter(CallEvaluation.id == evaluation_id)
+        .first()
+    )
     if not ev:
         raise HTTPException(status_code=404, detail="Evaluation not found")
 
-    data = _evaluation_to_response(ev, db)
+    data = _evaluation_to_response(ev)
 
     transcripts = db.query(CallTranscript).filter(
         CallTranscript.call_log_id == ev.call_log_id
@@ -2172,24 +2178,23 @@ async def list_evaluations(
     current_user: User = Depends(require_superadmin),
 ):
     """List evaluations with filtering, sorting, pagination."""
-    query = db.query(CallEvaluation)
-
+    filters = []
     if company_id:
-        query = query.filter(CallEvaluation.company_id == company_id)
+        filters.append(CallEvaluation.company_id == company_id)
     if min_score is not None:
-        query = query.filter(CallEvaluation.quality_score >= min_score)
+        filters.append(CallEvaluation.quality_score >= min_score)
     if max_score is not None:
-        query = query.filter(CallEvaluation.quality_score <= max_score)
+        filters.append(CallEvaluation.quality_score <= max_score)
     if hallucination_only:
-        query = query.filter(CallEvaluation.hallucination_detected == True)
+        filters.append(CallEvaluation.hallucination_detected == True)
     if wrong_tool_only:
-        query = query.filter(CallEvaluation.wrong_tool_detected == True)
+        filters.append(CallEvaluation.wrong_tool_detected == True)
     if needs_review_only:
-        query = query.filter(CallEvaluation.needs_review == True)
+        filters.append(CallEvaluation.needs_review == True)
     if date_from:
-        query = query.filter(CallEvaluation.evaluated_at >= datetime.combine(date_from, datetime.min.time()))
+        filters.append(CallEvaluation.evaluated_at >= datetime.combine(date_from, datetime.min.time()))
     if date_to:
-        query = query.filter(CallEvaluation.evaluated_at <= datetime.combine(date_to, datetime.max.time()))
+        filters.append(CallEvaluation.evaluated_at <= datetime.combine(date_to, datetime.max.time()))
 
     _sortable = {
         "evaluated_at": CallEvaluation.evaluated_at,
@@ -2199,12 +2204,20 @@ async def list_evaluations(
     sort_col = _sortable.get(sort_by, CallEvaluation.evaluated_at)
     order = sort_col.desc() if sort_dir == "desc" else sort_col.asc()
 
-    total = query.count()
+    total = db.query(func.count(CallEvaluation.id)).filter(*filters).scalar() or 0
     total_pages = max(1, (total + page_size - 1) // page_size)
 
-    evaluations = query.order_by(order).offset((page - 1) * page_size).limit(page_size).all()
+    evaluations = (
+        db.query(CallEvaluation)
+        .options(*_eval_eager_options())
+        .filter(*filters)
+        .order_by(order)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
 
-    items = [_evaluation_to_response(ev, db) for ev in evaluations]
+    items = [_evaluation_to_response(ev) for ev in evaluations]
 
     return EvaluationListResponse(
         items=items,
