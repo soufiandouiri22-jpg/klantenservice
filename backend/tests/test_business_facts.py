@@ -160,7 +160,18 @@ def _detect_period(text: str) -> Optional[str]:
 
 
 PROXIMITY_CHARS = 150
-_MIN_PLAN_PRICE = Decimal("5")
+
+_UNIT_PRICING_RE = re.compile(
+    r"per\s+(?:minuut|seconde|gesprek|call|sms|bericht|click|klik"
+    r"|verzoek|request|api[- ]?call|query|woord|word|karakter|character"
+    r"|uur|hour|minuut)"
+    r"|/\s*(?:min|sec|gesprek|call|sms|msg|click|request|query)",
+    re.I,
+)
+
+
+def _is_unit_price(text_after_price: str) -> bool:
+    return bool(_UNIT_PRICING_RE.search(text_after_price))
 
 
 def _find_price_after(text: str, start_pos: int) -> Optional[Decimal]:
@@ -173,7 +184,8 @@ def _find_price_after(text: str, start_pos: int) -> Optional[Decimal]:
         price = _parse_price(raw)
         if price is None or price <= 0:
             continue
-        if price < _MIN_PLAN_PRICE:
+        trailing = window[m.end():m.end() + 30]
+        if _is_unit_price(trailing):
             continue
         return price
     return None
@@ -1055,37 +1067,86 @@ class TestParsePrice145Bug:
             )
 
 
-# ── 14. Minimum price threshold in _find_price_after ─────────────
+# ── 14. Unit-pricing context detection ────────────────────────────
 
-class TestMinPriceThreshold:
+class TestUnitPricingDetection:
 
     @staticmethod
-    def test_per_minute_rate_skipped():
-        text = "Starter €0.14 per belminuut €149 /maand"
+    def test_per_minute_skipped():
+        text = "Starter €0.14 per minuut €149 /maand"
         m = _PLAN_NAME_RE.search(text)
         price = _find_price_after(text, m.start()) if m else None
-        _assert(price == Decimal("149"), "threshold: skip €0.14, find €149", f"got {price}")
+        _assert(price == Decimal("149"), "unit: skip 'per minuut', find €149", f"got {price}")
 
     @staticmethod
-    def test_per_call_rate_skipped():
+    def test_per_gesprek_skipped():
         text = "Starter €1.45 per gesprek €149 /maand"
         m = _PLAN_NAME_RE.search(text)
         price = _find_price_after(text, m.start()) if m else None
-        _assert(price == Decimal("149"), "threshold: skip €1.45, find €149", f"got {price}")
+        _assert(price == Decimal("149"), "unit: skip 'per gesprek', find €149", f"got {price}")
 
     @staticmethod
-    def test_normal_price_not_skipped():
+    def test_per_call_skipped():
+        text = "Starter €0.50 per call €49 /maand"
+        m = _PLAN_NAME_RE.search(text)
+        price = _find_price_after(text, m.start()) if m else None
+        _assert(price == Decimal("49"), "unit: skip 'per call', find €49", f"got {price}")
+
+    @staticmethod
+    def test_per_sms_skipped():
+        text = "Basic €0.10 per sms €5 /maand"
+        m = _PLAN_NAME_RE.search(text)
+        price = _find_price_after(text, m.start()) if m else None
+        _assert(price == Decimal("5"), "unit: skip 'per sms', find €5", f"got {price}")
+
+    @staticmethod
+    def test_slash_min_skipped():
+        text = "Starter €0.14/min €149 /maand"
+        m = _PLAN_NAME_RE.search(text)
+        price = _find_price_after(text, m.start()) if m else None
+        _assert(price == Decimal("149"), "unit: skip '/min', find €149", f"got {price}")
+
+    @staticmethod
+    def test_normal_price_accepted():
         text = "Starter €149 /maand"
         m = _PLAN_NAME_RE.search(text)
         price = _find_price_after(text, m.start()) if m else None
-        _assert(price == Decimal("149"), "threshold: €149 not skipped", f"got {price}")
+        _assert(price == Decimal("149"), "unit: €149 /maand accepted", f"got {price}")
 
     @staticmethod
-    def test_cheap_plan_preserved():
-        text = "Lite €9 /maand"
+    def test_cheap_plan_5_accepted():
+        text = "Basic €5 /maand"
         m = _PLAN_NAME_RE.search(text)
         price = _find_price_after(text, m.start()) if m else None
-        _assert(price == Decimal("9"), "threshold: €9 plan preserved", f"got {price}")
+        _assert(price == Decimal("5"), "unit: €5 /maand accepted", f"got {price}")
+
+    @staticmethod
+    def test_cheap_plan_499_accepted():
+        text = "Starter €4,99 per maand"
+        m = _PLAN_NAME_RE.search(text)
+        price = _find_price_after(text, m.start()) if m else None
+        _assert(price == Decimal("4.99"), "unit: €4,99 per maand accepted", f"got {price}")
+
+    @staticmethod
+    def test_cheap_plan_1_per_dag_accepted():
+        text = "Lite €1 /dag"
+        m = _PLAN_NAME_RE.search(text)
+        price = _find_price_after(text, m.start()) if m else None
+        _assert(price == Decimal("1"), "unit: €1 /dag accepted", f"got {price}")
+
+    @staticmethod
+    def test_cheap_plan_299_cents_accepted():
+        text = "Basic €2.99 per month"
+        m = _PLAN_NAME_RE.search(text)
+        price = _find_price_after(text, m.start()) if m else None
+        _assert(price == Decimal("2.99"), "unit: €2.99 per month accepted", f"got {price}")
+
+    @staticmethod
+    def test_per_api_call_skipped():
+        text = "Enterprise €0.002 per api call €999 /maand"
+        m = _PLAN_NAME_RE.search(text)
+        price = _find_price_after(text, m.start()) if m else None
+        _assert(price == Decimal("999"), "unit: skip 'per api call', find €999", f"got {price}")
 
 
 # ── 15. Full pipeline 145→149 proof ──────────────────────────────
@@ -1172,7 +1233,7 @@ test_classes = [
     TestPackageComparison,
     TestExactPricingDeterminism,
     TestParsePrice145Bug,
-    TestMinPriceThreshold,
+    TestUnitPricingDetection,
     TestFull145BugProof,
 ]
 

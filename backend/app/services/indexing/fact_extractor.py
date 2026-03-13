@@ -336,14 +336,29 @@ def _extract_pricing(
 
 
 _PROXIMITY_CHARS = 150
-_MIN_PLAN_PRICE = Decimal("5")
+
+_UNIT_PRICING_RE = re.compile(
+    r"per\s+(?:minuut|seconde|gesprek|call|sms|bericht|click|klik"
+    r"|verzoek|request|api[- ]?call|query|woord|word|karakter|character"
+    r"|uur|hour|minuut)"
+    r"|/\s*(?:min|sec|gesprek|call|sms|msg|click|request|query)",
+    re.I,
+)
+
+
+def _is_unit_price(text_after_price: str) -> bool:
+    """Return True if the text immediately after a price indicates
+    usage-based / unit-based pricing rather than a subscription plan."""
+    return bool(_UNIT_PRICING_RE.search(text_after_price))
 
 
 def _find_price_after(text: str, start_pos: int) -> Tuple[Optional[Decimal], Optional[str]]:
     """Find the first valid plan-level €-price within _PROXIMITY_CHARS after start_pos.
 
-    Skips prices below _MIN_PLAN_PRICE (per-minute / per-call rates) to
-    avoid mis-assigning a small unit price as the plan price.
+    Skips prices whose trailing context indicates unit-based pricing
+    (per minuut, per gesprek, etc.) to avoid mis-assigning a per-minute
+    rate as the plan price.  Cheap subscription prices (e.g. €1/dag,
+    €4.99/maand) are accepted.
     """
     end_pos = min(len(text), start_pos + _PROXIMITY_CHARS)
     window = text[start_pos:end_pos]
@@ -357,7 +372,8 @@ def _find_price_after(text: str, start_pos: int) -> Tuple[Optional[Decimal], Opt
         if price is None or price <= 0:
             continue
 
-        if price < _MIN_PLAN_PRICE:
+        trailing = window[m.end():m.end() + 30]
+        if _is_unit_price(trailing):
             continue
 
         currency = _detect_currency(window[m.start():m.end() + 20])
