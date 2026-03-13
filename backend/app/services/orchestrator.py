@@ -25,6 +25,8 @@ from app.services.call_tools import (
     tool_check_availability,
     tool_book_appointment,
     tool_search_knowledge,
+    tool_get_pricing,
+    tool_get_company_overview,
     tool_create_note,
     tool_flag_unknown,
     tool_transfer_call,
@@ -64,9 +66,10 @@ SYSTEM_PROMPT = """Je bent de intent- en actie-laag voor een Nederlandse klanten
 Jij bepaalt de waarheid; de spraakassistent spreekt alleen jouw feiten uit.
 
 BELANGRIJKE REGELS:
-- Bij prijzen, openingstijden, beleid: gebruik ALLEEN de resultaten van de tools. NOOIT iets verzinnen.
+- Bij prijzen, pakketten, abonnementen: gebruik get_pricing tool. NIET search_knowledge.
+- Bij "wat doen jullie?" / bedrijfsoverzicht: gebruik get_company_overview tool. NIET search_knowledge.
+- Bij openingstijden, contact, beleid, FAQ: gebruik search_knowledge tool.
 - Bij afspraakvragen: gebruik check_availability en book_appointment tools.
-- Bij vragen over het bedrijf of prijzen: gebruik search_knowledge tool.
 - Als je een vraag NIET kunt beantwoorden: gebruik flag_unknown tool EN maak een notitie.
 - Voor terugbelverzoeken of notities: gebruik create_note tool.
 - VERZIN NOOIT producten, diensten, prijzen of openingstijden. Als de kennisbank geen resultaat geeft, zeg dan dat je het niet weet en bied aan om een collega te laten terugbellen.
@@ -76,6 +79,11 @@ PRIJZEN — STRIKT:
 - Kopieer prijzen, bedragen en getallen EXACT uit tool-resultaten naar het "facts" veld.
 - Wijzig GEEN enkel cijfer. Rond NIET af. €149 moet €149 blijven, NIET €150.
 - Als een tool-resultaat een PRIJSINSTRUCTIE bevat, neem die op in "instructions".
+
+AFSCHEID / TEVREDEN — STRIKT:
+- Als de klant aangeeft tevreden te zijn, genoeg informatie te hebben, of afscheid neemt: roep GEEN tools aan.
+- Voorbeelden: "ik weet genoeg", "dat was het", "top dankjewel", "nee hoeft niet", "fijne dag", "geen vragen meer".
+- Geef dan ALLEEN een kort afscheid in "instructions". Gebruik GEEN check_availability, search_knowledge of andere tools.
 
 OUTPUT:
 Geef een JSON object met twee velden:
@@ -132,8 +140,38 @@ TOOLS_OPENAI = [
     {
         "type": "function",
         "function": {
+            "name": "get_pricing",
+            "description": "Haal prijsinformatie op. Gebruik bij prijsvragen, pakketvragen, abonnementsvragen. NIET search_knowledge gebruiken voor prijzen.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Optioneel: naam van een specifiek pakket (bijv. 'starter', 'business'). Leeg laten voor alle pakketten.",
+                        "default": "",
+                    },
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_company_overview",
+            "description": "Haal bedrijfsoverzicht op. Gebruik als de klant vraagt wat het bedrijf doet, aanbiedt, of wie jullie zijn. NIET search_knowledge gebruiken voor bedrijfsoverzicht.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "search_knowledge",
-            "description": "Zoek in de bedrijfsinformatie/kennisbank. Gebruik dit voor ALLE vragen over het bedrijf: prijzen, diensten, openingstijden, locatie, etc.",
+            "description": "Zoek in de bedrijfskennisbank. Gebruik voor openingstijden, contact, FAQ, beleid, en overige vragen. NIET gebruiken voor prijzen (gebruik get_pricing) of bedrijfsoverzicht (gebruik get_company_overview).",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -302,6 +340,15 @@ async def _run_tool(
                 call_log_id=call_log_id,
             )
         
+        if name == "get_pricing":
+            return tool_get_pricing(
+                db, company_id,
+                query=arguments.get("query", ""),
+            )
+
+        if name == "get_company_overview":
+            return tool_get_company_overview(db, company_id)
+
         if name == "search_knowledge":
             return tool_search_knowledge(
                 db, company_id,

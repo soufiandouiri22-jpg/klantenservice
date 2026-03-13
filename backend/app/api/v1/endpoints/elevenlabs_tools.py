@@ -14,6 +14,7 @@ off-topic, silence, repeated failure). If a policy blocks the action,
 the override is returned instead of the normal tool result.
 """
 import logging
+import re
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Request
@@ -40,6 +41,32 @@ CONTEXT_FIELDS = {
 
 # Tools that skip auto-policy (check_policy handles its own logic)
 _SKIP_AUTO_POLICY = {"check_policy"}
+
+# Tools that should be blocked when a closing utterance is detected
+_CLOSEABLE_TOOLS = {"check_availability", "book_appointment", "search_knowledge", "get_pricing", "get_company_overview"}
+
+_CLOSING_RE = re.compile(
+    # Dutch closing / satisfied signals
+    r"\b(?:ik\s+weet\s+genoeg|dat\s+was\s+het|dat\s+is\s+alles|"
+    r"ik\s+heb\s+genoeg\s+info\w*|geen\s+vragen\s+meer|"
+    r"verder\s+geen\s+vragen|hoeft\s+(?:niet\s+meer|verder\s+niet)|"
+    r"ik\s+ben\s+(?:klaar|geholpen)|"
+    r"dat\s+is\s+(?:voldoende|genoeg))\b|"
+    # English closing / satisfied signals
+    r"\b(?:that'?s\s+(?:all|enough|it)|(?:no\s+)?thanks?\s*,?\s*i'?m\s+good|"
+    r"i\s+(?:have\s+)?(?:enough|all\s+(?:the\s+)?info)|"
+    r"(?:nothing|no)\s+(?:else|more))\b",
+    re.I,
+)
+
+_CLOSING_RESPONSE = {
+    "ok": True,
+    "closing_detected": True,
+    "message": (
+        "De klant heeft aangegeven tevreden te zijn of het gesprek te willen afsluiten. "
+        "Roep GEEN verdere tools aan. Sluit het gesprek vriendelijk af."
+    ),
+}
 
 
 def _get_db() -> Session:
@@ -110,6 +137,12 @@ async def _handle_tool(request: Request, tool_name: str) -> JSONResponse:
         }
 
         customer_msg = arguments.get("query", "") or arguments.get("customer_message", "")
+
+        # ── Closing-intent guard: block tools when customer is done ──
+        if tool_name in _CLOSEABLE_TOOLS and customer_msg and _CLOSING_RE.search(customer_msg):
+            logger.info("[ElevenLabs Tool] %s BLOCKED — closing utterance detected: %s",
+                        tool_name, customer_msg[:80])
+            return JSONResponse(content=_CLOSING_RESPONSE)
 
         # ── Auto-policy check on every tool call ──
         if tool_name not in _SKIP_AUTO_POLICY and ctx.get("call_sid"):
@@ -188,9 +221,14 @@ async def ep_book_appointment(request: Request):
     return await _handle_tool(request, "book_appointment")
 
 
-@router.post("/get_prices")
-async def ep_get_prices(request: Request):
-    return await _handle_tool(request, "search_knowledge")
+@router.post("/get_pricing")
+async def ep_get_pricing(request: Request):
+    return await _handle_tool(request, "get_pricing")
+
+
+@router.post("/get_company_overview")
+async def ep_get_company_overview(request: Request):
+    return await _handle_tool(request, "get_company_overview")
 
 
 @router.post("/create_note")

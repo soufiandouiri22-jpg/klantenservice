@@ -1879,6 +1879,383 @@ zijn tegen extreme temperaturen en drukken.
 
 
 # ═══════════════════════════════════════════════════════════════════
+# Conversation Closing / End-of-call tests
+# ═══════════════════════════════════════════════════════════════════
+
+# Replicate the GOODBYE intent pattern from intent_classifier.py
+_GOODBYE_RE = re.compile(
+    r"\b(doei|tot\s*ziens|tot\s*snel|tot\s*de\s+volgende|"
+    r"fijne\s+dag|fijne\s+avond|prettige\s+dag|prettige\s+avond|"
+    r"goedenacht|lekker\s+weekend|"
+    r"bye|goodbye|tot\s+later)\b|"
+    # Satisfied / done / closing signals
+    r"\b(ik\s+weet\s+genoeg|dat\s+was\s+het|dat\s+is\s+alles|"
+    r"ik\s+heb\s+genoeg\s+info\w*|geen\s+vragen\s+meer|"
+    r"verder\s+geen\s+vragen|nee\s+hoor\s*,?\s*hoeft\s+niet|"
+    r"hoeft\s+(?:niet\s+meer|verder\s+niet)|"
+    r"nee\s+(?:dank\s*(?:je|u)|bedankt)\s*,?\s*(?:dat\s+was\s+het|ik\s+weet\s+genoeg)?|"
+    r"dat\s+is\s+(?:voldoende|genoeg)|ik\s+ben\s+(?:klaar|geholpen)|"
+    r"u\s+heeft\s+mij\s+geholpen|je\s+hebt\s+me\s+geholpen|"
+    r"top\s+(?:dank\w+|bedankt)|(?:oke|oké)\s+(?:dank\w+|bedankt)|"
+    r"that'?s\s+(?:all|enough|it)|(?:no\s+)?thanks?\s*,?\s*(?:that'?s\s+(?:all|enough|it)|i'?m\s+good)|"
+    r"i\s+(?:have\s+)?(?:enough|all\s+(?:the\s+)?info)|(?:nothing|no)\s+(?:else|more))\b|"
+    r"^\s*da+g!?\s*$",
+    re.I,
+)
+
+# Replicate the handler-level closing regex from elevenlabs_tools.py
+_HANDLER_CLOSING_RE = re.compile(
+    r"\b(?:ik\s+weet\s+genoeg|dat\s+was\s+het|dat\s+is\s+alles|"
+    r"ik\s+heb\s+genoeg\s+info\w*|geen\s+vragen\s+meer|"
+    r"verder\s+geen\s+vragen|hoeft\s+(?:niet\s+meer|verder\s+niet)|"
+    r"ik\s+ben\s+(?:klaar|geholpen)|"
+    r"dat\s+is\s+(?:voldoende|genoeg))\b|"
+    r"\b(?:that'?s\s+(?:all|enough|it)|(?:no\s+)?thanks?\s*,?\s*i'?m\s+good|"
+    r"i\s+(?:have\s+)?(?:enough|all\s+(?:the\s+)?info)|"
+    r"(?:nothing|no)\s+(?:else|more))\b",
+    re.I,
+)
+
+
+class TestClosingIntentDetection:
+    """Verify closing/satisfied utterances are classified as GOODBYE and
+    would be caught by the handler-level closing guard."""
+
+    _DUTCH_CLOSING = [
+        "ik weet genoeg dankje",
+        "dat was het",
+        "top dankjewel",
+        "nee hoor, hoeft niet",
+        "ik heb genoeg info",
+        "fijne dag",
+        "dat is alles",
+        "geen vragen meer",
+        "nee bedankt, dat was het",
+        "ik ben geholpen",
+        "verder geen vragen",
+        "hoeft niet meer",
+        "dat is voldoende",
+        "je hebt me geholpen",
+        "tot ziens",
+        "doei",
+    ]
+
+    _ENGLISH_CLOSING = [
+        "thanks, that's all",
+        "that's enough, thank you",
+        "no thanks, I'm good",
+        "nothing else",
+        "no more questions",
+        "I have enough info",
+        "that's it",
+        "goodbye",
+        "bye",
+    ]
+
+    _NOT_CLOSING = [
+        "ik wil een afspraak maken",
+        "wat zijn jullie prijzen?",
+        "wanneer is er plek?",
+        "kan ik morgen om 10 uur?",
+        "wat doen jullie?",
+        "ik heb een klacht",
+        "ik wil meer informatie",
+        "hoeveel kost dat?",
+        "I want to book an appointment",
+        "what do you offer?",
+    ]
+
+    @staticmethod
+    def test_dutch_closing_detected_by_intent():
+        """All Dutch closing phrases match the GOODBYE regex."""
+        for phrase in TestClosingIntentDetection._DUTCH_CLOSING:
+            _assert(
+                _GOODBYE_RE.search(phrase) is not None,
+                f"closing-intent-nl: '{phrase}' → GOODBYE",
+                "not matched",
+            )
+
+    @staticmethod
+    def test_english_closing_detected_by_intent():
+        """All English closing phrases match the GOODBYE regex."""
+        for phrase in TestClosingIntentDetection._ENGLISH_CLOSING:
+            _assert(
+                _GOODBYE_RE.search(phrase) is not None,
+                f"closing-intent-en: '{phrase}' → GOODBYE",
+                "not matched",
+            )
+
+    @staticmethod
+    def test_not_closing_not_matched():
+        """Non-closing phrases must NOT match the closing-specific part of the GOODBYE regex."""
+        for phrase in TestClosingIntentDetection._NOT_CLOSING:
+            matched_closing = _HANDLER_CLOSING_RE.search(phrase) is not None
+            _assert(
+                not matched_closing,
+                f"not-closing: '{phrase}' must not trigger closing guard",
+                "false positive",
+            )
+
+    @staticmethod
+    def test_handler_guard_catches_closing_queries():
+        """The handler-level closing regex catches closing phrases that might
+        arrive as the 'query' parameter in search_knowledge."""
+        closings_in_query = [
+            "ik weet genoeg dankje",
+            "dat was het",
+            "dat is alles",
+            "ik heb genoeg info",
+            "geen vragen meer",
+            "that's all",
+            "nothing else",
+            "no thanks I'm good",
+            "I have enough info",
+            "that's it",
+        ]
+        for q in closings_in_query:
+            _assert(
+                _HANDLER_CLOSING_RE.search(q) is not None,
+                f"handler-guard: '{q}' blocked",
+                "not caught",
+            )
+
+    @staticmethod
+    def test_closing_does_not_match_booking_queries():
+        """Booking/scheduling queries must NOT match the handler closing guard."""
+        booking = [
+            "ik wil graag een afspraak maken",
+            "heb je morgen plek?",
+            "wanneer kan ik langskomen?",
+            "wat zijn jullie prijzen?",
+            "kunnen we een afspraak inplannen?",
+            "I'd like to schedule an appointment",
+            "do you have availability tomorrow?",
+        ]
+        for q in booking:
+            _assert(
+                _HANDLER_CLOSING_RE.search(q) is None,
+                f"no-false-positive: '{q}' not blocked",
+                "false positive — would block legitimate query",
+            )
+
+    @staticmethod
+    def test_exact_bug_scenario():
+        """The exact utterance from the reported bug is caught."""
+        _assert(
+            _GOODBYE_RE.search("ik weet genoeg dankje") is not None,
+            "exact-bug: 'ik weet genoeg dankje' → GOODBYE intent",
+        )
+        _assert(
+            _HANDLER_CLOSING_RE.search("ik weet genoeg dankje") is not None,
+            "exact-bug: 'ik weet genoeg dankje' → handler guard blocks",
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Dedicated tool routing tests
+# ═══════════════════════════════════════════════════════════════════
+
+def _route_tool(query: str) -> str:
+    """Simulate the routing logic: classification -> dedicated tool name.
+    Mirrors the split between get_pricing, get_company_overview, and search_knowledge."""
+    c = classify_query(query)
+    if c == "pricing":
+        return "get_pricing"
+    if c == "company_overview":
+        return "get_company_overview"
+    return "search_knowledge"
+
+
+@dataclass
+class _MockPlan:
+    name: str
+    price: Optional[Decimal]
+    price_type: str = "fixed"
+    billing_period: str = "maand"
+    currency: str = "EUR"
+    features: Optional[list] = None
+    source_url: str = ""
+    display_order: int = 0
+
+
+def _simulate_get_pricing(plans: list, query: str = "") -> dict:
+    """Simulate tool_get_pricing behaviour: filter by plan name if query given."""
+    if not plans:
+        return {"ok": True, "results": [], "message": "fallback", "source": "search_knowledge"}
+    q_lower = query.lower().strip()
+    if q_lower:
+        matched = [p for p in plans if p.name.lower() in q_lower]
+        if matched:
+            plans = matched
+    lines = []
+    for p in plans:
+        if p.price_type == "fixed" and p.price is not None:
+            lines.append(f"{p.name}: €{int(p.price)} per {p.billing_period}")
+        elif p.price_type == "contact_required":
+            lines.append(f"{p.name}: Prijs op aanvraag")
+        else:
+            lines.append(p.name)
+    return {"ok": True, "message": "\n".join(lines), "source": "structured_facts",
+            "plan_count": len(plans)}
+
+
+class TestDedicatedToolRouting:
+    """Verify that pricing/overview queries route to dedicated tools,
+    and other queries still route to search_knowledge."""
+
+    # ── Pricing routing ──
+
+    @staticmethod
+    def test_pricing_queries_route_to_get_pricing():
+        queries = [
+            "Wat zijn jullie prijzen?",
+            "Welke pakketten hebben jullie?",
+            "Wat kost het starter pakket?",
+            "Hoeveel is het business abonnement?",
+            "Vergelijk starter en business",
+            "Wat zijn de tarieven?",
+            "Prijzen alstublieft",
+        ]
+        for q in queries:
+            tool = _route_tool(q)
+            _assert(
+                tool == "get_pricing",
+                f"route-pricing: '{q}' → get_pricing",
+                f"got {tool}",
+            )
+
+    # ── Overview routing ──
+
+    @staticmethod
+    def test_overview_queries_route_to_get_company_overview():
+        queries = [
+            "Wat doen jullie?",
+            "Wat doet dit bedrijf?",
+            "What does your company do?",
+            "Wat bieden jullie aan?",
+            "Vertel eens over jullie",
+            "What do you offer?",
+        ]
+        for q in queries:
+            tool = _route_tool(q)
+            _assert(
+                tool == "get_company_overview",
+                f"route-overview: '{q}' → get_company_overview",
+                f"got {tool}",
+            )
+
+    # ── Non-dedicated queries stay in search_knowledge ──
+
+    @staticmethod
+    def test_other_queries_route_to_search_knowledge():
+        queries = [
+            "Wat zijn jullie openingstijden?",
+            "Hoe kan ik retourneren?",
+            "Waar zijn jullie gevestigd?",
+            "Hoe bereik ik jullie?",
+            "Wat is het retourbeleid?",
+        ]
+        for q in queries:
+            tool = _route_tool(q)
+            _assert(
+                tool == "search_knowledge",
+                f"route-other: '{q}' → search_knowledge",
+                f"got {tool}",
+            )
+
+    # ── Single plan filtering ──
+
+    @staticmethod
+    def test_single_plan_filtering():
+        plans = [
+            _MockPlan("Starter", Decimal("149"), display_order=1),
+            _MockPlan("Business", Decimal("299"), display_order=2),
+            _MockPlan("Enterprise", None, price_type="contact_required", display_order=3),
+        ]
+        result = _simulate_get_pricing(plans, "starter")
+        _assert(result["plan_count"] == 1, "filter: 'starter' returns 1 plan",
+                f"got {result['plan_count']}")
+        _assert("Starter" in result["message"], "filter: result contains Starter")
+
+        result_all = _simulate_get_pricing(plans, "")
+        _assert(result_all["plan_count"] == 3, "filter: empty query returns all plans",
+                f"got {result_all['plan_count']}")
+
+    # ── Plan comparison ──
+
+    @staticmethod
+    def test_plan_comparison():
+        plans = [
+            _MockPlan("Starter", Decimal("149"), display_order=1),
+            _MockPlan("Business", Decimal("299"), display_order=2),
+            _MockPlan("Enterprise", None, price_type="contact_required", display_order=3),
+        ]
+        result = _simulate_get_pricing(plans, "vergelijk starter en business")
+        _assert(result["plan_count"] == 2, "compare: 'starter en business' returns 2 plans",
+                f"got {result['plan_count']}")
+        _assert("Starter" in result["message"] and "Business" in result["message"],
+                "compare: result contains both plan names")
+
+    # ── Fallback when no structured data ──
+
+    @staticmethod
+    def test_fallback_when_no_structured_pricing():
+        result = _simulate_get_pricing([], "prijzen")
+        _assert(result["source"] == "search_knowledge",
+                "fallback: no plans → source=search_knowledge")
+
+    # ── Multi-turn simulation ──
+
+    @staticmethod
+    def test_multi_turn_overview_then_pricing():
+        """Turn 1: overview, Turn 2: pricing — each routes to correct dedicated tool."""
+        tool1 = _route_tool("Wat doen jullie?")
+        tool2 = _route_tool("Wat zijn jullie prijzen?")
+        _assert(tool1 == "get_company_overview",
+                "multi-turn-1: overview → get_company_overview", f"got {tool1}")
+        _assert(tool2 == "get_pricing",
+                "multi-turn-2: pricing → get_pricing", f"got {tool2}")
+
+    @staticmethod
+    def test_multi_turn_pricing_then_specific():
+        """Turn 1: all pricing, Turn 2: specific plan."""
+        tool1 = _route_tool("Welke pakketten hebben jullie?")
+        tool2 = _route_tool("Wat kost het starter pakket?")
+        _assert(tool1 == "get_pricing", "multi-turn-p1: pakketten → get_pricing", f"got {tool1}")
+        _assert(tool2 == "get_pricing", "multi-turn-p2: starter → get_pricing", f"got {tool2}")
+
+    # ── Enterprise (contact_required) is included ──
+
+    @staticmethod
+    def test_enterprise_included_in_overview():
+        plans = [
+            _MockPlan("Starter", Decimal("149"), display_order=1),
+            _MockPlan("Business", Decimal("299"), display_order=2),
+            _MockPlan("Enterprise", None, price_type="contact_required", display_order=3),
+        ]
+        result = _simulate_get_pricing(plans, "")
+        _assert("Enterprise" in result["message"],
+                "enterprise: Enterprise plan is included in full overview")
+        _assert("op aanvraag" in result["message"].lower(),
+                "enterprise: 'op aanvraag' is shown for Enterprise")
+
+    # ── search_knowledge no longer handles pricing/overview ──
+
+    @staticmethod
+    def test_search_knowledge_excludes_pricing_and_overview():
+        """Pricing and overview classifications should NOT route to search_knowledge."""
+        pricing_qs = ["Wat zijn jullie prijzen?", "Hoeveel kost starter?"]
+        overview_qs = ["Wat doen jullie?", "What does your company do?"]
+        for q in pricing_qs + overview_qs:
+            tool = _route_tool(q)
+            _assert(
+                tool != "search_knowledge",
+                f"exclusion: '{q}' does NOT go to search_knowledge",
+                f"got {tool}",
+            )
+
+
+# ═══════════════════════════════════════════════════════════════════
 # Runner
 # ═══════════════════════════════════════════════════════════════════
 
@@ -1904,6 +2281,8 @@ test_classes = [
     TestOverviewClassifierGlobal,
     TestOverviewScoring,
     TestNoHardcodedDomains,
+    TestClosingIntentDetection,
+    TestDedicatedToolRouting,
 ]
 
 

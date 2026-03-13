@@ -266,20 +266,49 @@ def build_system_instructions(
         tool_lines.append(f"## Bevoegdheden\n{chr(10).join(permissions)}")
 
     tool_lines.append(
+        "## get_pricing\n"
+        "Haal prijsinformatie, pakketten en abonnementen op.\n\n"
+        "**Wanneer gebruiken:**\n"
+        "- Klant vraagt naar prijzen, kosten, tarieven\n"
+        "- Klant vraagt welke pakketten er zijn\n"
+        "- Klant vraagt specifiek naar een pakket (bijv. 'starter', 'business')\n"
+        "- Klant wil pakketten vergelijken\n\n"
+        "**Optionele parameter:** `query` — vul in met de naam van een specifiek pakket "
+        "als de klant naar één pakket vraagt. Laat leeg voor een volledig overzicht.\n\n"
+        "**Resultaten:** De tool retourneert exacte prijzen en pakketnamen. "
+        "Als een resultaat een PRIJSINSTRUCTIE bevat, volg die LETTERLIJK.\n"
+        "Neem prijzen en bedragen EXACT over. "
+        "Rond NIET af en wijzig GEEN cijfers. €149 = honderdnegenveertig euro, niet honderdvijftig."
+    )
+
+    tool_lines.append(
+        "## get_company_overview\n"
+        "Haal een overzicht op van het bedrijf.\n\n"
+        "**Wanneer gebruiken:**\n"
+        "- Klant vraagt wat het bedrijf doet\n"
+        "- Klant vraagt 'wat bieden jullie aan?'\n"
+        "- Klant vraagt 'wie zijn jullie?'\n"
+        "- Klant vraagt 'vertel eens over jullie bedrijf'\n\n"
+        "Geen parameters nodig. De tool retourneert een korte beschrijving van het bedrijf, "
+        "doelgroep en belangrijkste diensten/mogelijkheden."
+    )
+
+    tool_lines.append(
         "## search_knowledge\n"
-        "Zoek ALTIJD in de kennisbank bij ELKE inhoudelijke vraag. "
-        "De resultaten bevatten alle bedrijfsinformatie, inclusief opgeslagen Q&A. "
+        "Zoek in de bedrijfskennisbank voor overige vragen. "
+        "De resultaten bevatten bedrijfsinformatie, inclusief opgeslagen Q&A. "
         "Beantwoord nooit uit eigen kennis.\n\n"
-        "**Resultaten:** De tool retourneert `results` met relevante informatie (website + opgeslagen Q&A). "
-        "Gebruik ALLEEN het meest recente tool-resultaat om de vraag te beantwoorden. "
-        "Als een resultaat een PRIJSINSTRUCTIE bevat, volg die LETTERLIJK.\n\n"
-        "**Wanneer gebruiken:** Bij elke inhoudelijke vraag over het bedrijf.\n\n"
+        "**Wanneer gebruiken:**\n"
+        "- Openingstijden, contactgegevens, locatie\n"
+        "- FAQ en beleid (retour, garantie, etc.)\n"
+        "- Overige inhoudelijke vragen over het bedrijf\n\n"
+        "**NIET gebruiken voor:**\n"
+        "- Prijzen of pakketten (gebruik get_pricing)\n"
+        "- Bedrijfsoverzicht / 'wat doen jullie?' (gebruik get_company_overview)\n\n"
         "**Foutafhandeling:**\n"
         'Als de tool faalt: "Dat heb ik even niet bij de hand. '
         'Zal ik een collega vragen om u terug te bellen?"\n'
-        "Verzin nooit een antwoord. Noem nooit de tool of kennisbank tegen de klant.\n"
-        "Neem prijzen, bedragen, getallen en namen EXACT over uit het zoekresultaat. "
-        "Rond NIET af en wijzig GEEN cijfers. €149 = honderdnegenveertig euro, niet honderdvijftig."
+        "Verzin nooit een antwoord. Noem nooit de tool of kennisbank tegen de klant."
     )
 
     if worker.can_make_appointments:
@@ -287,8 +316,12 @@ def build_system_instructions(
             "## check_availability\n"
             "Haal beschikbare agenda-slots op voor een datum of periode.\n\n"
             "**Wanneer gebruiken:**\n"
-            "- Klant wil een afspraak maken\n"
+            "- Klant wil EXPLICIET een afspraak maken\n"
             "- Klant vraagt wanneer er plek is\n\n"
+            "**NIET gebruiken als:**\n"
+            "- De klant afscheid neemt of aangeeft tevreden te zijn\n"
+            "- De klant zegt: 'ik weet genoeg', 'dat was het', 'dankjewel', 'nee hoeft niet', 'fijne dag'\n"
+            "- Het gesprek in de afsluitfase zit\n\n"
             "Geef een `start_date` mee (ISO-formaat). De tool retourneert beschikbare tijden.\n"
             "De tool retourneert ook `next_action`. Volg die instructie voor de volgende stap.\n"
             "Bied de klant maximaal 3 opties aan en vraag welk moment het beste uitkomt."
@@ -299,6 +332,9 @@ def build_system_instructions(
             "Plan een afspraak in de agenda.\n\n"
             "**Wanneer gebruiken:**\n"
             "- Nadat de klant een tijdstip heeft gekozen uit check_availability\n\n"
+            "**NIET gebruiken als:**\n"
+            "- De klant afscheid neemt of aangeeft tevreden te zijn\n"
+            "- Het gesprek in de afsluitfase zit\n\n"
             "Vereiste parameters: `starts_at`, `ends_at`, `customer_name`.\n"
             "Optioneel: `title`, `customer_email`.\n"
             "Vraag ALTIJD de naam van de klant voordat je boekt.\n"

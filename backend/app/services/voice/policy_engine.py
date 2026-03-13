@@ -400,6 +400,69 @@ def _policy_silence(
     )
 
 
+_SCHEDULING_TOOLS = frozenset({
+    "check_availability", "book_appointment",
+})
+
+
+def _policy_conversation_closing(
+    session: VoiceSession,
+    intent: CallerIntent,
+    trigger_tool: str,
+) -> PolicyResult:
+    """
+    Rule: When the customer signals the conversation is done (goodbye,
+    gratitude, denial-of-further-help), block scheduling/booking tools.
+    The agent should simply close politely without taking further action.
+    """
+    if trigger_tool not in _SCHEDULING_TOOLS:
+        return PolicyResult(
+            allowed=True,
+            policy_name="conversation_closing",
+            required_action="proceed",
+            reason_code="not_scheduling_tool",
+        )
+
+    closing_intents = {
+        CallerIntent.GOODBYE,
+        CallerIntent.GRATITUDE,
+    }
+
+    if intent in closing_intents:
+        return PolicyResult(
+            allowed=False,
+            policy_name="conversation_closing",
+            required_action="block",
+            reason_code="closing_utterance_blocks_scheduling",
+            instruction_nl=(
+                "De klant geeft aan tevreden te zijn of neemt afscheid. "
+                "Roep GEEN tools aan. Sluit het gesprek vriendelijk af met "
+                "bijvoorbeeld 'Fijn dat ik kon helpen! Fijne dag nog.'"
+            ),
+        )
+
+    if session.goodbye_said_by_customer or session.phase in (
+        CallPhase.CLOSING.value, CallPhase.WAITING_GOODBYE.value, CallPhase.ENDED.value,
+    ):
+        return PolicyResult(
+            allowed=False,
+            policy_name="conversation_closing",
+            required_action="block",
+            reason_code="already_closing",
+            instruction_nl=(
+                "Het gesprek is al in de afsluitfase. "
+                "Roep GEEN tools meer aan. Sluit vriendelijk af."
+            ),
+        )
+
+    return PolicyResult(
+        allowed=True,
+        policy_name="conversation_closing",
+        required_action="proceed",
+        reason_code="not_closing",
+    )
+
+
 # ── Policy Engine (orchestrator) ───────────────────────────────────
 
 
@@ -510,6 +573,11 @@ class PolicyEngine:
         """
         phase_before = session.phase
         checks = []
+
+        # Conversation closing — block scheduling tools during goodbye/satisfaction
+        cl = _policy_conversation_closing(session, intent, trigger_tool)
+        if not cl.allowed:
+            checks.append(cl)
 
         # Always check escalation signals
         esc = _policy_escalation(session, intent)

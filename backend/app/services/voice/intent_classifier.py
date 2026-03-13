@@ -122,12 +122,23 @@ _RULES: list[tuple[re.Pattern, CallerIntent, float]] = [
     # Silence / empty
     (re.compile(r"^\s*$"), CallerIntent.SILENCE, 0.99),
 
-    # Goodbye — must come before greeting (overlapping words)
+    # Goodbye / conversation closing — must come before greeting (overlapping words)
     (re.compile(
         r"\b(doei|tot\s*ziens|tot\s*snel|tot\s*de\s+volgende|"
         r"fijne\s+dag|fijne\s+avond|prettige\s+dag|prettige\s+avond|"
         r"goedenacht|lekker\s+weekend|"
         r"bye|goodbye|tot\s+later)\b|"
+        # Satisfied / done / closing signals
+        r"\b(ik\s+weet\s+genoeg|dat\s+was\s+het|dat\s+is\s+alles|"
+        r"ik\s+heb\s+genoeg\s+info\w*|geen\s+vragen\s+meer|"
+        r"verder\s+geen\s+vragen|nee\s+hoor\s*,?\s*hoeft\s+niet|"
+        r"hoeft\s+(?:niet\s+meer|verder\s+niet)|"
+        r"nee\s+(?:dank\s*(?:je|u)|bedankt)\s*,?\s*(?:dat\s+was\s+het|ik\s+weet\s+genoeg)?|"
+        r"dat\s+is\s+(?:voldoende|genoeg)|ik\s+ben\s+(?:klaar|geholpen)|"
+        r"u\s+heeft\s+mij\s+geholpen|je\s+hebt\s+me\s+geholpen|"
+        r"top\s+(?:dank\w+|bedankt)|(?:oke|oké)\s+(?:dank\w+|bedankt)|"
+        r"that'?s\s+(?:all|enough|it)|(?:no\s+)?thanks?\s*,?\s*(?:that'?s\s+(?:all|enough|it)|i'?m\s+good)|"
+        r"i\s+(?:have\s+)?(?:enough|all\s+(?:the\s+)?info)|(?:nothing|no)\s+(?:else|more))\b|"
         r"^\s*da+g!?\s*$",
         re.I,
     ), CallerIntent.GOODBYE, 0.95),
@@ -668,9 +679,13 @@ _ENGLISH_FALLBACK: list[tuple[re.Pattern, CallerIntent, float]] = [
     # Greeting
     (re.compile(r"^(?:hello|hi|hey|good\s+(?:morning|afternoon|evening))\b", re.I),
      CallerIntent.GREETING, 0.80),
-    # Goodbye
-    (re.compile(r"\b(?:goodbye|bye|see\s+you|take\s+care)\b", re.I),
-     CallerIntent.GOODBYE, 0.80),
+    # Goodbye / closing
+    (re.compile(
+        r"\b(?:goodbye|bye|see\s+you|take\s+care|"
+        r"that'?s\s+(?:all|enough|it)|i'?m\s+good|no\s+thanks|"
+        r"(?:nothing|no)\s+(?:else|more)|i\s+have\s+enough)\b",
+        re.I,
+    ), CallerIntent.GOODBYE, 0.80),
 ]
 
 

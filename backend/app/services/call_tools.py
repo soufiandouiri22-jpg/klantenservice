@@ -311,24 +311,13 @@ def _try_structured_facts(
 
     Returns a tool-result dict if structured data can answer the query,
     or None to fall through to the retrieval pipeline.
+
+    NOTE: pricing and company_overview are handled by dedicated tools
+    (tool_get_pricing, tool_get_company_overview) and are no longer
+    checked here.
     """
     classification = classify_query(query)
     logger.info("[structured_facts] query=%r classification=%s", query, classification)
-
-    if classification == "company_overview":
-        overview = db.query(CompanyOverview).filter_by(company_id=company_id).first()
-        if overview:
-            return _format_overview_response(overview)
-
-    if classification == "pricing":
-        plans = (
-            db.query(PricingPlan)
-            .filter_by(company_id=company_id)
-            .order_by(PricingPlan.display_order)
-            .all()
-        )
-        if plans:
-            return _format_pricing_response(plans)
 
     if classification == "contact":
         contacts = db.query(ContactInfo).filter_by(company_id=company_id).all()
@@ -607,12 +596,25 @@ def tool_search_knowledge(
     }
 
 
-def tool_get_prices(
+def tool_get_pricing(
     db: Session,
     company_id: str,
-    topic: Optional[str] = None,
+    query: str = "",
 ) -> Dict[str, Any]:
-    """Get price information — structured facts first, RAG fallback."""
+    """
+    Dedicated pricing tool — reads directly from PricingPlan.
+
+    Supports:
+      - Full pricing overview (no query / generic query)
+      - Single plan detail (query matches a plan name)
+      - Plan comparison (query contains multiple plan names)
+
+    Falls back to search_knowledge when no structured pricing exists.
+    """
+    import time as _time
+    t0 = _time.time()
+    logger.info("[tool_get_pricing] START query=%r company=%s", query, company_id)
+
     plans = (
         db.query(PricingPlan)
         .filter_by(company_id=company_id)
@@ -620,35 +622,50 @@ def tool_get_prices(
         .all()
     )
 
-    if plans:
-        result = _format_pricing_response(plans)
-        logger.info("[get_prices] structured hit: %d plans", len(plans))
-        return {
-            "ok": True,
-            "prices": [result["message"]],
-            "message": "Prijsinformatie gevonden.",
-            "source": "structured_facts",
-        }
+    if not plans:
+        logger.info("[tool_get_pricing] no structured plans — falling back to search_knowledge")
+        return tool_search_knowledge(db, company_id, query or "prijzen tarieven kosten", limit=5)
 
-    query = topic or "prijzen tarieven kosten"
-    if topic and "prijs" not in topic.lower():
-        query = f"{topic} prijs tarief kosten"
+    q_lower = query.lower().strip()
+    if q_lower:
+        plan_names_lower = {p.name.lower(): p for p in plans}
+        matched = [p for name, p in plan_names_lower.items() if name in q_lower]
+        if matched:
+            plans = matched
+            logger.info("[tool_get_pricing] filtered to %d plan(s): %s",
+                        len(matched), [p.name for p in matched])
 
-    result = tool_search_knowledge(db, company_id, query, limit=3)
-    prices = [
-        r["content"][:500]
-        for r in result.get("results", [])
-        if any(w in r.get("content", "").lower() for w in ("€", "euro", "prijs", "tarief", "kost"))
-    ]
+    result = _format_pricing_response(plans)
+    elapsed_ms = int((_time.time() - t0) * 1000)
+    logger.info("[tool_get_pricing] returning %d plans in %dms", len(plans), elapsed_ms)
+    return result
 
-    if not prices:
-        return {
-            "ok": True,
-            "prices": [],
-            "message": "Geen prijsinformatie gevonden. Vraag de klant om contact op te nemen voor prijzen.",
-        }
 
-    return {"ok": True, "prices": prices, "message": "Prijsinformatie gevonden."}
+def tool_get_company_overview(
+    db: Session,
+    company_id: str,
+) -> Dict[str, Any]:
+    """
+    Dedicated company overview tool — reads directly from CompanyOverview.
+
+    Returns a short business summary, target audience, and key capabilities.
+    Falls back to search_knowledge when no structured overview exists.
+    """
+    import time as _time
+    t0 = _time.time()
+    logger.info("[tool_get_company_overview] START company=%s", company_id)
+
+    overview = db.query(CompanyOverview).filter_by(company_id=company_id).first()
+
+    if not overview:
+        logger.info("[tool_get_company_overview] no structured overview — falling back to search_knowledge")
+        return tool_search_knowledge(db, company_id, "bedrijf overzicht wat doen jullie", limit=5)
+
+    result = _format_overview_response(overview)
+    elapsed_ms = int((_time.time() - t0) * 1000)
+    logger.info("[tool_get_company_overview] returning overview in %dms (%d chars)",
+                elapsed_ms, len(result.get("message", "")))
+    return result
 
 
 def tool_create_note(
