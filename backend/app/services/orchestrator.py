@@ -35,6 +35,13 @@ from app.services.call_tools import (
     tool_flag_unknown,
     tool_transfer_call,
     tool_check_policy,
+    tool_cancel_appointment,
+    tool_reschedule_appointment,
+    tool_create_lead,
+    tool_send_sms,
+    tool_send_email,
+    tool_leave_message,
+    tool_create_callback_request,
 )
 from app.models.context_log import ContextLog
 from app.models.usage_log import UsageLog
@@ -90,8 +97,17 @@ PRIJZEN — STRIKT:
 
 AFSCHEID / TEVREDEN — STRIKT:
 - Als de klant aangeeft tevreden te zijn, genoeg informatie te hebben, of afscheid neemt: roep GEEN tools aan.
-- Voorbeelden: "ik weet genoeg", "dat was het", "top dankjewel", "nee hoeft niet", "fijne dag", "geen vragen meer".
-- Geef dan ALLEEN een kort afscheid in "instructions". Gebruik GEEN check_availability, search_knowledge of andere tools.
+- Voorbeelden: "ik weet genoeg", "dat was het", "top dankjewel", "nee hoeft niet", "fijne dag", "geen vragen meer", "bedankt hoor", "prima zo".
+- Geef dan ALLEEN een kort afscheid in "instructions". Gebruik GEEN enkele tool.
+
+ACTIE-ROUTING:
+- "Annuleer mijn afspraak" → cancel_appointment
+- "Verzet mijn afspraak" / "kan ik mijn afspraak verplaatsen" → reschedule_appointment
+- "Laat iemand mij terugbellen" / "kan iemand mij bellen" → create_callback_request
+- "Ik wil een bericht achterlaten" → leave_message
+- "Stuur me een sms" → send_sms
+- "Mail het me even" / "stuur het per email" → send_email
+- "Ik ben geïnteresseerd" / "ik wil een demo" → create_lead
 
 OUTPUT:
 Geef een JSON object met twee velden:
@@ -139,6 +155,7 @@ TOOLS_OPENAI = [
                     "starts_at": {"type": "string", "description": "ISO datetime van de afspraak"},
                     "ends_at": {"type": "string", "description": "ISO datetime einde afspraak"},
                     "customer_name": {"type": "string", "description": "Naam van de klant"},
+                    "customer_email": {"type": "string", "description": "E-mailadres van de klant (optioneel, voor bevestigingsmail)", "default": ""},
                     "title": {"type": "string", "description": "Titel/omschrijving afspraak", "default": "Afspraak"},
                 },
                 "required": ["starts_at", "ends_at", "customer_name"],
@@ -287,6 +304,117 @@ TOOLS_OPENAI = [
     {
         "type": "function",
         "function": {
+            "name": "cancel_appointment",
+            "description": "Annuleer een bestaande afspraak. Zoekt op telefoonnummer, naam en/of datum.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "customer_name": {"type": "string", "description": "Naam van de klant"},
+                    "appointment_date": {"type": "string", "description": "Datum van de afspraak (YYYY-MM-DD)"},
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "reschedule_appointment",
+            "description": "Verzet een bestaande afspraak naar een nieuw tijdstip. Zoekt bestaande afspraak op telefoonnummer/naam/datum, verplaatst naar nieuwe tijd.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "customer_name": {"type": "string", "description": "Naam van de klant"},
+                    "appointment_date": {"type": "string", "description": "Datum van de huidige afspraak (YYYY-MM-DD)"},
+                    "new_starts_at": {"type": "string", "description": "ISO datetime van het nieuwe tijdstip"},
+                    "new_ends_at": {"type": "string", "description": "ISO datetime einde nieuwe afspraak"},
+                },
+                "required": ["new_starts_at", "new_ends_at"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_lead",
+            "description": "Leg een lead/geïnteresseerde vast (demo-aanvraag, verkoopinteresse, opvolgverzoek).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Naam van de geïnteresseerde"},
+                    "phone": {"type": "string", "description": "Telefoonnummer"},
+                    "email": {"type": "string", "description": "E-mailadres"},
+                    "notes": {"type": "string", "description": "Opmerkingen of reden van interesse"},
+                },
+                "required": ["name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "send_sms",
+            "description": "Stuur een SMS-bericht naar de klant of een opgegeven nummer.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "to": {"type": "string", "description": "Telefoonnummer (leeg = nummer van de beller)"},
+                    "message": {"type": "string", "description": "Tekst van het SMS-bericht"},
+                },
+                "required": ["message"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "send_email",
+            "description": "Stuur een e-mail namens het bedrijf.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "to": {"type": "string", "description": "E-mailadres van de ontvanger"},
+                    "subject": {"type": "string", "description": "Onderwerp van de e-mail"},
+                    "body": {"type": "string", "description": "Inhoud van de e-mail"},
+                },
+                "required": ["to", "subject", "body"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "leave_message",
+            "description": "Laat een bericht achter voor een collega. Gebruik als de klant een boodschap wil achterlaten.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "message": {"type": "string", "description": "Het bericht"},
+                    "customer_name": {"type": "string", "description": "Naam van de klant"},
+                },
+                "required": ["message"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_callback_request",
+            "description": "Maak een terugbelverzoek aan. De klant wil worden teruggebeld.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "customer_name": {"type": "string", "description": "Naam van de klant"},
+                    "preferred_callback_time": {"type": "string", "description": "Gewenst tijdstip voor terugbellen"},
+                    "notes": {"type": "string", "description": "Extra opmerkingen"},
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "check_policy",
             "description": "Controleer of een actie mag worden uitgevoerd (bijv. ophangen, escaleren). VERPLICHT vóór end_call en transfer_call.",
             "parameters": {
@@ -393,6 +521,7 @@ async def _run_tool(
                 customer_name=customer_name,
                 title=arguments.get("title", "Afspraak"),
                 customer_phone=customer_phone,
+                customer_email=arguments.get("customer_email") or None,
                 call_log_id=call_log_id,
             )
         
@@ -450,6 +579,95 @@ async def _run_tool(
                 call_log_id=call_log_id,
                 call_sid=call_sid,
                 reason=arguments.get("reason", ""),
+            )
+
+        if name == "cancel_appointment":
+            return await tool_cancel_appointment(
+                db, company_id,
+                customer_phone=customer_phone,
+                customer_name=arguments.get("customer_name"),
+                appointment_date=arguments.get("appointment_date"),
+                call_log_id=call_log_id,
+            )
+
+        if name == "reschedule_appointment":
+            from dateutil import parser as date_parser
+            try:
+                new_starts_at = date_parser.parse(arguments["new_starts_at"])
+                new_ends_at = date_parser.parse(arguments["new_ends_at"])
+            except Exception:
+                return {
+                    "ok": False,
+                    "missing": "new_starts_at",
+                    "message": "De nieuwe datum of tijd kon niet worden begrepen. Vraag de klant om de gewenste datum en tijd.",
+                }
+            return await tool_reschedule_appointment(
+                db, company_id,
+                new_starts_at=new_starts_at,
+                new_ends_at=new_ends_at,
+                customer_phone=customer_phone,
+                customer_name=arguments.get("customer_name"),
+                appointment_date=arguments.get("appointment_date"),
+                call_log_id=call_log_id,
+                customer_email=arguments.get("customer_email"),
+            )
+
+        if name == "create_lead":
+            lead_name = (arguments.get("name") or "").strip()
+            if not lead_name:
+                return {"ok": False, "missing": "name", "message": "Vraag de naam van de klant."}
+            return tool_create_lead(
+                db, company_id,
+                name=lead_name,
+                phone=arguments.get("phone") or customer_phone,
+                email=arguments.get("email"),
+                notes=arguments.get("notes"),
+                call_log_id=call_log_id,
+            )
+
+        if name == "send_sms":
+            msg = (arguments.get("message") or "").strip()
+            if not msg:
+                return {"ok": False, "missing": "message", "message": "Vraag wat er in de SMS moet staan."}
+            return tool_send_sms(
+                db, company_id,
+                to=arguments.get("to", ""),
+                message=msg,
+                customer_phone=customer_phone,
+            )
+
+        if name == "send_email":
+            if not arguments.get("to"):
+                return {"ok": False, "missing": "to", "message": "Vraag het e-mailadres van de klant."}
+            if not arguments.get("subject"):
+                return {"ok": False, "missing": "subject", "message": "Geef een onderwerp op voor de e-mail."}
+            return tool_send_email(
+                db, company_id,
+                to=arguments["to"],
+                subject=arguments["subject"],
+                body=arguments.get("body", ""),
+            )
+
+        if name == "leave_message":
+            msg = (arguments.get("message") or "").strip()
+            if not msg:
+                return {"ok": False, "missing": "message", "message": "Vraag wat het bericht is."}
+            return tool_leave_message(
+                db, company_id,
+                message=msg,
+                customer_name=arguments.get("customer_name"),
+                customer_phone=customer_phone,
+                call_log_id=call_log_id,
+            )
+
+        if name == "create_callback_request":
+            return tool_create_callback_request(
+                db, company_id,
+                customer_name=arguments.get("customer_name"),
+                customer_phone=customer_phone,
+                preferred_callback_time=arguments.get("preferred_callback_time"),
+                notes=arguments.get("notes"),
+                call_log_id=call_log_id,
             )
 
         if name == "check_policy":

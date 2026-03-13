@@ -213,6 +213,8 @@ export default function PhonePage() {
       voicemail_email: phone.voicemail_email || '',
       sms_confirmation_enabled: phone.sms_confirmation_enabled ?? false,
       sms_confirmation_template: phone.sms_confirmation_template || 'Uw afspraak bij {bedrijfsnaam} is bevestigd op {datum} om {tijd}. Tot dan!',
+      email_confirmation_enabled: phone.email_confirmation_enabled ?? false,
+      email_confirmation_template: phone.email_confirmation_template || 'Uw afspraak bij {bedrijfsnaam} is bevestigd op {datum} om {tijd}. Tot dan!',
       sms_callback_template: phone.sms_callback_template || 'Uw verzoek is genoteerd bij {bedrijfsnaam}. U wordt zo snel mogelijk teruggebeld.',
       transfer_enabled: phone.transfer_enabled ?? false,
       transfer_number: phone.transfer_number || '',
@@ -944,6 +946,47 @@ export default function PhonePage() {
                       rows={2}
                       value={settingsForm.sms_confirmation_template}
                       onChange={(e) => setSettingsForm({ ...settingsForm, sms_confirmation_template: e.target.value })}
+                      placeholder="Uw afspraak bij {bedrijfsnaam} is bevestigd op {datum} om {tijd}. Tot dan!"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">
+                      Gebruik {'{bedrijfsnaam}'}, {'{datum}'} en {'{tijd}'} als variabelen.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Email Confirmation */}
+            <div>
+              <h4 className="font-medium text-gray-900 mb-3">E-mailbevestiging</h4>
+              <div className="bg-gray-50 rounded-lg p-4 space-y-4">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">Bevestigingsmail versturen</p>
+                    <p className="text-xs text-gray-500 mt-0.5">Stuur automatisch een e-mail na het inplannen van een afspraak (alleen als e-mailadres beschikbaar is)</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSettingsForm({ ...settingsForm, email_confirmation_enabled: !settingsForm.email_confirmation_enabled })}
+                    className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      settingsForm.email_confirmation_enabled ? 'bg-primary-600' : 'bg-gray-200'
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                        settingsForm.email_confirmation_enabled ? 'translate-x-4' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+                {settingsForm.email_confirmation_enabled && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">E-mailtekst</label>
+                    <textarea
+                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-500 resize-none"
+                      rows={2}
+                      value={settingsForm.email_confirmation_template}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, email_confirmation_template: e.target.value })}
                       placeholder="Uw afspraak bij {bedrijfsnaam} is bevestigd op {datum} om {tijd}. Tot dan!"
                     />
                     <p className="text-xs text-gray-400 mt-1">

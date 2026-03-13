@@ -52,6 +52,8 @@ class PhoneNumberUpdate(BaseModel):
     voicemail_email: Optional[str] = None
     sms_confirmation_enabled: Optional[bool] = None
     sms_confirmation_template: Optional[str] = None
+    email_confirmation_enabled: Optional[bool] = None
+    email_confirmation_template: Optional[str] = None
     sms_callback_template: Optional[str] = None
     transfer_enabled: Optional[bool] = None
     transfer_number: Optional[str] = Field(None, max_length=20)
@@ -79,6 +81,8 @@ class PhoneNumberResponse(PhoneNumberBase):
     voicemail_email: Optional[str]
     sms_confirmation_enabled: bool
     sms_confirmation_template: Optional[str]
+    email_confirmation_enabled: bool = False
+    email_confirmation_template: Optional[str] = None
     sms_callback_template: Optional[str] = None
     transfer_enabled: bool = False
     transfer_number: Optional[str] = None

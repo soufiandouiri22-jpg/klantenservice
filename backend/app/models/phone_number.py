@@ -2,7 +2,7 @@
 klantenservice.ai - Phone Number Model
 """
 from datetime import datetime, time
-from sqlalchemy import Column, String, DateTime, Boolean, Time, ForeignKey, JSON, Integer
+from sqlalchemy import Column, String, Text, DateTime, Boolean, Time, ForeignKey, JSON, Integer
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 import uuid
@@ -63,6 +63,10 @@ class PhoneNumber(Base):
         String(500),
         default="Uw afspraak bij {bedrijfsnaam} is bevestigd op {datum} om {tijd}. Tot dan!"
     )
+
+    # Email confirmation settings
+    email_confirmation_enabled = Column(Boolean, default=False)
+    email_confirmation_template = Column(Text, nullable=True)
 
     # SMS callback template (for terugbelverzoeken)
     sms_callback_template = Column(

@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 from app.models.calendar_integration import CalendarIntegration, CalendarProvider
 from app.models.appointment import Appointment, AppointmentStatus
 from app.models.internal_note import InternalNote, NotePriority
+from app.models.lead import Lead
 from app.models.training import ExampleAnswer
 from app.models.business_facts import (
     CompanyOverview, PricingPlan, ContactInfo, OpeningHours,
@@ -226,29 +227,49 @@ async def tool_book_appointment(
     day_name = day_names[starts_at.weekday()]
     starts_at_readable = f"{day_name} {starts_at.day} {starts_at.strftime('%B')} om {starts_at.strftime('%H:%M')}"
 
-    if customer_phone:
-        try:
-            from app.models.phone_number import PhoneNumber
-            from app.models.company import Company
-            from app.services.sms_service import send_appointment_confirmation_sms
+    # ── Post-booking confirmations (SMS + Email) ──
+    try:
+        from app.models.phone_number import PhoneNumber
+        from app.models.company import Company
 
-            phone_cfg = db.query(PhoneNumber).filter(
-                PhoneNumber.company_id == company_id,
-                PhoneNumber.is_active == True,
-                PhoneNumber.sms_confirmation_enabled == True,
-            ).first()
+        phone_cfg = db.query(PhoneNumber).filter(
+            PhoneNumber.company_id == company_id,
+            PhoneNumber.is_active == True,
+        ).first()
 
-            if phone_cfg:
-                company_obj = db.query(Company).filter(Company.id == company_id).first()
-                company_name = company_obj.name if company_obj else "ons bedrijf"
-                send_appointment_confirmation_sms(
-                    to=customer_phone,
-                    company_name=company_name,
-                    starts_at_readable=starts_at_readable,
-                    custom_template=phone_cfg.sms_confirmation_template,
-                )
-        except Exception as e:
-            logger.error(f"Failed to send confirmation SMS: {e}", exc_info=True)
+        if phone_cfg:
+            company_obj = db.query(Company).filter(Company.id == company_id).first()
+            _company_name = company_obj.name if company_obj else "ons bedrijf"
+
+            # SMS confirmation
+            if customer_phone and phone_cfg.sms_confirmation_enabled:
+                try:
+                    from app.services.sms_service import send_appointment_confirmation_sms
+                    send_appointment_confirmation_sms(
+                        to=customer_phone,
+                        company_name=_company_name,
+                        starts_at_readable=starts_at_readable,
+                        custom_template=phone_cfg.sms_confirmation_template,
+                    )
+                    logger.info("Confirmation SMS sent to %s", customer_phone)
+                except Exception as e:
+                    logger.error("Failed to send confirmation SMS: %s", e, exc_info=True)
+
+            # Email confirmation
+            if customer_email and phone_cfg.email_confirmation_enabled:
+                try:
+                    from app.core.email import send_appointment_confirmation_email
+                    send_appointment_confirmation_email(
+                        to=customer_email,
+                        company_name=_company_name,
+                        starts_at_readable=starts_at_readable,
+                        custom_template=phone_cfg.email_confirmation_template,
+                    )
+                    logger.info("Confirmation email sent to %s", customer_email)
+                except Exception as e:
+                    logger.error("Failed to send confirmation email: %s", e, exc_info=True)
+    except Exception as e:
+        logger.error("Failed to load phone config for confirmations: %s", e, exc_info=True)
 
     return {
         "ok": True,
@@ -1266,3 +1287,427 @@ def tool_transfer_call(
             "ok": False,
             "message": "Doorverbinden is op dit moment niet mogelijk. Bied aan om een collega te laten terugbellen.",
         }
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Action tools — cancel, reschedule, lead, sms, email, message, callback
+# ═══════════════════════════════════════════════════════════════════
+
+
+def _find_appointment(
+    db: Session,
+    company_id: str,
+    customer_phone: Optional[str] = None,
+    customer_name: Optional[str] = None,
+    appointment_date: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Shared lookup logic for cancel / reschedule.
+
+    Returns {"ok": True, "appointment": <obj>} or
+            {"ok": False, "reason": ..., "message": ...}.
+    """
+    q = db.query(Appointment).filter(
+        Appointment.company_id == company_id,
+        Appointment.status == AppointmentStatus.CONFIRMED,
+    )
+
+    if customer_phone:
+        q = q.filter(Appointment.customer_phone == customer_phone)
+    if customer_name:
+        q = q.filter(Appointment.customer_name.ilike(f"%{customer_name}%"))
+    if appointment_date:
+        try:
+            from dateutil import parser as dp
+            dt = dp.parse(appointment_date)
+            q = q.filter(
+                Appointment.starts_at >= dt.replace(hour=0, minute=0, second=0),
+                Appointment.starts_at < dt.replace(hour=23, minute=59, second=59),
+            )
+        except Exception:
+            pass
+
+    matches = q.order_by(Appointment.starts_at).all()
+
+    if len(matches) == 0:
+        return {
+            "ok": False,
+            "reason": "not_found",
+            "message": "Er is geen afspraak gevonden die voldoet aan de opgegeven gegevens. Vraag de klant om meer details (naam, datum, telefoonnummer).",
+        }
+
+    if len(matches) == 1:
+        return {"ok": True, "appointment": matches[0]}
+
+    day_names = ["ma", "di", "wo", "do", "vr", "za", "zo"]
+    options = []
+    for a in matches[:5]:
+        dn = day_names[a.starts_at.weekday()]
+        options.append(f"- {a.customer_name}: {dn} {a.starts_at.strftime('%d-%m-%Y %H:%M')}")
+    return {
+        "ok": False,
+        "reason": "ambiguous",
+        "count": len(matches),
+        "options": options,
+        "message": f"Er zijn {len(matches)} afspraken gevonden. Vraag de klant welke afspraak bedoeld wordt:\n" + "\n".join(options),
+    }
+
+
+async def tool_cancel_appointment(
+    db: Session,
+    company_id: str,
+    customer_phone: Optional[str] = None,
+    customer_name: Optional[str] = None,
+    appointment_date: Optional[str] = None,
+    call_log_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Cancel a confirmed appointment found by phone/name/date."""
+    logger.info("[tool_cancel_appointment] company=%s phone=%s name=%s date=%s",
+                company_id, customer_phone, customer_name, appointment_date)
+
+    lookup = _find_appointment(db, company_id, customer_phone, customer_name, appointment_date)
+    if not lookup["ok"]:
+        return lookup
+
+    appointment: Appointment = lookup["appointment"]
+    old_event_id = appointment.external_event_id
+
+    appointment.status = AppointmentStatus.CANCELLED
+    appointment.cancelled_at = datetime.utcnow()
+    appointment.cancelled_by = "customer"
+    appointment.cancellation_reason = "Geannuleerd via telefoon"
+    db.commit()
+
+    if appointment.calendar_integration_id and old_event_id:
+        try:
+            calendar = db.query(CalendarIntegration).filter(
+                CalendarIntegration.id == appointment.calendar_integration_id
+            ).first()
+            if calendar and calendar.access_token_encrypted:
+                if calendar.provider == CalendarProvider.MICROSOFT:
+                    from app.services import outlook_calendar_service as svc
+                else:
+                    from app.services import google_calendar_service as svc
+                await svc.delete_event(calendar, db, old_event_id)
+        except Exception as e:
+            logger.error("Failed to delete external calendar event: %s", e, exc_info=True)
+
+    try:
+        from app.services.notification_service import create_notification
+        from app.models.notification import NotificationType
+        create_notification(
+            db=db, company_id=company_id,
+            type=NotificationType.APPOINTMENT_CANCELLED,
+            title=f"Afspraak geannuleerd: {appointment.customer_name}",
+            message=f"Afspraak op {appointment.starts_at.strftime('%d-%m-%Y %H:%M')} is geannuleerd door de klant.",
+            url="/dashboard/appointments",
+        )
+    except Exception:
+        pass
+
+    logger.info("Appointment %s cancelled", appointment.id)
+    return {
+        "ok": True,
+        "appointment_id": str(appointment.id),
+        "message": f"De afspraak van {appointment.customer_name} op {appointment.starts_at.strftime('%d-%m-%Y')} om {appointment.starts_at.strftime('%H:%M')} is geannuleerd.",
+    }
+
+
+async def tool_reschedule_appointment(
+    db: Session,
+    company_id: str,
+    new_starts_at: datetime,
+    new_ends_at: datetime,
+    customer_phone: Optional[str] = None,
+    customer_name: Optional[str] = None,
+    appointment_date: Optional[str] = None,
+    call_log_id: Optional[str] = None,
+    customer_email: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Reschedule a confirmed appointment to a new timeslot."""
+    logger.info("[tool_reschedule_appointment] company=%s new=%s phone=%s name=%s",
+                company_id, new_starts_at, customer_phone, customer_name)
+
+    lookup = _find_appointment(db, company_id, customer_phone, customer_name, appointment_date)
+    if not lookup["ok"]:
+        return lookup
+
+    appointment: Appointment = lookup["appointment"]
+    old_event_id = appointment.external_event_id
+
+    appointment.starts_at = new_starts_at
+    appointment.ends_at = new_ends_at
+    appointment.duration_minutes = int((new_ends_at - new_starts_at).total_seconds() / 60)
+    db.commit()
+    db.refresh(appointment)
+
+    # Update external calendar
+    if appointment.calendar_integration_id:
+        try:
+            calendar = db.query(CalendarIntegration).filter(
+                CalendarIntegration.id == appointment.calendar_integration_id
+            ).first()
+            if calendar and calendar.access_token_encrypted:
+                if calendar.provider == CalendarProvider.MICROSOFT:
+                    from app.services import outlook_calendar_service as svc
+                else:
+                    from app.services import google_calendar_service as svc
+                if old_event_id:
+                    try:
+                        await svc.delete_event(calendar, db, old_event_id)
+                    except Exception:
+                        pass
+                event = await svc.book_appointment(
+                    calendar=calendar, db=db,
+                    summary=appointment.title,
+                    start=new_starts_at, end=new_ends_at,
+                    description=appointment.description or "",
+                    attendee_email=appointment.customer_email or "",
+                )
+                appointment.external_event_id = event.get("id")
+                db.commit()
+        except Exception as e:
+            logger.error("Failed to update external calendar: %s", e, exc_info=True)
+
+    day_names = ["maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag", "zondag"]
+    day_name = day_names[new_starts_at.weekday()]
+    starts_at_readable = f"{day_name} {new_starts_at.day} {new_starts_at.strftime('%B')} om {new_starts_at.strftime('%H:%M')}"
+
+    # Send updated confirmations
+    try:
+        from app.models.phone_number import PhoneNumber
+        from app.models.company import Company
+
+        phone_cfg = db.query(PhoneNumber).filter(
+            PhoneNumber.company_id == company_id, PhoneNumber.is_active == True,
+        ).first()
+        if phone_cfg:
+            company_obj = db.query(Company).filter(Company.id == company_id).first()
+            _cn = company_obj.name if company_obj else "ons bedrijf"
+
+            _phone = customer_phone or appointment.customer_phone
+            if _phone and phone_cfg.sms_confirmation_enabled:
+                try:
+                    from app.services.sms_service import send_appointment_confirmation_sms
+                    send_appointment_confirmation_sms(to=_phone, company_name=_cn, starts_at_readable=starts_at_readable, custom_template=phone_cfg.sms_confirmation_template)
+                except Exception as e:
+                    logger.error("Failed to send reschedule SMS: %s", e, exc_info=True)
+
+            _email = customer_email or appointment.customer_email
+            if _email and phone_cfg.email_confirmation_enabled:
+                try:
+                    from app.core.email import send_appointment_confirmation_email
+                    send_appointment_confirmation_email(to=_email, company_name=_cn, starts_at_readable=starts_at_readable, custom_template=phone_cfg.email_confirmation_template)
+                except Exception as e:
+                    logger.error("Failed to send reschedule email: %s", e, exc_info=True)
+    except Exception as e:
+        logger.error("Failed to load phone config for reschedule confirmations: %s", e, exc_info=True)
+
+    logger.info("Appointment %s rescheduled to %s", appointment.id, new_starts_at)
+    return {
+        "ok": True,
+        "appointment_id": str(appointment.id),
+        "starts_at_readable": starts_at_readable,
+        "message": f"De afspraak is verzet naar {starts_at_readable}.",
+        "next_action": "Bevestig de nieuwe tijd en vraag of er verder nog iets is.",
+    }
+
+
+def tool_create_lead(
+    db: Session,
+    company_id: str,
+    name: str,
+    phone: Optional[str] = None,
+    email: Optional[str] = None,
+    notes: Optional[str] = None,
+    source: str = "voice_call",
+    call_log_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Create a lead record (demo request, sales interest, follow-up)."""
+    logger.info("[tool_create_lead] company=%s name=%s source=%s", company_id, name, source)
+
+    lead = Lead(
+        id=uuid4(),
+        company_id=UUID(company_id),
+        call_log_id=UUID(call_log_id) if call_log_id else None,
+        name=name,
+        phone=phone,
+        email=email,
+        notes=notes,
+        source=source,
+    )
+    db.add(lead)
+    db.commit()
+    db.refresh(lead)
+
+    try:
+        from app.services.notification_service import create_notification
+        from app.models.notification import NotificationType
+        create_notification(
+            db=db, company_id=company_id,
+            type=NotificationType.NOTE_ACTION,
+            title=f"Nieuwe lead: {name}",
+            message=notes[:120] if notes else f"Lead via {source}",
+            url="/dashboard/notes",
+        )
+    except Exception:
+        pass
+
+    logger.info("Lead %s created for company %s", lead.id, company_id)
+    return {
+        "ok": True,
+        "lead_id": str(lead.id),
+        "message": f"Lead '{name}' is vastgelegd. Een collega neemt zo snel mogelijk contact op.",
+    }
+
+
+def tool_send_sms(
+    db: Session,
+    company_id: str,
+    to: str,
+    message: str,
+    customer_phone: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Send an SMS message. Falls back to caller phone if 'to' is empty."""
+    destination = to.strip() if to else (customer_phone or "")
+    if not destination:
+        return {"ok": False, "message": "Er is geen telefoonnummer beschikbaar om een SMS naar te sturen."}
+
+    logger.info("[tool_send_sms] company=%s to=%s", company_id, destination)
+    from app.services.sms_service import send_sms
+    ok = send_sms(to=destination, body=message)
+    if ok:
+        logger.info("SMS sent to %s", destination)
+        return {"ok": True, "message": f"SMS verstuurd naar {destination}."}
+    return {"ok": False, "message": "Het versturen van de SMS is mislukt. Probeer het later opnieuw."}
+
+
+def tool_send_email(
+    db: Session,
+    company_id: str,
+    to: str,
+    subject: str,
+    body: str,
+) -> Dict[str, Any]:
+    """Send a generic email on behalf of the company."""
+    if not to or not to.strip():
+        return {"ok": False, "message": "Er is geen e-mailadres opgegeven."}
+
+    logger.info("[tool_send_email] company=%s to=%s subject=%s", company_id, to, subject)
+    from app.core.email import send_generic_email
+    from app.models.company import Company
+
+    company_obj = db.query(Company).filter(Company.id == company_id).first()
+    cn = company_obj.name if company_obj else "klantenservice.ai"
+
+    ok = send_generic_email(to=to.strip(), subject=subject, body=body, company_name=cn)
+    if ok:
+        logger.info("Email sent to %s", to)
+        return {"ok": True, "message": f"E-mail verstuurd naar {to}."}
+    return {"ok": False, "message": "Het versturen van de e-mail is mislukt. Probeer het later opnieuw."}
+
+
+def tool_leave_message(
+    db: Session,
+    company_id: str,
+    message: str,
+    customer_name: Optional[str] = None,
+    customer_phone: Optional[str] = None,
+    customer_email: Optional[str] = None,
+    call_log_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Leave a message — alias for create_note with category='Bericht'."""
+    logger.info("[tool_leave_message] company=%s name=%s", company_id, customer_name)
+    return tool_create_note(
+        db=db,
+        company_id=company_id,
+        title=f"Bericht van {customer_name or 'klant'}",
+        content=message,
+        call_log_id=call_log_id,
+        customer_name=customer_name,
+        customer_phone=customer_phone,
+        action_required=True,
+        priority="normal",
+    )
+
+
+def tool_create_callback_request(
+    db: Session,
+    company_id: str,
+    customer_name: Optional[str] = None,
+    customer_phone: Optional[str] = None,
+    preferred_callback_time: Optional[str] = None,
+    notes: Optional[str] = None,
+    call_log_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Create a callback request stored as an InternalNote with category 'Terugbellen'."""
+    logger.info("[tool_create_callback_request] company=%s name=%s phone=%s",
+                company_id, customer_name, customer_phone)
+
+    content_parts = []
+    if customer_name:
+        content_parts.append(f"Naam: {customer_name}")
+    if customer_phone:
+        content_parts.append(f"Telefoon: {customer_phone}")
+    if preferred_callback_time:
+        content_parts.append(f"Gewenst tijdstip: {preferred_callback_time}")
+    if notes:
+        content_parts.append(f"Opmerking: {notes}")
+    content = "\n".join(content_parts) or "Terugbelverzoek"
+
+    note = InternalNote(
+        id=uuid4(),
+        company_id=UUID(company_id),
+        call_log_id=UUID(call_log_id) if call_log_id else None,
+        title=f"Terugbelverzoek: {customer_name or 'onbekend'}",
+        content=content,
+        category="Terugbellen",
+        priority=NotePriority.HIGH,
+        customer_name=customer_name,
+        customer_phone=customer_phone,
+        action_required=True,
+        action_description="Bel de klant terug",
+    )
+    db.add(note)
+    db.commit()
+    db.refresh(note)
+
+    # Notification
+    try:
+        from app.services.notification_service import create_notification
+        from app.models.notification import NotificationType
+        create_notification(
+            db=db, company_id=company_id,
+            type=NotificationType.NOTE_ACTION,
+            title=f"Terugbelverzoek: {customer_name or 'klant'}",
+            message=content[:120],
+            url="/dashboard/notes",
+        )
+    except Exception:
+        pass
+
+    # Callback SMS to customer
+    if customer_phone:
+        try:
+            from app.models.phone_number import PhoneNumber
+            from app.models.company import Company
+            phone_cfg = db.query(PhoneNumber).filter(
+                PhoneNumber.company_id == company_id, PhoneNumber.is_active == True,
+            ).first()
+            if phone_cfg and phone_cfg.sms_confirmation_enabled:
+                company_obj = db.query(Company).filter(Company.id == company_id).first()
+                cn = company_obj.name if company_obj else "ons bedrijf"
+                template = phone_cfg.sms_callback_template or "Uw verzoek is genoteerd bij {bedrijfsnaam}. U wordt zo snel mogelijk teruggebeld."
+                sms_text = template.replace("{bedrijfsnaam}", cn)
+                from app.services.sms_service import send_sms
+                send_sms(to=customer_phone, body=sms_text)
+                logger.info("Callback SMS sent to %s", customer_phone)
+        except Exception as e:
+            logger.error("Failed to send callback SMS: %s", e, exc_info=True)
+
+    logger.info("Callback request %s created for company %s", note.id, company_id)
+    return {
+        "ok": True,
+        "note_id": str(note.id),
+        "message": "Het terugbelverzoek is genoteerd. Een collega belt zo snel mogelijk terug.",
+    }

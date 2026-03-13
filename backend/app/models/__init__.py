@@ -20,6 +20,7 @@ from app.models.voice_session import VoiceSession, PolicyDecisionLog, CallPhase
 from app.models.crm_integration import CRMIntegration
 from app.models.notification import Notification
 from app.models.billing_run import BillingRun, BillingRunStatus
+from app.models.lead import Lead
 from app.services.indexing.models import (
     IdxSite, IdxCrawlJob, IdxPage, IdxChunk, IdxError, RtvEvent, RtvResult,
 )
@@ -58,4 +59,5 @@ __all__ = [
     "RtvResult",
     "BillingRun",
     "BillingRunStatus",
+    "Lead",
 ]

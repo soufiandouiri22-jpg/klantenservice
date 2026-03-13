@@ -47,6 +47,9 @@ _CLOSEABLE_TOOLS = {
     "check_availability", "book_appointment", "search_knowledge",
     "get_pricing", "get_company_overview",
     "get_contact_info", "get_opening_hours", "get_services", "get_location",
+    "cancel_appointment", "reschedule_appointment",
+    "create_lead", "send_sms", "send_email",
+    "leave_message", "create_callback_request",
 }
 
 _CLOSING_RE = re.compile(
@@ -55,11 +58,14 @@ _CLOSING_RE = re.compile(
     r"ik\s+heb\s+genoeg\s+info\w*|geen\s+vragen\s+meer|"
     r"verder\s+geen\s+vragen|hoeft\s+(?:niet\s+meer|verder\s+niet)|"
     r"ik\s+ben\s+(?:klaar|geholpen)|"
-    r"dat\s+is\s+(?:voldoende|genoeg))\b|"
+    r"dat\s+is\s+(?:voldoende|genoeg)|"
+    r"top\s+dankje\w*|fijne\s+dag|dankuwel|bedankt\s+hoor|"
+    r"prima\s+zo|mooi\s+zo|nee\s+(?:dank\w*|bedankt))\b|"
     # English closing / satisfied signals
     r"\b(?:that'?s\s+(?:all|enough|it)|(?:no\s+)?thanks?\s*,?\s*i'?m\s+good|"
     r"i\s+(?:have\s+)?(?:enough|all\s+(?:the\s+)?info)|"
-    r"(?:nothing|no)\s+(?:else|more))\b",
+    r"(?:nothing|no)\s+(?:else|more)|"
+    r"have\s+a\s+(?:nice|good|great)\s+day|bye\b|goodbye|cheers)\b",
     re.I,
 )
 
@@ -253,6 +259,41 @@ async def ep_get_services(request: Request):
 @router.post("/get_location")
 async def ep_get_location(request: Request):
     return await _handle_tool(request, "get_location")
+
+
+@router.post("/cancel_appointment")
+async def ep_cancel_appointment(request: Request):
+    return await _handle_tool(request, "cancel_appointment")
+
+
+@router.post("/reschedule_appointment")
+async def ep_reschedule_appointment(request: Request):
+    return await _handle_tool(request, "reschedule_appointment")
+
+
+@router.post("/create_lead")
+async def ep_create_lead(request: Request):
+    return await _handle_tool(request, "create_lead")
+
+
+@router.post("/send_sms")
+async def ep_send_sms(request: Request):
+    return await _handle_tool(request, "send_sms")
+
+
+@router.post("/send_email")
+async def ep_send_email(request: Request):
+    return await _handle_tool(request, "send_email")
+
+
+@router.post("/leave_message")
+async def ep_leave_message(request: Request):
+    return await _handle_tool(request, "leave_message")
+
+
+@router.post("/create_callback_request")
+async def ep_create_callback_request(request: Request):
+    return await _handle_tool(request, "create_callback_request")
 
 
 @router.post("/create_note")

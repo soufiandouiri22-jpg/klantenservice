@@ -383,9 +383,84 @@ def build_system_instructions(
             "Vereiste parameters: `starts_at`, `ends_at`, `customer_name`.\n"
             "Optioneel: `title`, `customer_email`.\n"
             "Vraag ALTIJD de naam van de klant voordat je boekt.\n"
+            "Vraag ook naar het e-mailadres als de klant een bevestiging per e-mail wil. "
+            "Het e-mailadres is NIET verplicht — als de klant het niet wil geven, boek gewoon zonder.\n"
             "Bevestig datum, tijd en naam voordat je de tool aanroept.\n"
             "Als de tool `missing` retourneert: vraag het ontbrekende gegeven en roep de tool opnieuw aan zodra je het hebt."
         )
+
+        tool_lines.append(
+            "## cancel_appointment\n"
+            "Annuleer een bestaande afspraak.\n\n"
+            "**Wanneer gebruiken:**\n"
+            "- Klant wil een afspraak annuleren\n"
+            "- Zoekt automatisch op telefoonnummer, naam en/of datum\n\n"
+            "**NIET gebruiken als:**\n"
+            "- De klant afscheid neemt of tevreden is\n\n"
+            "Optionele parameters: `customer_name`, `appointment_date`.\n"
+            "Als er meerdere afspraken worden gevonden, vraag de klant welke bedoeld wordt."
+        )
+
+        tool_lines.append(
+            "## reschedule_appointment\n"
+            "Verzet een bestaande afspraak naar een nieuw tijdstip.\n\n"
+            "**Wanneer gebruiken:**\n"
+            "- Klant wil een afspraak verplaatsen of verzetten\n\n"
+            "**Flow:**\n"
+            "1. Gebruik eerst check_availability om een nieuw tijdstip te vinden\n"
+            "2. Laat de klant een nieuw tijdstip kiezen\n"
+            "3. Roep dan reschedule_appointment aan met `new_starts_at` en `new_ends_at`\n\n"
+            "Optioneel: `customer_name`, `appointment_date` om de juiste afspraak te vinden."
+        )
+
+    tool_lines.append(
+        "## create_lead\n"
+        "Leg een geïnteresseerde / lead vast.\n\n"
+        "**Wanneer gebruiken:**\n"
+        "- Klant is geïnteresseerd in het product/dienst\n"
+        "- Klant wil een demo of meer informatie\n"
+        "- Klant wil dat iemand contact met hen opneemt over een aanbod\n\n"
+        "Vereist: `name`. Optioneel: `phone`, `email`, `notes`."
+    )
+
+    tool_lines.append(
+        "## send_sms\n"
+        "Stuur een SMS-bericht.\n\n"
+        "**Wanneer gebruiken:**\n"
+        "- Klant vraagt om informatie per SMS te ontvangen\n"
+        "- Een link of bevestiging per SMS sturen\n\n"
+        "Parameter `to` is optioneel — als leeg, wordt het nummer van de beller gebruikt.\n"
+        "Vereist: `message`."
+    )
+
+    tool_lines.append(
+        "## send_email\n"
+        "Stuur een e-mail namens het bedrijf.\n\n"
+        "**Wanneer gebruiken:**\n"
+        "- Klant vraagt om informatie per e-mail te ontvangen\n"
+        "- Een samenvatting of document per e-mail sturen\n\n"
+        "Vereist: `to`, `subject`, `body`.\n"
+        "Vraag ALTIJD het e-mailadres voordat je deze tool gebruikt."
+    )
+
+    tool_lines.append(
+        "## leave_message\n"
+        "Laat een bericht achter voor een collega.\n\n"
+        "**Wanneer gebruiken:**\n"
+        "- Klant wil een boodschap achterlaten\n"
+        "- Klant wil iets doorgeven aan het bedrijf\n\n"
+        "Vereist: `message`. Optioneel: `customer_name`."
+    )
+
+    tool_lines.append(
+        "## create_callback_request\n"
+        "Maak een terugbelverzoek aan.\n\n"
+        "**Wanneer gebruiken:**\n"
+        "- Klant wil worden teruggebeld\n"
+        "- Klant zegt 'laat iemand mij bellen'\n\n"
+        "Bevestig het telefoonnummer van de klant.\n"
+        "Optioneel: `customer_name`, `preferred_callback_time`, `notes`."
+    )
 
     if worker.can_leave_notes:
         tool_lines.append(

@@ -1,10 +1,13 @@
 """
 klantenservice.ai - Email Service using Resend
 """
+import logging
 import resend
 from typing import Optional
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 def init_resend():
@@ -553,4 +556,170 @@ def send_contact_form_email(
 
     except Exception as e:
         print(f"Error sending contact form email: {e}")
+        return False
+
+
+DEFAULT_EMAIL_CONFIRMATION_TEMPLATE = (
+    "Uw afspraak bij {bedrijfsnaam} is bevestigd op {datum} om {tijd}. Tot dan!"
+)
+
+
+def send_appointment_confirmation_email(
+    to: str,
+    company_name: str,
+    starts_at_readable: str,
+    custom_template: Optional[str] = None,
+) -> bool:
+    """
+    Send an appointment confirmation email.
+
+    Supported placeholders in custom_template: {bedrijfsnaam}, {datum}, {tijd}.
+    Returns True on success, False on failure. Never raises.
+    """
+    if not settings.RESEND_API_KEY:
+        logger.info("[DEV] Would send appointment confirmation email to %s", to)
+        return True
+
+    try:
+        init_resend()
+
+        parts = starts_at_readable.split(" om ")
+        datum = parts[0] if parts else starts_at_readable
+        tijd = parts[1] if len(parts) > 1 else ""
+
+        plain_text = (custom_template or DEFAULT_EMAIL_CONFIRMATION_TEMPLATE)
+        plain_text = plain_text.replace("{bedrijfsnaam}", company_name)
+        plain_text = plain_text.replace("{datum}", datum)
+        plain_text = plain_text.replace("{tijd}", tijd)
+
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Afspraakbevestiging</title>
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background-color: #2563eb; padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
+                <h1 style="color: white; margin: 0; font-size: 24px;">Afspraak bevestigd</h1>
+            </div>
+
+            <div style="background-color: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
+                <p style="font-size: 16px; margin-bottom: 20px;">
+                    Beste klant,
+                </p>
+
+                <p style="font-size: 16px; margin-bottom: 24px;">
+                    Uw afspraak bij <strong>{company_name}</strong> is bevestigd.
+                </p>
+
+                <div style="background: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin: 20px 0;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <tr>
+                            <td style="padding: 8px 0; font-size: 14px; color: #6b7280; width: 80px;">Datum</td>
+                            <td style="padding: 8px 0; font-size: 16px; font-weight: 600;">{datum}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px 0; font-size: 14px; color: #6b7280;">Tijd</td>
+                            <td style="padding: 8px 0; font-size: 16px; font-weight: 600;">{tijd}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px 0; font-size: 14px; color: #6b7280;">Bij</td>
+                            <td style="padding: 8px 0; font-size: 16px; font-weight: 600;">{company_name}</td>
+                        </tr>
+                    </table>
+                </div>
+
+                <p style="font-size: 14px; color: #6b7280; margin-top: 24px;">
+                    Moet u de afspraak wijzigen of annuleren? Neem dan contact op met {company_name}.
+                </p>
+
+                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+
+                <p style="font-size: 12px; color: #9ca3af; text-align: center;">
+                    U ontvangt deze e-mail omdat er een afspraak voor u is ingepland bij {company_name}.
+                </p>
+            </div>
+        </body>
+        </html>
+        """
+
+        params = {
+            "from": f"{company_name} <{settings.RESEND_FROM_EMAIL}>",
+            "to": [to],
+            "subject": f"Afspraakbevestiging - {company_name}",
+            "html": html_content,
+        }
+
+        resend.Emails.send(params)
+        logger.info("Appointment confirmation email sent to %s", to)
+        return True
+
+    except Exception as e:
+        logger.error("Failed to send appointment confirmation email to %s: %s", to, e, exc_info=True)
+        return False
+
+
+def send_generic_email(
+    to: str,
+    subject: str,
+    body: str,
+    company_name: str = "klantenservice.ai",
+) -> bool:
+    """
+    Send a generic email on behalf of a company.
+
+    Uses a simple professional HTML template. Returns True on success,
+    False on failure. Never raises.
+    """
+    if not settings.RESEND_API_KEY:
+        logger.info("[DEV] Would send generic email to %s: %s", to, subject)
+        return True
+
+    try:
+        init_resend()
+
+        body_html = body.replace("\n", "<br>")
+
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background-color: #2563eb; padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
+                <h1 style="color: white; margin: 0; font-size: 24px;">{subject}</h1>
+            </div>
+
+            <div style="background-color: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
+                <div style="font-size: 16px; margin-bottom: 20px;">
+                    {body_html}
+                </div>
+
+                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+
+                <p style="font-size: 12px; color: #9ca3af; text-align: center;">
+                    Verstuurd namens {company_name}.
+                </p>
+            </div>
+        </body>
+        </html>
+        """
+
+        params = {
+            "from": f"{company_name} <{settings.RESEND_FROM_EMAIL}>",
+            "to": [to],
+            "subject": subject,
+            "html": html_content,
+        }
+
+        resend.Emails.send(params)
+        logger.info("Generic email sent to %s: %s", to, subject)
+        return True
+
+    except Exception as e:
+        logger.error("Failed to send generic email to %s: %s", to, e, exc_info=True)
         return False
