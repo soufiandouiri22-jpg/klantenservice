@@ -13,6 +13,7 @@ _RULES: list[tuple[re.Pattern, str]] = [
     (re.compile(r"\b(locatie\w*|vestiging\w*|filiaal\w*|kantoor\w*|winkel\w*|route\w*|parkeer\w*)\b", re.I), "location"),
     (re.compile(r"\b(blog\w*|artikel\w*|nieuws\w*)\b", re.I), "blog"),
     (re.compile(r"\b(product\w*|dienst\w*|service\w*|aanbod\w*|oplossing\w*|feature\w*|functie\w*|mogelijkheid\w*)\b", re.I), "service"),
+    (re.compile(r"wat\s+(?:doen|bieden)\s+jullie|jullie\s+(?:allemaal\s+)?doen|wat\s+voor\s+bedrijf|vertel\s+(?:eens\s+)?over\s+(?:jullie|je|uw)|uitleggen\s+wat\s+jullie|wat\s+jullie\s+(?:allemaal\s+)?(?:doen|bieden|aanbieden)", re.I), "service"),
 ]
 
 

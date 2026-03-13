@@ -364,6 +364,11 @@ def _format_pricing_response(plans: List) -> Dict[str, Any]:
         else:
             lines.append(p.name)
 
+        if p.features:
+            feats = p.features if isinstance(p.features, list) else []
+            for feat in feats:
+                lines.append(f"  - {feat}")
+
     content = "\n".join(lines)
     source_url = plans[0].source_url or ""
     logger.info("[structured_facts] returning %d pricing plans", len(plans))

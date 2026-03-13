@@ -93,6 +93,7 @@ _QUERY_RULES: list[tuple[re.Pattern, str]] = [
     (re.compile(r"\b(retour\w*|terugsturen|annuleer\w*|annulering\w*|opzeg\w*|garantie\w*|verzend\w*|lever\w*|bezorg\w*)\b", re.I), "policy"),
     (re.compile(r"\b(locatie\w*|vestiging\w*|filiaal\w*|kantoor\w*|winkel\w*|route\w*|parkeer\w*)\b", re.I), "location"),
     (re.compile(r"\b(product\w*|dienst\w*|service\w*|aanbod\w*|oplossing\w*|feature\w*|functie\w*|mogelijkheid\w*)\b", re.I), "service"),
+    (re.compile(r"wat\s+(?:doen|bieden)\s+jullie|jullie\s+(?:allemaal\s+)?doen|wat\s+voor\s+bedrijf|vertel\s+(?:eens\s+)?over\s+(?:jullie|je|uw)|uitleggen\s+wat\s+jullie|wat\s+jullie\s+(?:allemaal\s+)?(?:doen|bieden|aanbieden)", re.I), "service"),
 ]
 
 
@@ -143,6 +144,15 @@ def _find_price_after(text: str, start_pos: int) -> Optional[Decimal]:
     return price if price is not None and price > 0 else None
 
 
+def _find_plan_boundary(text: str, name_pos: int) -> int:
+    """Find the end of a plan section (next plan name or end of text)."""
+    search_from = name_pos + 5
+    m = _PLAN_NAME_RE.search(text[search_from:])
+    if m:
+        return search_from + m.start()
+    return len(text)
+
+
 def _extract_plan_from_text(text: str, plan_name: str, name_pos: int) -> Optional[Dict]:
     """Extract a plan using the forward-proximity logic."""
     window_start = max(0, name_pos - 20)
@@ -160,11 +170,23 @@ def _extract_plan_from_text(text: str, plan_name: str, name_pos: int) -> Optiona
         return None
 
     billing_period = _detect_period(window)
+
+    boundary = _find_plan_boundary(text, name_pos)
+    feature_text = text[name_pos:boundary]
+    features = []
+    for line in feature_text.split("\n"):
+        line = line.strip()
+        if line.startswith(("- ", "• ", "✓ ", "* ")):
+            feat = line.lstrip("-•✓* ").strip()
+            if feat and 3 < len(feat) < 120:
+                features.append(feat)
+
     return {
         "name": plan_name.strip().capitalize(),
         "price": price,
         "price_type": price_type,
         "billing_period": billing_period,
+        "features": features or None,
     }
 
 
@@ -182,6 +204,24 @@ def _parse_plans_from_text(text: str) -> List[Dict]:
             seen.add(key)
             plans.append(plan)
     return plans
+
+
+def _format_pricing_with_features(plans: List[Dict]) -> str:
+    """Mirror production _format_pricing_response with features."""
+    lines = []
+    for p in plans:
+        if p["price_type"] == "fixed" and p.get("price") is not None:
+            price_str = f"\u20ac{p['price']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            period = f" per {p['billing_period']}" if p.get("billing_period") else ""
+            lines.append(f"{p['name']} \u2013 {price_str}{period}")
+        elif p["price_type"] == "contact_required":
+            lines.append(f"{p['name']} \u2013 Prijs op aanvraag")
+        else:
+            lines.append(p["name"])
+        if p.get("features"):
+            for feat in p["features"]:
+                lines.append(f"  - {feat}")
+    return "\n".join(lines)
 
 
 # ── Dataclasses to simulate DB models ─────────────────────────────
@@ -772,6 +812,146 @@ Prijs op aanvraag
             _assert(plans[2]["price_type"] == "contact_required", "multi-section: Enterprise = contact_required")
 
 
+# ── 9. Company overview query classification ─────────────────────
+
+class TestCompanyOverviewQueries:
+
+    @staticmethod
+    def test_vague_overview_classified():
+        queries = [
+            "Wat doen jullie?",
+            "Ik vroeg me af wat jullie allemaal doen",
+            "Kan je uitleggen wat jullie doen?",
+            "Wat bieden jullie aan?",
+            "Wat voor bedrijf zijn jullie?",
+            "Vertel eens over jullie bedrijf",
+        ]
+        for q in queries:
+            result = classify_query(q)
+            _assert(
+                result != "general",
+                f"overview: '{q}' must NOT be 'general'",
+                f"got '{result}'",
+            )
+
+    @staticmethod
+    def test_overview_not_pricing():
+        queries = [
+            "Wat doen jullie?",
+            "Ik vroeg me af wat jullie allemaal doen",
+        ]
+        for q in queries:
+            result = classify_query(q)
+            _assert(result != "pricing", f"overview: '{q}' must NOT be 'pricing'", f"got '{result}'")
+
+
+# ── 10. Package feature extraction tests ─────────────────────────
+
+class TestFeatureExtraction:
+
+    @staticmethod
+    def test_starter_features_complete():
+        plans = _parse_plans_from_text(_HOMEPAGE)
+        starter = next((p for p in plans if p["name"] == "Starter"), None)
+        _assert(starter is not None, "features: Starter found")
+        if starter:
+            feats = starter.get("features") or []
+            _assert(len(feats) >= 4, f"features: Starter has >= 4 features", f"got {len(feats)}: {feats}")
+            feat_text = " ".join(feats).lower()
+            _assert("ai-medewerker" in feat_text or "medewerker" in feat_text, "features: Starter has AI-medewerker")
+            _assert("belminuten" in feat_text, "features: Starter has belminuten")
+
+    @staticmethod
+    def test_business_features_complete():
+        plans = _parse_plans_from_text(_HOMEPAGE)
+        biz = next((p for p in plans if p["name"] == "Business"), None)
+        _assert(biz is not None, "features: Business found")
+        if biz:
+            feats = biz.get("features") or []
+            _assert(len(feats) >= 4, f"features: Business has >= 4 features", f"got {len(feats)}: {feats}")
+            feat_text = " ".join(feats).lower()
+            _assert("medewerker" in feat_text, "features: Business has medewerkers")
+            _assert("belminuten" in feat_text, "features: Business has belminuten")
+
+    @staticmethod
+    def test_enterprise_features_complete():
+        plans = _parse_plans_from_text(_HOMEPAGE)
+        ent = next((p for p in plans if p["name"] == "Enterprise"), None)
+        _assert(ent is not None, "features: Enterprise found")
+        if ent:
+            feats = ent.get("features") or []
+            _assert(len(feats) >= 3, f"features: Enterprise has >= 3 features", f"got {len(feats)}: {feats}")
+
+    @staticmethod
+    def test_features_included_in_format():
+        plans = _parse_plans_from_text(_HOMEPAGE)
+        formatted = _format_pricing_with_features(plans)
+        _assert("AI-medewerker" in formatted or "medewerker" in formatted, "format: features visible in output")
+        _assert("belminuten" in formatted, "format: belminuten in output")
+        _assert("149" in formatted, "format: exact price 149 in output")
+        _assert("299" in formatted, "format: exact price 299 in output")
+        _assert("op aanvraag" in formatted, "format: op aanvraag in output")
+
+
+# ── 11. Package comparison tests ─────────────────────────────────
+
+class TestPackageComparison:
+
+    @staticmethod
+    def test_comparison_query_classified_as_pricing():
+        queries = [
+            "Wat is het verschil tussen starter en business?",
+            "Wat zit er extra in business?",
+        ]
+        for q in queries:
+            result = classify_query(q)
+            _assert(result == "pricing", f"comparison: '{q}' -> pricing", f"got {result}")
+
+    @staticmethod
+    def test_both_plans_in_comparison_output():
+        plans = _parse_plans_from_text(_HOMEPAGE)
+        formatted = _format_pricing_with_features(plans)
+        _assert("Starter" in formatted, "comparison: Starter in output")
+        _assert("Business" in formatted, "comparison: Business in output")
+        _assert("Enterprise" in formatted, "comparison: Enterprise in output")
+
+    @staticmethod
+    def test_features_enable_comparison():
+        plans = _parse_plans_from_text(_HOMEPAGE)
+        starter = next((p for p in plans if p["name"] == "Starter"), None)
+        biz = next((p for p in plans if p["name"] == "Business"), None)
+        if starter and biz:
+            s_feats = set(f.lower() for f in (starter.get("features") or []))
+            b_feats = set(f.lower() for f in (biz.get("features") or []))
+            _assert(len(b_feats - s_feats) > 0, "comparison: Business has features Starter doesn't", f"diff={b_feats - s_feats}")
+
+
+# ── 12. Exact pricing determinism ────────────────────────────────
+
+class TestExactPricingDeterminism:
+
+    @staticmethod
+    def test_repeated_runs_exact():
+        for i in range(10):
+            plans = _parse_plans_from_text(_HOMEPAGE)
+            starter = next((p for p in plans if p["name"] == "Starter"), None)
+            if starter:
+                _assert(
+                    starter["price"] == Decimal("149"),
+                    f"determinism: run {i+1} Starter = 149",
+                    f"got {starter['price']}",
+                )
+
+    @staticmethod
+    def test_no_price_rounding():
+        plans = _parse_plans_from_text(_HOMEPAGE)
+        for p in plans:
+            if p.get("price") is not None:
+                _assert(p["price"] != Decimal("145"), f"rounding: {p['name']} != 145")
+                _assert(p["price"] != Decimal("150"), f"rounding: {p['name']} != 150")
+                _assert(p["price"] != Decimal("300"), f"rounding: {p['name']} != 300")
+
+
 # ═══════════════════════════════════════════════════════════════════
 # Runner
 # ═══════════════════════════════════════════════════════════════════
@@ -785,6 +965,10 @@ test_classes = [
     TestDeterminism,
     TestEdgeCases,
     TestHomepageRegression,
+    TestCompanyOverviewQueries,
+    TestFeatureExtraction,
+    TestPackageComparison,
+    TestExactPricingDeterminism,
 ]
 
 

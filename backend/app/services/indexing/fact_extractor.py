@@ -332,6 +332,15 @@ def _parse_plans(text: str, default_url: str) -> List[Dict]:
     return plans
 
 
+def _find_plan_boundary(text: str, name_pos: int) -> int:
+    """Find end of a plan section: the next plan name occurrence or end of text."""
+    search_from = name_pos + 5
+    m = _PLAN_NAME_RE.search(text[search_from:])
+    if m:
+        return search_from + m.start()
+    return len(text)
+
+
 def _extract_single_plan(
     text: str, plan_name: str, name_pos: int, source_url: str,
 ) -> Optional[Dict]:
@@ -341,11 +350,6 @@ def _extract_single_plan(
     window_start = max(0, name_pos - 20)
     window_end = min(len(text), name_pos + _PROXIMITY_CHARS)
     window = text[window_start:window_end]
-
-    if _FREE_TRIAL_RE.search(window):
-        nearby_plan = _PLAN_NAME_RE.search(window)
-        if not nearby_plan or nearby_plan.group(1).lower() == plan_name.lower():
-            pass
 
     price, currency = _find_price_after(text, name_pos)
     billing_period = _detect_period(window)
@@ -359,8 +363,10 @@ def _extract_single_plan(
     else:
         return None
 
+    boundary = _find_plan_boundary(text, name_pos)
+    feature_section = text[name_pos:boundary]
     features = []
-    for line in window.split("\n"):
+    for line in feature_section.split("\n"):
         line = line.strip()
         if line.startswith(("- ", "• ", "✓ ", "* ")):
             feat = line.lstrip("-•✓* ").strip()
