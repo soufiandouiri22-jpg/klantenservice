@@ -31,13 +31,13 @@ _PER_PERIOD_RE = re.compile(
 )
 
 _PLAN_NAME_RE = re.compile(
-    r"\b(starter|basic|standaard|standard|business|professional|"
+    r"\b(starter|basic|standaard|standard|business|professional|pro|"
     r"premium|enterprise|plus|growth|advanced|lite|team)\b",
     re.I,
 )
 
 _CONTACT_REQUIRED_RE = re.compile(
-    r"op\s+aanvraag|neem\s+contact\s+op"
+    r"op\s+aanvraag|neem\s+contact\s+op|contact\s+us"
     r"|request\s+(?:pricing|quote|a\s+quote)|offerte"
     r"|custom\s+pricing|enterprise\s+pricing",
     re.I,
@@ -206,16 +206,24 @@ def _parse_plans_from_text(text: str) -> List[Dict]:
     return plans
 
 
+def _format_price_str(price) -> str:
+    if price is None:
+        return ""
+    if price == int(price):
+        return f"\u20ac{int(price)}"
+    return f"\u20ac{price:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
 def _format_pricing_with_features(plans: List[Dict]) -> str:
     """Mirror production _format_pricing_response with features."""
     lines = []
     for p in plans:
         if p["price_type"] == "fixed" and p.get("price") is not None:
-            price_str = f"\u20ac{p['price']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            price_str = _format_price_str(p["price"])
             period = f" per {p['billing_period']}" if p.get("billing_period") else ""
-            lines.append(f"{p['name']} \u2013 {price_str}{period}")
+            lines.append(f"{p['name']}: {price_str}{period}")
         elif p["price_type"] == "contact_required":
-            lines.append(f"{p['name']} \u2013 Prijs op aanvraag")
+            lines.append(f"{p['name']}: Prijs op aanvraag")
         else:
             lines.append(p["name"])
         if p.get("features"):
@@ -520,13 +528,11 @@ class TestFormatting:
         lines = []
         for p in plans:
             if p.price_type == "fixed" and p.price is not None:
-                price_str = f"€{p.price:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                price_str = _format_price_str(p.price)
                 period = f" per {p.billing_period}" if p.billing_period else ""
-                lines.append(f"{p.name} – {price_str}{period}")
-            elif p.price_type == "free":
-                lines.append(f"{p.name} – Gratis")
+                lines.append(f"{p.name}: {price_str}{period}")
             elif p.price_type == "contact_required":
-                lines.append(f"{p.name} – Prijs op aanvraag")
+                lines.append(f"{p.name}: Prijs op aanvraag")
             else:
                 lines.append(p.name)
 
@@ -538,6 +544,13 @@ class TestFormatting:
         _assert("Enterprise" in content, "format: Enterprise in output")
         _assert("op aanvraag" in content, "format: 'op aanvraag' in output")
         _assert(len(lines) == 3, "format: 3 lines for 3 plans", f"got {len(lines)}")
+
+    @staticmethod
+    def test_whole_number_no_decimals():
+        _assert(_format_price_str(Decimal("149")) == "\u20ac149", "format: 149 -> €149 (no decimals)")
+        _assert(_format_price_str(Decimal("299")) == "\u20ac299", "format: 299 -> €299 (no decimals)")
+        _assert(_format_price_str(Decimal("29.90")) == "\u20ac29,90", "format: 29.90 -> €29,90 (keep decimals)")
+        _assert(_format_price_str(None) == "", "format: None -> empty")
 
     @staticmethod
     def test_hours_format():
@@ -627,9 +640,15 @@ class TestEdgeCases:
             _assert(bool(_PLAN_NAME_RE.search(name)), f"edge: plan name '{name}' detected")
 
     @staticmethod
-    def test_gratis_free_not_plan_names():
-        for word in ["gratis", "free", "pro", "custom", "Free", "Gratis"]:
+    def test_gratis_free_custom_not_plan_names():
+        for word in ["gratis", "free", "custom", "Free", "Gratis"]:
             _assert(not bool(_PLAN_NAME_RE.search(word)), f"edge: '{word}' is NOT a plan name")
+
+    @staticmethod
+    def test_pro_is_plan_name():
+        _assert(bool(_PLAN_NAME_RE.search("Pro")), "edge: 'Pro' IS a plan name")
+        _assert(not bool(_PLAN_NAME_RE.search("Probeer")), "edge: 'Probeer' is NOT a plan name")
+        _assert(not bool(_PLAN_NAME_RE.search("proefperiode")), "edge: 'proefperiode' is NOT a plan name")
 
 
 # ── 8. Klantenservice.ai homepage regression ─────────────────────

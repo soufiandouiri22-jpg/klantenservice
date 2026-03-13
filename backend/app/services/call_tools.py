@@ -350,17 +350,26 @@ def _try_structured_facts(
 _WEEKDAY_NAMES = ["Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag", "Zondag"]
 
 
+def _format_price_str(price) -> str:
+    """Format price for voice: €149 (not €149,00) to prevent LLM rounding."""
+    if price is None:
+        return ""
+    if price == int(price):
+        return f"\u20ac{int(price)}"
+    return f"\u20ac{price:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
 def _format_pricing_response(plans: List) -> Dict[str, Any]:
     lines = []
     for p in plans:
         if p.price_type == "fixed" and p.price is not None:
-            price_str = f"€{p.price:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            price_str = _format_price_str(p.price)
             period = f" per {p.billing_period}" if p.billing_period else ""
-            lines.append(f"{p.name} – {price_str}{period}")
+            lines.append(f"{p.name}: {price_str}{period}")
         elif p.price_type == "free":
-            lines.append(f"{p.name} – Gratis")
+            lines.append(f"{p.name}: Gratis")
         elif p.price_type == "contact_required":
-            lines.append(f"{p.name} – Prijs op aanvraag")
+            lines.append(f"{p.name}: Prijs op aanvraag")
         else:
             lines.append(p.name)
 

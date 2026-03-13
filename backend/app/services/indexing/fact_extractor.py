@@ -46,13 +46,13 @@ _PER_PERIOD_RE = re.compile(
 )
 
 _PLAN_NAME_RE = re.compile(
-    r"\b(starter|basic|standaard|standard|business|professional|"
+    r"\b(starter|basic|standaard|standard|business|professional|pro|"
     r"premium|enterprise|plus|growth|advanced|lite|team)\b",
     re.I,
 )
 
 _CONTACT_REQUIRED_RE = re.compile(
-    r"op\s+aanvraag|neem\s+contact\s+op"
+    r"op\s+aanvraag|neem\s+contact\s+op|contact\s+us"
     r"|request\s+(?:pricing|quote|a\s+quote)|offerte"
     r"|custom\s+pricing|enterprise\s+pricing",
     re.I,
@@ -163,7 +163,7 @@ def extract_business_facts(
 
 def _delete_existing(db: Session, company_id: str, site_id: str) -> None:
     for model in (PricingPlan, ContactInfo, OpeningHours, BusinessLocation, BusinessService):
-        db.query(model).filter_by(company_id=company_id, site_id=site_id).delete()
+        db.query(model).filter_by(company_id=company_id).delete()
 
 
 def _collect_text_blocks(pages: List[Dict], chunks: List[Dict]) -> List[Dict]:
