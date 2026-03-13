@@ -381,11 +381,20 @@ def _format_pricing_response(plans: List) -> Dict[str, Any]:
     content = "\n".join(lines)
     source_url = plans[0].source_url or ""
     logger.info("[structured_facts] returning %d pricing plans", len(plans))
+
+    # Build a strict verbal template the LLM must follow verbatim
+    verbal_instruction = (
+        "PRIJSINSTRUCTIE: Noem onderstaande prijzen en pakketten EXACT zoals ze hier staan. "
+        "Wijzig GEEN enkel bedrag. Rond NIET af. "
+        "Zeg het getal precies: €149 = honderdnegenveertig euro, €299 = tweehonderdnegenennegentig euro. "
+        "Als er eerdere zoekresultaten in het gesprek staan, NEGEER die voor de prijsvraag en gebruik ALLEEN deze gegevens.\n\n"
+    )
+
     return {
         "ok": True,
         "results": [{"content": content, "url": source_url, "title": "Prijzen", "chunk_type": "pricing", "score": 1.0}],
         "top_retrieval_score": 1.0,
-        "message": content,
+        "message": verbal_instruction + content,
         "source": "structured_facts",
     }
 

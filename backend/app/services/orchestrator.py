@@ -72,9 +72,14 @@ BELANGRIJKE REGELS:
 - VERZIN NOOIT producten, diensten, prijzen of openingstijden. Als de kennisbank geen resultaat geeft, zeg dan dat je het niet weet en bied aan om een collega te laten terugbellen.
 - Noem NOOIT interne systemen (agenda, kennisbank, tools) tegen de klant. Gebruik altijd klantgerichte taal.
 
+PRIJZEN — STRIKT:
+- Kopieer prijzen, bedragen en getallen EXACT uit tool-resultaten naar het "facts" veld.
+- Wijzig GEEN enkel cijfer. Rond NIET af. €149 moet €149 blijven, NIET €150.
+- Als een tool-resultaat een PRIJSINSTRUCTIE bevat, neem die op in "instructions".
+
 OUTPUT:
 Geef een JSON object met twee velden:
-1. "facts": Letterlijke feiten uit tool-resultaten die de assistent moet gebruiken. Kort en concreet.
+1. "facts": Letterlijke feiten uit tool-resultaten die de assistent moet gebruiken. Kort en concreet. Prijzen en getallen EXACT overnemen.
 2. "instructions": Wat de assistent moet zeggen/doen. Geen beleefdheden, alleen de kern.
 
 Voorbeeld output:

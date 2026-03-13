@@ -271,13 +271,15 @@ def build_system_instructions(
         "De resultaten bevatten alle bedrijfsinformatie, inclusief opgeslagen Q&A. "
         "Beantwoord nooit uit eigen kennis.\n\n"
         "**Resultaten:** De tool retourneert `results` met relevante informatie (website + opgeslagen Q&A). "
-        "Gebruik deze resultaten om de vraag te beantwoorden.\n\n"
+        "Gebruik ALLEEN het meest recente tool-resultaat om de vraag te beantwoorden. "
+        "Als een resultaat een PRIJSINSTRUCTIE bevat, volg die LETTERLIJK.\n\n"
         "**Wanneer gebruiken:** Bij elke inhoudelijke vraag over het bedrijf.\n\n"
         "**Foutafhandeling:**\n"
         'Als de tool faalt: "Dat heb ik even niet bij de hand. '
         'Zal ik een collega vragen om u terug te bellen?"\n'
         "Verzin nooit een antwoord. Noem nooit de tool of kennisbank tegen de klant.\n"
-        "Neem prijzen, bedragen, getallen en namen EXACT over uit het zoekresultaat. Rond niet af en wijzig geen cijfers."
+        "Neem prijzen, bedragen, getallen en namen EXACT over uit het zoekresultaat. "
+        "Rond NIET af en wijzig GEEN cijfers. €149 = honderdnegenveertig euro, niet honderdvijftig."
     )
 
     if worker.can_make_appointments:

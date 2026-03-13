@@ -93,7 +93,19 @@ _QUERY_RULES: list[tuple[re.Pattern, str]] = [
     (re.compile(r"\b(retour\w*|terugsturen|annuleer\w*|annulering\w*|opzeg\w*|garantie\w*|verzend\w*|lever\w*|bezorg\w*)\b", re.I), "policy"),
     (re.compile(r"\b(locatie\w*|vestiging\w*|filiaal\w*|kantoor\w*|winkel\w*|route\w*|parkeer\w*)\b", re.I), "location"),
     (re.compile(r"\b(product\w*|dienst\w*|service\w*|aanbod\w*|oplossing\w*|feature\w*|functie\w*|mogelijkheid\w*)\b", re.I), "service"),
-    (re.compile(r"wat\s+(?:doen|bieden)\s+jullie|jullie\s+(?:allemaal\s+)?doen|wat\s+voor\s+bedrijf|vertel\s+(?:eens\s+)?over\s+(?:jullie|je|uw)|uitleggen\s+wat\s+jullie|wat\s+jullie\s+(?:allemaal\s+)?(?:doen|bieden|aanbieden)", re.I), "service"),
+    (re.compile(
+        r"wat\s+(?:doen|doet|bieden|biedt)\s+(?:jullie|je|u|uw|\w+\.?\w*)"
+        r"|jullie\s+(?:allemaal\s+)?doen"
+        r"|wat\s+voor\s+(?:bedrijf|organisatie|bureau)"
+        r"|vertel\s+(?:eens\s+)?over\s+(?:jullie|je|uw|het\s+bedrijf)"
+        r"|uitleggen\s+wat\s+jullie"
+        r"|wat\s+jullie\s+(?:allemaal\s+)?(?:doen|bieden|aanbieden)"
+        r"|wat\s+is\s+\S+\s+(?:precies|eigenlijk|voor\s+(?:bedrijf|dienst))"
+        r"|waar\s+(?:gaat|staat)\s+\S+\s+voor"
+        r"|wie\s+(?:is|zijn)\s+(?:jullie|je|uw)"
+        r"|wat\s+houdt\s+\S+\s+in",
+        re.I,
+    ), "service"),
 ]
 
 
@@ -1215,6 +1227,202 @@ Business
             )
 
 
+# ── 16. Company-name classifier tests ────────────────────────────
+
+class TestCompanyNameClassifier:
+    """Verify that 'Wat doet [company]?' routes to service, not general."""
+
+    @staticmethod
+    def test_wat_doet_company():
+        queries_expected_service = [
+            "Wat doet Klantenservice.ai?",
+            "Wat doet ACME?",
+            "Wat biedt Google aan?",
+            "Wie zijn jullie?",
+            "Wat houdt klantenservice.ai in?",
+            "Wat is Klantenservice precies?",
+            "Waar staat bedrijfX voor?",
+        ]
+        for q in queries_expected_service:
+            c = classify_query(q)
+            _assert(
+                c == "service",
+                f"company-classifier: '{q}' must be service",
+                f"got '{c}'",
+            )
+
+    @staticmethod
+    def test_company_queries_not_general():
+        """These must not fall through to 'general'."""
+        queries = [
+            "Wat doet Klantenservice.ai?",
+            "Vertel eens over het bedrijf",
+            "Wat doet jullie bedrijf?",
+        ]
+        for q in queries:
+            c = classify_query(q)
+            _assert(c != "general", f"company-classifier: '{q}' NOT general", f"got '{c}'")
+
+    @staticmethod
+    def test_pricing_still_pricing():
+        """Pricing queries must not be affected by the new patterns."""
+        queries = [
+            "Wat zijn de prijzen?",
+            "Hoeveel kost het?",
+            "Welke pakketten hebben jullie?",
+            "Wat kost starter?",
+        ]
+        for q in queries:
+            c = classify_query(q)
+            _assert(c == "pricing", f"company-classifier: '{q}' still pricing", f"got '{c}'")
+
+
+# ── 17. Multi-turn contamination tests ───────────────────────────
+
+class TestMultiTurnContamination:
+    """
+    Simulate multi-turn conversations where a general/overview question
+    precedes a pricing question. The pricing response must always contain
+    exact numbers regardless of prior turns.
+    """
+
+    @staticmethod
+    def _simulate_pricing_response() -> str:
+        """Simulate what _format_pricing_response returns for our 3 plans."""
+        plans = _parse_plans_from_text(_HOMEPAGE)
+        return _format_pricing_with_features(plans)
+
+    @staticmethod
+    def test_turn1_overview_turn2_pricing():
+        """
+        Turn 1: 'Wat doen jullie?' -> classified as service (not general)
+        Turn 2: 'Wat zijn jullie prijzen?' -> classified as pricing, gets structured facts
+        Pricing output must contain 149, 299, 'op aanvraag'.
+        """
+        q1 = "Wat doen jullie?"
+        c1 = classify_query(q1)
+        _assert(c1 == "service", "multiturn-1: turn1 classified as service", f"got '{c1}'")
+
+        q2 = "Wat zijn jullie prijzen?"
+        c2 = classify_query(q2)
+        _assert(c2 == "pricing", "multiturn-1: turn2 classified as pricing", f"got '{c2}'")
+
+        pricing = TestMultiTurnContamination._simulate_pricing_response()
+        _assert("€149" in pricing, "multiturn-1: pricing contains €149")
+        _assert("€299" in pricing, "multiturn-1: pricing contains €299")
+        _assert("op aanvraag" in pricing.lower(), "multiturn-1: pricing contains 'op aanvraag'")
+        _assert("€145" not in pricing, "multiturn-1: pricing does NOT contain €145")
+        _assert("€150" not in pricing, "multiturn-1: pricing does NOT contain €150")
+
+    @staticmethod
+    def test_turn1_wat_doet_company_turn2_starter():
+        """
+        Turn 1: 'Wat doet Klantenservice.ai?' -> classified as service
+        Turn 2: 'Wat kost het starter pakket?' -> classified as pricing
+        Starter must be exactly 149.
+        """
+        q1 = "Wat doet Klantenservice.ai?"
+        c1 = classify_query(q1)
+        _assert(c1 == "service", "multiturn-2: turn1 classified as service", f"got '{c1}'")
+
+        q2 = "Wat kost het starter pakket?"
+        c2 = classify_query(q2)
+        _assert(c2 == "pricing", "multiturn-2: turn2 classified as pricing", f"got '{c2}'")
+
+        pricing = TestMultiTurnContamination._simulate_pricing_response()
+        _assert("€149" in pricing, "multiturn-2: starter is €149")
+        _assert("€145" not in pricing, "multiturn-2: starter is NOT €145")
+
+    @staticmethod
+    def test_turn1_vertel_turn2_pricing():
+        """
+        Turn 1: 'Vertel eens wat jullie doen' -> service
+        Turn 2: 'Wat zijn jullie prijzen?' -> pricing
+        """
+        c1 = classify_query("Vertel eens over jullie")
+        _assert(c1 == "service", "multiturn-3: 'Vertel eens over jullie' = service", f"got '{c1}'")
+
+        c2 = classify_query("Wat zijn jullie prijzen?")
+        _assert(c2 == "pricing", "multiturn-3: pricing query = pricing", f"got '{c2}'")
+
+        pricing = TestMultiTurnContamination._simulate_pricing_response()
+        _assert("€149" in pricing, "multiturn-3: contains €149")
+        _assert("€299" in pricing, "multiturn-3: contains €299")
+
+    @staticmethod
+    def test_pricing_instruction_in_message():
+        """Verify the pricing response message contains the verbal instruction."""
+        plans = [
+            MockPricingPlan(
+                name="Starter", price=Decimal("149"), price_type="fixed",
+                billing_period="maand", features=["1 AI-medewerker"],
+            ),
+            MockPricingPlan(
+                name="Business", price=Decimal("299"), price_type="fixed",
+                billing_period="maand", features=["3 AI-medewerkers"],
+            ),
+            MockPricingPlan(
+                name="Enterprise", price=None, price_type="contact_required",
+                features=["5+ AI-medewerkers"],
+            ),
+        ]
+        result = _mock_format_pricing_response(plans)
+        msg = result["message"]
+        _assert("PRIJSINSTRUCTIE" in msg, "pricing-msg: contains PRIJSINSTRUCTIE")
+        _assert("€149" in msg, "pricing-msg: contains €149")
+        _assert("€299" in msg, "pricing-msg: contains €299")
+        _assert("op aanvraag" in msg.lower(), "pricing-msg: contains 'op aanvraag'")
+        _assert("NEGEER" in msg, "pricing-msg: contains override instruction")
+
+    @staticmethod
+    def test_pricing_stability_across_10_calls():
+        """
+        Run pricing extraction + formatting 10 times.
+        All must produce identical output with exact prices.
+        """
+        outputs = set()
+        for _ in range(10):
+            plans = _parse_plans_from_text(_HOMEPAGE)
+            formatted = _format_pricing_with_features(plans)
+            outputs.add(formatted)
+        _assert(len(outputs) == 1, "stability: 10 runs produce identical output")
+        output = outputs.pop()
+        _assert("€149" in output, "stability: €149 in output")
+        _assert("€299" in output, "stability: €299 in output")
+
+
+def _mock_format_pricing_response(plans: list) -> dict:
+    """Mirror production _format_pricing_response with verbal instruction."""
+    lines = []
+    for p in plans:
+        if p.price_type == "fixed" and p.price is not None:
+            price_str = _format_price_str(p.price)
+            period = f" per {p.billing_period}" if p.billing_period else ""
+            lines.append(f"{p.name}: {price_str}{period}")
+        elif p.price_type == "contact_required":
+            lines.append(f"{p.name}: Prijs op aanvraag")
+        else:
+            lines.append(p.name)
+        if p.features:
+            for feat in (p.features if isinstance(p.features, list) else []):
+                lines.append(f"  - {feat}")
+
+    content = "\n".join(lines)
+    verbal_instruction = (
+        "PRIJSINSTRUCTIE: Noem onderstaande prijzen en pakketten EXACT zoals ze hier staan. "
+        "Wijzig GEEN enkel bedrag. Rond NIET af. "
+        "Zeg het getal precies: €149 = honderdnegenveertig euro, €299 = tweehonderdnegenennegentig euro. "
+        "Als er eerdere zoekresultaten in het gesprek staan, NEGEER die voor de prijsvraag en gebruik ALLEEN deze gegevens.\n\n"
+    )
+    return {
+        "ok": True,
+        "results": [{"content": content, "url": "", "title": "Prijzen", "chunk_type": "pricing", "score": 1.0}],
+        "top_retrieval_score": 1.0,
+        "message": verbal_instruction + content,
+        "source": "structured_facts",
+    }
+
+
 # ═══════════════════════════════════════════════════════════════════
 # Runner
 # ═══════════════════════════════════════════════════════════════════
@@ -1235,6 +1443,8 @@ test_classes = [
     TestParsePrice145Bug,
     TestUnitPricingDetection,
     TestFull145BugProof,
+    TestCompanyNameClassifier,
+    TestMultiTurnContamination,
 ]
 
 

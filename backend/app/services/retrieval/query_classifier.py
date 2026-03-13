@@ -13,7 +13,19 @@ _RULES: list[tuple[re.Pattern, str]] = [
     (re.compile(r"\b(locatie\w*|vestiging\w*|filiaal\w*|kantoor\w*|winkel\w*|route\w*|parkeer\w*)\b", re.I), "location"),
     (re.compile(r"\b(blog\w*|artikel\w*|nieuws\w*)\b", re.I), "blog"),
     (re.compile(r"\b(product\w*|dienst\w*|service\w*|aanbod\w*|oplossing\w*|feature\w*|functie\w*|mogelijkheid\w*)\b", re.I), "service"),
-    (re.compile(r"wat\s+(?:doen|bieden)\s+jullie|jullie\s+(?:allemaal\s+)?doen|wat\s+voor\s+bedrijf|vertel\s+(?:eens\s+)?over\s+(?:jullie|je|uw)|uitleggen\s+wat\s+jullie|wat\s+jullie\s+(?:allemaal\s+)?(?:doen|bieden|aanbieden)", re.I), "service"),
+    (re.compile(
+        r"wat\s+(?:doen|doet|bieden|biedt)\s+(?:jullie|je|u|uw|\w+\.?\w*)"  # wat doet/doen X?
+        r"|jullie\s+(?:allemaal\s+)?doen"
+        r"|wat\s+voor\s+(?:bedrijf|organisatie|bureau)"
+        r"|vertel\s+(?:eens\s+)?over\s+(?:jullie|je|uw|het\s+bedrijf)"
+        r"|uitleggen\s+wat\s+jullie"
+        r"|wat\s+jullie\s+(?:allemaal\s+)?(?:doen|bieden|aanbieden)"
+        r"|wat\s+is\s+\S+\s+(?:precies|eigenlijk|voor\s+(?:bedrijf|dienst))"
+        r"|waar\s+(?:gaat|staat)\s+\S+\s+voor"
+        r"|wie\s+(?:is|zijn)\s+(?:jullie|je|uw)"
+        r"|wat\s+houdt\s+\S+\s+in",
+        re.I,
+    ), "service"),
 ]
 
 
