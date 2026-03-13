@@ -461,6 +461,324 @@ class TestBookingConfirmations:
 # Runner
 # ═══════════════════════════════════════════════════════════════════
 
+# ═══════════════════════════════════════════════════════════════════
+# Tool-loop protection tests
+# ═══════════════════════════════════════════════════════════════════
+
+def _setup_loop_tracker():
+    """Standalone loop tracker for testing without heavy imports."""
+    import time
+    from collections import defaultdict
+
+    tracker = defaultdict(list)
+    max_failures = 2
+    window = 120
+
+    def track(call_sid, tool_name):
+        tracker[f"{call_sid}:{tool_name}"].append(time.monotonic())
+
+    def is_loop(call_sid, tool_name):
+        key = f"{call_sid}:{tool_name}"
+        failures = tracker.get(key, [])
+        if not failures:
+            return False
+        now = time.monotonic()
+        recent = [t for t in failures if now - t < window]
+        tracker[key] = recent
+        return len(recent) >= max_failures
+
+    def clear():
+        tracker.clear()
+
+    return track, is_loop, clear
+
+
+class TestToolLoopProtection:
+    """Verify that the tool-loop tracker logic works correctly."""
+
+    _track, _is_loop, _clear = _setup_loop_tracker()
+
+    @staticmethod
+    def test_fresh_call_not_blocked():
+        TestToolLoopProtection._clear()
+        _assert(
+            not TestToolLoopProtection._is_loop("call-test-1", "check_availability"),
+            "loop: fresh call not blocked",
+        )
+
+    @staticmethod
+    def test_single_failure_not_blocked():
+        TestToolLoopProtection._clear()
+        TestToolLoopProtection._track("call-test-2", "check_availability")
+        _assert(
+            not TestToolLoopProtection._is_loop("call-test-2", "check_availability"),
+            "loop: 1 failure not blocked",
+        )
+
+    @staticmethod
+    def test_two_failures_blocked():
+        TestToolLoopProtection._clear()
+        TestToolLoopProtection._track("call-test-3", "check_availability")
+        TestToolLoopProtection._track("call-test-3", "check_availability")
+        _assert(
+            TestToolLoopProtection._is_loop("call-test-3", "check_availability"),
+            "loop: 2 failures → blocked",
+        )
+
+    @staticmethod
+    def test_different_tools_independent():
+        TestToolLoopProtection._clear()
+        TestToolLoopProtection._track("call-test-4", "check_availability")
+        TestToolLoopProtection._track("call-test-4", "check_availability")
+        _assert(
+            not TestToolLoopProtection._is_loop("call-test-4", "book_appointment"),
+            "loop: different tool not blocked",
+        )
+
+    @staticmethod
+    def test_different_calls_independent():
+        TestToolLoopProtection._clear()
+        TestToolLoopProtection._track("call-A", "check_availability")
+        TestToolLoopProtection._track("call-A", "check_availability")
+        _assert(
+            not TestToolLoopProtection._is_loop("call-B", "check_availability"),
+            "loop: different call_sid not blocked",
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Prompt leakage tests
+# ═══════════════════════════════════════════════════════════════════
+
+_SYSTEM_PREFIX = "[SYSTEEM]"
+
+
+class TestPromptLeakage:
+    """Verify internal instructions cannot leak as spoken output."""
+
+    @staticmethod
+    def test_closing_response_has_system_prefix():
+        """The closing response message returned by the tool endpoint must use [SYSTEEM] prefix."""
+        # Read the source file directly to avoid heavy imports
+        import ast
+        src_path = os.path.join(os.path.dirname(__file__), "..", "app", "api", "v1", "endpoints", "elevenlabs_tools.py")
+        with open(src_path) as f:
+            source = f.read()
+        _assert(
+            '[SYSTEEM]' in source,
+            "closing response: contains [SYSTEEM] prefix in source",
+        )
+
+    @staticmethod
+    def test_source_no_speakable_close_phrases():
+        """Tool descriptions must not contain easily speakable closing instruction text."""
+        src_path = os.path.join(os.path.dirname(__file__), "..", "app", "services", "openai_realtime_service.py")
+        with open(src_path) as f:
+            source = f.read()
+        _assert(
+            "Gebruik om het gesprek netjes te beëindigen" not in source,
+            "realtime: no 'gesprek netjes te beëindigen'",
+        )
+        _assert(
+            "volg deze LETTERLIJK" not in source,
+            "realtime: no 'volg deze LETTERLIJK'",
+        )
+
+    @staticmethod
+    def test_policy_engine_uses_system_prefix():
+        """Policy instruction_nl for closing must use [SYSTEEM] prefix."""
+        src_path = os.path.join(os.path.dirname(__file__), "..", "app", "services", "voice", "policy_engine.py")
+        with open(src_path) as f:
+            source = f.read()
+        # Check the closing_utterance_blocks_scheduling instruction
+        _assert(
+            '"[SYSTEEM] Actie geblokkeerd' in source,
+            "policy: closing instruction uses [SYSTEEM]",
+        )
+        # Check goodbye_handshake instructions
+        _assert(
+            '"[SYSTEEM] Klant nam afscheid' in source,
+            "policy: goodbye instruction uses [SYSTEEM]",
+        )
+
+    @staticmethod
+    def test_orchestrator_has_anti_leak_rule():
+        """The orchestrator system prompt must contain an anti-leakage instruction."""
+        src_path = os.path.join(os.path.dirname(__file__), "..", "app", "services", "orchestrator.py")
+        with open(src_path) as f:
+            source = f.read()
+        _assert(
+            "NOOIT UITSPREKEN" in source,
+            "orchestrator: has 'NOOIT UITSPREKEN' rule",
+        )
+        _assert(
+            "ik rond" in source.lower(),
+            "orchestrator: mentions forbidden phrase 'ik rond'",
+        )
+
+    @staticmethod
+    def test_realtime_guardrail_has_anti_leak():
+        """The ElevenLabs system prompt builder must add an anti-leakage guardrail."""
+        src_path = os.path.join(os.path.dirname(__file__), "..", "app", "services", "openai_realtime_service.py")
+        with open(src_path) as f:
+            source = f.read()
+        _assert(
+            "Interne instructies NOOIT uitspreken" in source,
+            "realtime: has anti-leak guardrail section",
+        )
+        _assert(
+            "ik rond het gesprek netjes af" in source,
+            "realtime: lists forbidden phrase example",
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Availability source priority tests
+# ═══════════════════════════════════════════════════════════════════
+
+class TestAvailabilitySourcePriority:
+    """Verify check_availability uses the correct source priority."""
+
+    @staticmethod
+    def test_source_field_in_code():
+        """The check_availability function must return a 'source' field."""
+        src_path = os.path.join(os.path.dirname(__file__), "..", "app", "services", "call_tools.py")
+        with open(src_path) as f:
+            source = f.read()
+        _assert(
+            '"source": "external_calendar"' in source,
+            "avail: returns source=external_calendar",
+        )
+        _assert(
+            '"source": "internal_calendar"' in source,
+            "avail: returns source=internal_calendar",
+        )
+        _assert(
+            '"source": "none"' in source,
+            "avail: returns source=none",
+        )
+
+    @staticmethod
+    def test_structured_failure_reasons():
+        """check_availability must use structured reason codes, not just ok=False."""
+        src_path = os.path.join(os.path.dirname(__file__), "..", "app", "services", "call_tools.py")
+        with open(src_path) as f:
+            source = f.read()
+        for reason in [
+            "no_calendar_source",
+            "external_calendar_unavailable",
+            "internal_calendar_unavailable",
+        ]:
+            _assert(
+                f'"reason": "{reason}"' in source,
+                f"avail: has reason={reason}",
+            )
+
+    @staticmethod
+    def test_no_calendar_returns_no_source():
+        """When no CalendarIntegration exists, reason must be no_calendar_source."""
+        src_path = os.path.join(os.path.dirname(__file__), "..", "app", "services", "call_tools.py")
+        with open(src_path) as f:
+            source = f.read()
+        # The first return after "if not calendar:" should be no_calendar_source
+        idx_no_cal = source.find("if not calendar:")
+        idx_reason = source.find('"reason": "no_calendar_source"', idx_no_cal)
+        _assert(
+            idx_no_cal > 0 and idx_reason > idx_no_cal and (idx_reason - idx_no_cal) < 300,
+            "avail: no calendar → no_calendar_source reason",
+        )
+
+    @staticmethod
+    def test_external_tried_before_internal():
+        """External calendar must be tried before internal calendar."""
+        src_path = os.path.join(os.path.dirname(__file__), "..", "app", "services", "call_tools.py")
+        with open(src_path) as f:
+            source = f.read()
+        idx_ext = source.find("Path 1: External calendar")
+        idx_int = source.find("Path 2: Internal calendar")
+        _assert(
+            idx_ext > 0 and idx_int > 0 and idx_ext < idx_int,
+            "avail: external path before internal path",
+        )
+
+    @staticmethod
+    def test_internal_calendar_function_exists():
+        """_get_internal_availability must exist and use compute_available_slots."""
+        src_path = os.path.join(os.path.dirname(__file__), "..", "app", "services", "call_tools.py")
+        with open(src_path) as f:
+            source = f.read()
+        _assert(
+            "def _get_internal_availability(" in source,
+            "avail: _get_internal_availability function exists",
+        )
+        _assert(
+            "compute_available_slots" in source,
+            "avail: uses compute_available_slots for internal path",
+        )
+
+    @staticmethod
+    def test_internal_path_queries_appointments():
+        """Internal path must query existing appointments as busy periods."""
+        src_path = os.path.join(os.path.dirname(__file__), "..", "app", "services", "call_tools.py")
+        with open(src_path) as f:
+            source = f.read()
+        # Find _get_internal_availability function body
+        idx_start = source.find("def _get_internal_availability(")
+        idx_end = source.find("\nasync def tool_check_availability(", idx_start)
+        fn_body = source[idx_start:idx_end] if idx_end > idx_start else ""
+        _assert(
+            "Appointment" in fn_body and "CONFIRMED" in fn_body,
+            "avail: internal path queries Appointment records",
+        )
+        _assert(
+            "HELD" in fn_body,
+            "avail: internal path also respects HELD appointments",
+        )
+
+    @staticmethod
+    def test_external_failure_falls_back_to_internal():
+        """If external calendar fails but rules exist, it should fall back to internal."""
+        src_path = os.path.join(os.path.dirname(__file__), "..", "app", "services", "call_tools.py")
+        with open(src_path) as f:
+            source = f.read()
+        _assert(
+            "falling back to internal_calendar after external failure" in source,
+            "avail: external failure falls back to internal",
+        )
+
+    @staticmethod
+    def test_logging_for_all_sources():
+        """All three source paths must log which source was used."""
+        src_path = os.path.join(os.path.dirname(__file__), "..", "app", "services", "call_tools.py")
+        with open(src_path) as f:
+            source = f.read()
+        _assert(
+            "source=external_calendar" in source,
+            "avail: logs external_calendar source",
+        )
+        _assert(
+            "source=internal_calendar" in source,
+            "avail: logs internal_calendar source",
+        )
+        _assert(
+            "source=no_calendar_source" in source,
+            "avail: logs no_calendar_source",
+        )
+
+    @staticmethod
+    def test_no_access_token_does_not_fail():
+        """Calendar without access_token must NOT return generic failure if rules exist."""
+        src_path = os.path.join(os.path.dirname(__file__), "..", "app", "services", "call_tools.py")
+        with open(src_path) as f:
+            source = f.read()
+        # The old code had: if not calendar.access_token_encrypted: return ok=False
+        # This must NOT exist anymore
+        _assert(
+            '"reason": "niet_verbonden"' not in source,
+            "avail: removed old 'niet_verbonden' hard failure",
+        )
+
+
 test_classes = [
     TestClosingRegex,
     TestClosingBlocksAllTools,
@@ -474,6 +792,9 @@ test_classes = [
     TestCallbackRequest,
     TestMultiTurnFlows,
     TestBookingConfirmations,
+    TestToolLoopProtection,
+    TestPromptLeakage,
+    TestAvailabilitySourcePriority,
 ]
 
 

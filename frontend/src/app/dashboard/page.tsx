@@ -152,10 +152,12 @@ export default function DashboardPage() {
     },
   ]
 
-  // Sentiment calculations
-  const sentimentTotal = (stats?.sentiment_positive || 0) + (stats?.sentiment_neutral || 0) + (stats?.sentiment_negative || 0)
+  // Sentiment calculations: neutral counts as positive
+  const positiveCount = (stats?.sentiment_positive || 0) + (stats?.sentiment_neutral || 0)
+  const negativeCount = (stats?.sentiment_negative || 0)
+  const sentimentTotal = positiveCount + negativeCount
   const satisfactionPct = sentimentTotal > 0
-    ? Math.round((stats!.sentiment_positive / sentimentTotal) * 100)
+    ? Math.round((positiveCount / sentimentTotal) * 100)
     : null
 
   // Answered %
@@ -413,29 +415,21 @@ export default function DashboardPage() {
                     <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden flex">
                       <div
                         className="h-full bg-green-500 transition-all"
-                        style={{ width: `${(stats!.sentiment_positive / sentimentTotal) * 100}%` }}
-                      />
-                      <div
-                        className="h-full bg-gray-300 transition-all"
-                        style={{ width: `${(stats!.sentiment_neutral / sentimentTotal) * 100}%` }}
+                        style={{ width: `${(positiveCount / sentimentTotal) * 100}%` }}
                       />
                       <div
                         className="h-full bg-red-400 transition-all"
-                        style={{ width: `${(stats!.sentiment_negative / sentimentTotal) * 100}%` }}
+                        style={{ width: `${(negativeCount / sentimentTotal) * 100}%` }}
                       />
                     </div>
                     <div className="flex justify-between text-xs text-gray-500 mt-2">
                       <span className="flex items-center gap-1">
                         <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
-                        Positief ({stats!.sentiment_positive})
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <span className="inline-block w-2 h-2 rounded-full bg-gray-300" />
-                        Neutraal ({stats!.sentiment_neutral})
+                        Positief ({positiveCount})
                       </span>
                       <span className="flex items-center gap-1">
                         <span className="inline-block w-2 h-2 rounded-full bg-red-400" />
-                        Negatief ({stats!.sentiment_negative})
+                        Negatief ({negativeCount})
                       </span>
                     </div>
                   </div>

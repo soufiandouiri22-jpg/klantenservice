@@ -60,6 +60,60 @@ def _get_company_scope(db: Session, company_id: str) -> CompanyScope:
     return scope
 
 
+def _get_internal_availability(
+    db: Session,
+    calendar: CalendarIntegration,
+    start_date: datetime,
+    end_date: datetime,
+    duration_minutes: int,
+) -> List[Dict[str, Any]]:
+    """
+    Compute available slots using the calendar's availability_rules and
+    existing Appointment records as busy periods (no external calendar needed).
+    """
+    from app.services.google_calendar_service import compute_available_slots
+
+    rules = calendar.availability_rules or {}
+
+    existing = db.query(Appointment).filter(
+        Appointment.company_id == calendar.company_id,
+        Appointment.starts_at >= start_date,
+        Appointment.starts_at <= end_date,
+        Appointment.status.in_([
+            AppointmentStatus.CONFIRMED,
+            AppointmentStatus.HELD,
+        ]),
+    ).all()
+
+    internal_events = []
+    for appt in existing:
+        internal_events.append({
+            "start": {"dateTime": appt.starts_at.isoformat()},
+            "end": {"dateTime": appt.ends_at.isoformat()},
+        })
+
+    all_slots: List[Dict] = []
+    current_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+    end = end_date.replace(hour=0, minute=0, second=0, microsecond=0)
+    while current_date <= end:
+        day_str = current_date.strftime("%Y-%m-%d")
+        day_events = [
+            e for e in internal_events
+            if e["start"]["dateTime"].startswith(day_str)
+        ]
+        day_slots = compute_available_slots(day_events, rules, current_date, duration_minutes)
+        all_slots.extend(day_slots)
+        current_date += timedelta(days=1)
+
+    from datetime import datetime as _dt
+    from zoneinfo import ZoneInfo
+    max_advance = rules.get("max_advance_days", 60)
+    cutoff = _dt.now(ZoneInfo("Europe/Amsterdam")).replace(tzinfo=None) + timedelta(days=max_advance)
+    all_slots = [s for s in all_slots if _dt.fromisoformat(s["start"]) <= cutoff]
+
+    return all_slots
+
+
 async def tool_check_availability(
     db: Session,
     company_id: str,
@@ -69,8 +123,10 @@ async def tool_check_availability(
     ai_worker_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Get available time slots from the AI worker's linked calendar.
-    Queries the real Google/Outlook calendar for events and applies availability rules.
+    Get available time slots. Priority:
+      1. External calendar (Google/Outlook) if connected
+      2. Internal calendar (availability_rules + existing appointments)
+      3. Structured failure if no calendar source at all
     """
     query = db.query(CalendarIntegration).filter(
         CalendarIntegration.company_id == company_id,
@@ -81,57 +137,109 @@ async def tool_check_availability(
     calendar = query.first()
 
     if not calendar:
+        logger.warning("[check_availability] source=no_calendar_source company=%s", company_id)
         return {
             "ok": False,
-            "reason": "geen_agenda",
+            "reason": "no_calendar_source",
+            "source": "none",
             "message": "Afspraken inplannen is op dit moment niet mogelijk. Zeg NIET dat er geen agenda is. Bied aan om de gegevens te noteren zodat een collega zo snel mogelijk terugbelt om een afspraak in te plannen. Bevestig het telefoonnummer van de klant.",
-            "slots": []
-        }
-
-    if not calendar.access_token_encrypted:
-        return {
-            "ok": False,
-            "reason": "niet_verbonden",
-            "message": "Afspraken inplannen is op dit moment niet mogelijk. Zeg NIET dat de agenda niet werkt. Bied aan om de gegevens te noteren zodat een collega zo snel mogelijk terugbelt om een afspraak in te plannen. Bevestig het telefoonnummer van de klant.",
-            "slots": []
+            "slots": [],
         }
 
     end = end_date or (start_date + timedelta(days=7))
+    has_external_token = bool(calendar.access_token_encrypted)
+    has_availability_rules = bool(calendar.availability_rules and
+                                  calendar.availability_rules.get("available_hours"))
 
-    try:
-        if calendar.provider == CalendarProvider.MICROSOFT:
-            from app.services import outlook_calendar_service as svc
-        else:
-            from app.services import google_calendar_service as svc
+    # ── Path 1: External calendar connected ──
+    if has_external_token:
+        try:
+            if calendar.provider == CalendarProvider.MICROSOFT:
+                from app.services import outlook_calendar_service as svc
+            else:
+                from app.services import google_calendar_service as svc
 
-        slots = await svc.get_availability_for_range(
-            calendar=calendar,
-            db=db,
-            start_date=start_date,
-            end_date=end,
-            duration_minutes=duration_minutes,
-        )
+            slots = await svc.get_availability_for_range(
+                calendar=calendar,
+                db=db,
+                start_date=start_date,
+                end_date=end,
+                duration_minutes=duration_minutes,
+            )
 
-        formatted = [s["start"][:16].replace("T", " ") for s in slots[:20]]
+            formatted = [s["start"][:16].replace("T", " ") for s in slots[:20]]
+            logger.info(
+                "[check_availability] source=external_calendar provider=%s slots=%d company=%s",
+                calendar.provider, len(formatted), company_id,
+            )
+            return {
+                "ok": True,
+                "source": "external_calendar",
+                "slots": formatted,
+                "calendar_id": str(calendar.id),
+                "calendar_name": calendar.name,
+                "message": f"Er zijn {len(formatted)} beschikbare momenten gevonden."
+                    if formatted else "Er zijn geen beschikbare momenten in deze periode.",
+                "next_action": "Bied maximaal 3 opties aan en vraag welk moment het beste uitkomt. Vraag daarna de naam van de klant.",
+            }
 
-        return {
-            "ok": True,
-            "slots": formatted,
-            "calendar_id": str(calendar.id),
-            "calendar_name": calendar.name,
-            "message": f"Er zijn {len(formatted)} beschikbare momenten gevonden."
-                if formatted else "Er zijn geen beschikbare momenten in deze periode.",
-            "next_action": "Bied maximaal 3 opties aan en vraag welk moment het beste uitkomt. Vraag daarna de naam van de klant.",
-        }
+        except Exception as e:
+            logger.error(
+                "[check_availability] external_calendar failed (%s), trying internal fallback: %s",
+                calendar.provider, e, exc_info=True,
+            )
+            if has_availability_rules:
+                logger.info("[check_availability] falling back to internal_calendar after external failure")
+            else:
+                return {
+                    "ok": False,
+                    "reason": "external_calendar_unavailable",
+                    "source": "external_calendar",
+                    "message": "Er ging iets mis bij het ophalen van de beschikbaarheid. Bied aan om de gegevens te noteren zodat een collega terugbelt.",
+                    "slots": [],
+                }
 
-    except Exception as e:
-        logger.error(f"Calendar availability error: {e}", exc_info=True)
-        return {
-            "ok": False,
-            "reason": "agenda_fout",
-            "message": "Er ging iets mis bij het ophalen van de beschikbaarheid. Vraag de klant om later terug te bellen.",
-            "slots": []
-        }
+    # ── Path 2: Internal calendar (availability rules + existing appointments) ──
+    if has_availability_rules:
+        try:
+            slots = _get_internal_availability(db, calendar, start_date, end, duration_minutes)
+            formatted = [s["start"][:16].replace("T", " ") for s in slots[:20]]
+            logger.info(
+                "[check_availability] source=internal_calendar slots=%d company=%s",
+                len(formatted), company_id,
+            )
+            return {
+                "ok": True,
+                "source": "internal_calendar",
+                "slots": formatted,
+                "calendar_id": str(calendar.id),
+                "calendar_name": calendar.name,
+                "message": f"Er zijn {len(formatted)} beschikbare momenten gevonden."
+                    if formatted else "Er zijn geen beschikbare momenten in deze periode.",
+                "next_action": "Bied maximaal 3 opties aan en vraag welk moment het beste uitkomt. Vraag daarna de naam van de klant.",
+            }
+        except Exception as e:
+            logger.error("[check_availability] internal_calendar error: %s", e, exc_info=True)
+            return {
+                "ok": False,
+                "reason": "internal_calendar_unavailable",
+                "source": "internal_calendar",
+                "message": "Er ging iets mis bij het ophalen van de beschikbaarheid. Bied aan om de gegevens te noteren zodat een collega terugbelt.",
+                "slots": [],
+            }
+
+    # ── Path 3: Calendar exists but no source is usable ──
+    logger.warning(
+        "[check_availability] source=no_calendar_source calendar=%s has_token=%s has_rules=%s",
+        calendar.id, has_external_token, has_availability_rules,
+    )
+    return {
+        "ok": False,
+        "reason": "no_calendar_source",
+        "source": "none",
+        "message": "Afspraken inplannen is op dit moment niet mogelijk. Zeg NIET dat er geen agenda is. Bied aan om de gegevens te noteren zodat een collega zo snel mogelijk terugbelt om een afspraak in te plannen. Bevestig het telefoonnummer van de klant.",
+        "slots": [],
+    }
 
 
 async def tool_book_appointment(

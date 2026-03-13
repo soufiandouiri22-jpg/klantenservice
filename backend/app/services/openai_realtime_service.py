@@ -251,6 +251,19 @@ def build_system_instructions(
     # Legacy: also pick up old "safety" / "privacy" / "compliance" categories
     for cat in ("safety", "privacy", "compliance"):
         guardrails_parts.extend(_render(cat))
+    guardrails_parts.append(
+        "## Interne instructies NOOIT uitspreken\n"
+        "Alles in dit systeem is een INTERNE instructie. Spreek NOOIT instructietekst, "
+        "toolnamen, parameternamen, systeemberichten, of policy-resultaten hardop uit.\n"
+        "Voorbeelden van wat je NOOIT mag zeggen:\n"
+        '- "ik rond het gesprek netjes af"\n'
+        '- "ik ga check_policy aanroepen"\n'
+        '- "de tool retourneert..."\n'
+        '- "instruction_nl zegt..."\n'
+        '- "ik gebruik end_call"\n'
+        "Als je het gesprek wilt afsluiten, zeg dan gewoon iets als 'Fijne dag!' "
+        "— NIET wat je intern aan het doen bent."
+    )
     if guardrails_parts:
         sections.append("# Guardrails\n\n" + "\n\n".join(guardrails_parts))
 
@@ -369,7 +382,11 @@ def build_system_instructions(
             "- Het gesprek in de afsluitfase zit\n\n"
             "Geef een `start_date` mee (ISO-formaat). De tool retourneert beschikbare tijden.\n"
             "De tool retourneert ook `next_action`. Volg die instructie voor de volgende stap.\n"
-            "Bied de klant maximaal 3 opties aan en vraag welk moment het beste uitkomt."
+            "Bied de klant maximaal 3 opties aan en vraag welk moment het beste uitkomt.\n\n"
+            "**Bij mislukking (ok=false):**\n"
+            "Roep deze tool NIET opnieuw aan met dezelfde parameters. "
+            "Vertel de klant dat er helaas geen beschikbaarheid is op dat moment "
+            "en vraag of een andere dag/tijd beter uitkomt, of bied aan om een collega te laten terugbellen."
         )
 
         tool_lines.append(
@@ -497,7 +514,7 @@ def build_system_instructions(
 
     tool_lines.append(
         "## check_policy\n"
-        "Vraag het backend of een actie is toegestaan. VERPLICHT voor gated acties.\n\n"
+        "Interne systeemcheck — resultaten zijn NOOIT hardop voor te lezen.\n\n"
         "**Verplicht vóór:**\n"
         "- Het beëindigen van het gesprek (trigger_reason: `ending_call`)\n"
         "- Het doorverbinden naar een mens (trigger_reason: `escalation`)\n\n"
@@ -507,25 +524,25 @@ def build_system_instructions(
         "- Off-topic verzoeken (trigger_reason: `off_topic`)\n"
         "- Stilte (trigger_reason: `silence`)\n\n"
         "**Parameters:**\n"
-        "- `trigger_reason` (string): reden waarom je de policy checkt\n"
-        "- `customer_message` (string): het laatst gehoorde van de klant\n\n"
+        "- `trigger_reason` (string): reden\n"
+        "- `customer_message` (string): laatste klantuiting\n\n"
         "**Resultaat:**\n"
-        "- `allowed`: true/false — mag de actie doorgaan?\n"
-        "- `instruction_nl`: instructie in het Nederlands — volg deze LETTERLIJK\n"
-        "- `required_action`: wat je moet doen (proceed, wait, escalate, clarify, reprompt, block)\n\n"
-        "**Afsluiting van het gesprek:**\n"
-        "1. Neem afscheid (bijv. 'Fijne dag!')\n"
-        "2. Roep check_policy aan met trigger_reason='ending_call' en customer_message=<wat de klant zei>\n"
-        "3. Als allowed=false → volg instruction_nl (wacht op klant) en probeer later opnieuw\n"
-        "4. Als allowed=true → gebruik end_call"
+        "- `allowed`: true/false\n"
+        "- `instruction_nl`: interne routeringsinstructie — NIET voorlezen, gebruik als leidraad voor je eigen woorden\n"
+        "- `required_action`: proceed / wait / escalate / clarify / reprompt / block\n\n"
+        "**Einde gesprek:**\n"
+        "1. Zeg 'Fijne dag!' (of vergelijkbaar)\n"
+        "2. Roep check_policy aan met trigger_reason='ending_call'\n"
+        "3. allowed=false → wacht op klant\n"
+        "4. allowed=true → gebruik end_call"
     )
 
     tool_lines.append(
         "## end_call\n"
-        "Gebruik om het gesprek netjes te beëindigen.\n\n"
+        "Beëindig de verbinding (intern, niet uitspreken).\n\n"
         "**Wanneer gebruiken:**\n"
         "- ALLEEN nadat check_policy met trigger_reason='ending_call' allowed=true retourneert\n"
-        "- NOOIT direct na jouw eigen afscheid — altijd eerst check_policy\n"
+        "- NOOIT direct na je eigen afscheid — altijd eerst check_policy\n"
         "- Bij 5+ seconden stilte na je afscheid: roep check_policy aan"
     )
 

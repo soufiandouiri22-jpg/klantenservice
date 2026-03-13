@@ -58,7 +58,7 @@ def _policy_goodbye_handshake(
             policy_name="goodbye_handshake",
             required_action="proceed",
             reason_code="customer_said_goodbye",
-            instruction_nl="De klant heeft afscheid genomen. Je mag het gesprek nu beëindigen met end_call.",
+            instruction_nl="[SYSTEEM] Klant nam afscheid → end_call toegestaan.",
             phase_after=CallPhase.ENDED.value,
         )
 
@@ -72,7 +72,7 @@ def _policy_goodbye_handshake(
             policy_name="goodbye_handshake",
             required_action="proceed",
             reason_code="max_attempts_reached",
-            instruction_nl="Je hebt al meerdere keren afscheid genomen. Je mag het gesprek nu beëindigen.",
+            instruction_nl="[SYSTEEM] Max pogingen bereikt → end_call toegestaan.",
             phase_after=CallPhase.ENDED.value,
         )
 
@@ -83,9 +83,8 @@ def _policy_goodbye_handshake(
             required_action="wait",
             reason_code="customer_not_goodbye",
             instruction_nl=(
-                "De klant heeft nog niet gedag gezegd. "
-                "Wacht stil tot de klant reageert. Zeg NIETS meer. "
-                "Als de klant iets zegt, reageer dan kort en neem opnieuw afscheid."
+                "[SYSTEEM] Wacht: klant heeft nog niet gedag gezegd. "
+                "Zeg niets, wacht op reactie."
             ),
             phase_after=CallPhase.WAITING_GOODBYE.value,
         )
@@ -96,8 +95,7 @@ def _policy_goodbye_handshake(
         required_action="wait",
         reason_code="agent_not_goodbye",
         instruction_nl=(
-            "Neem eerst afscheid van de klant. Zeg bijvoorbeeld 'Fijne dag!' "
-            "en wacht dan tot de klant ook afscheid neemt."
+            "[SYSTEEM] Neem eerst afscheid voordat end_call wordt gebruikt."
         ),
         phase_after=CallPhase.CLOSING.value,
     )
@@ -435,9 +433,8 @@ def _policy_conversation_closing(
             required_action="block",
             reason_code="closing_utterance_blocks_scheduling",
             instruction_nl=(
-                "De klant geeft aan tevreden te zijn of neemt afscheid. "
-                "Roep GEEN tools aan. Sluit het gesprek vriendelijk af met "
-                "bijvoorbeeld 'Fijn dat ik kon helpen! Fijne dag nog.'"
+                "[SYSTEEM] Actie geblokkeerd: klant sluit af. "
+                "Geen tools aanroepen. Neem normaal afscheid."
             ),
         )
 
@@ -450,8 +447,8 @@ def _policy_conversation_closing(
             required_action="block",
             reason_code="already_closing",
             instruction_nl=(
-                "Het gesprek is al in de afsluitfase. "
-                "Roep GEEN tools meer aan. Sluit vriendelijk af."
+                "[SYSTEEM] Actie geblokkeerd: gesprek al in afsluitfase. "
+                "Geen tools meer. Neem afscheid."
             ),
         )
 

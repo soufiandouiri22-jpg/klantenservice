@@ -15,6 +15,8 @@ the override is returned instead of the normal tool result.
 """
 import logging
 import re
+import time
+from collections import defaultdict
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Request
@@ -28,6 +30,63 @@ from app.services.call_tools import run_auto_policies, apply_output_guardrails
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# ── Tool-loop protection ──────────────────────────────────────────
+# Tracks recent failed tool calls per call_sid to prevent infinite loops.
+# Key: (call_sid, tool_name), Value: list of failure timestamps
+_TOOL_FAIL_TRACKER: Dict[str, list] = defaultdict(list)
+_MAX_TOOL_FAILURES = 2          # after this many failures, block the tool
+_FAIL_WINDOW_SECS = 120         # only count failures within this window
+_TRACKER_CLEANUP_INTERVAL = 300 # purge stale entries every 5 min
+_last_tracker_cleanup = 0.0
+
+
+def _track_tool_failure(call_sid: str, tool_name: str) -> None:
+    """Record a failed tool call."""
+    key = f"{call_sid}:{tool_name}"
+    _TOOL_FAIL_TRACKER[key].append(time.monotonic())
+
+
+def _is_tool_loop(call_sid: str, tool_name: str) -> bool:
+    """Check if a tool has failed too many times recently for this call."""
+    key = f"{call_sid}:{tool_name}"
+    failures = _TOOL_FAIL_TRACKER.get(key, [])
+    if not failures:
+        return False
+    now = time.monotonic()
+    recent = [t for t in failures if now - t < _FAIL_WINDOW_SECS]
+    _TOOL_FAIL_TRACKER[key] = recent
+    return len(recent) >= _MAX_TOOL_FAILURES
+
+
+def _cleanup_tracker() -> None:
+    """Periodically remove stale tracker entries."""
+    global _last_tracker_cleanup
+    now = time.monotonic()
+    if now - _last_tracker_cleanup < _TRACKER_CLEANUP_INTERVAL:
+        return
+    _last_tracker_cleanup = now
+    cutoff = now - _FAIL_WINDOW_SECS
+    stale_keys = []
+    for key, timestamps in _TOOL_FAIL_TRACKER.items():
+        fresh = [t for t in timestamps if t > cutoff]
+        if not fresh:
+            stale_keys.append(key)
+        else:
+            _TOOL_FAIL_TRACKER[key] = fresh
+    for k in stale_keys:
+        del _TOOL_FAIL_TRACKER[k]
+
+
+_LOOP_BLOCK_RESPONSE = {
+    "ok": False,
+    "loop_blocked": True,
+    "message": (
+        "Deze actie is al meerdere keren niet gelukt. "
+        "Vertel de klant dat het op dit moment niet beschikbaar is "
+        "en bied aan om een collega te laten terugbellen."
+    ),
+}
 
 CONTEXT_FIELDS = {
     "company_id",
@@ -73,8 +132,7 @@ _CLOSING_RESPONSE = {
     "ok": True,
     "closing_detected": True,
     "message": (
-        "De klant heeft aangegeven tevreden te zijn of het gesprek te willen afsluiten. "
-        "Roep GEEN verdere tools aan. Sluit het gesprek vriendelijk af."
+        "[SYSTEEM] Klant sluit af. Geen tools meer aanroepen. Neem normaal afscheid."
     ),
 }
 
@@ -147,6 +205,16 @@ async def _handle_tool(request: Request, tool_name: str) -> JSONResponse:
         }
 
         customer_msg = arguments.get("query", "") or arguments.get("customer_message", "")
+        call_sid = ctx.get("call_sid") or ""
+
+        # ── Tool-loop guard: block repeated failed calls ──
+        _cleanup_tracker()
+        if call_sid and _is_tool_loop(call_sid, tool_name):
+            logger.warning(
+                "[ElevenLabs Tool] %s BLOCKED — tool loop detected for call %s",
+                tool_name, call_sid,
+            )
+            return JSONResponse(content=_LOOP_BLOCK_RESPONSE)
 
         # ── Closing-intent guard: block tools when customer is done ──
         if tool_name in _CLOSEABLE_TOOLS and customer_msg and _CLOSING_RE.search(customer_msg):
@@ -155,7 +223,7 @@ async def _handle_tool(request: Request, tool_name: str) -> JSONResponse:
             return JSONResponse(content=_CLOSING_RESPONSE)
 
         # ── Auto-policy check on every tool call ──
-        if tool_name not in _SKIP_AUTO_POLICY and ctx.get("call_sid"):
+        if tool_name not in _SKIP_AUTO_POLICY and call_sid:
             override = run_auto_policies(
                 db=db,
                 company_id=ctx["company_id"],
@@ -171,6 +239,12 @@ async def _handle_tool(request: Request, tool_name: str) -> JSONResponse:
 
         # ── Normal tool execution ──
         result = await _run_tool(tool_name, arguments, context)
+
+        # ── Track failures for loop protection ──
+        if call_sid and result.get("ok") is False:
+            _track_tool_failure(call_sid, tool_name)
+            logger.info("[ElevenLabs Tool] %s failed (tracked for loop protection), call=%s",
+                        tool_name, call_sid)
 
         # ── Post-retrieval low-confidence policy check ──
         top_score = result.get("top_retrieval_score")
