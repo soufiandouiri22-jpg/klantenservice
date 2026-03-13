@@ -7,7 +7,7 @@ and stores them as CallTranscript records for sentiment analysis.
 import logging
 import asyncio
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, Tuple
 from uuid import UUID
 
 import httpx
@@ -19,6 +19,14 @@ from app.models.call_log import CallLog, CallTranscript
 logger = logging.getLogger(__name__)
 
 ELEVENLABS_API_BASE = "https://api.elevenlabs.io/v1"
+
+# Conversation statuses that mean "transcript not ready yet"
+_PENDING_STATUSES = frozenset({"initiated", "in-progress", "processing"})
+
+# Retry schedule: (initial_delay_s, max_attempts, backoff_delays)
+_INITIAL_WAIT_SECS = 8
+_MAX_FETCH_ATTEMPTS = 6
+_RETRY_DELAYS = [5, 8, 12, 15, 20]
 
 
 async def find_conversation_id(
@@ -76,63 +84,151 @@ async def find_conversation_id(
 
             if best_match and best_diff < 120:
                 logger.info(
-                    f"[TRANSCRIPT] Matched conversation_id={best_match} "
-                    f"(time_diff={best_diff}s)"
+                    "[TRANSCRIPT] Matched conversation_id=%s (time_diff=%ds)",
+                    best_match, best_diff,
                 )
                 return best_match
 
             logger.warning(
-                f"[TRANSCRIPT] No close match found "
-                f"(best_diff={best_diff}s, {len(conversations)} candidates)"
+                "[TRANSCRIPT] No close match found (best_diff=%ds, %d candidates)",
+                best_diff, len(conversations),
             )
             return None
 
     except Exception as e:
-        logger.warning(f"[TRANSCRIPT] Conversations list lookup failed: {e}")
+        logger.warning("[TRANSCRIPT] Conversations list lookup failed: %s", e)
         return None
 
 
-async def fetch_elevenlabs_transcript(conversation_id: str) -> Optional[list[dict]]:
+def _extract_transcript(data: dict) -> list[dict]:
     """
-    Fetch transcript from ElevenLabs API.
-    Returns list of {"role": "user"|"ai", "message": str, "time_in_call_secs": float}
-    or None on failure.
+    Extract transcript entries from an ElevenLabs conversation detail response.
+
+    The canonical field is ``data["transcript"]``, but we also check alternative
+    nesting locations in case the API structure changes.
+    """
+    # Primary: top-level "transcript"
+    transcript = data.get("transcript")
+    if isinstance(transcript, list) and transcript:
+        return transcript
+
+    # Alternative 1: nested under "conversation" → "transcript"
+    conv_obj = data.get("conversation")
+    if isinstance(conv_obj, dict):
+        nested = conv_obj.get("transcript")
+        if isinstance(nested, list) and nested:
+            logger.info("[TRANSCRIPT] Found transcript under 'conversation.transcript'")
+            return nested
+
+    # Alternative 2: "messages" key (older API versions / alternate format)
+    messages = data.get("messages")
+    if isinstance(messages, list) and messages:
+        logger.info("[TRANSCRIPT] Found transcript under 'messages' key")
+        return messages
+
+    # Alternative 3: nested under "analysis" → "transcript"
+    analysis = data.get("analysis")
+    if isinstance(analysis, dict):
+        at = analysis.get("transcript")
+        if isinstance(at, list) and at:
+            logger.info("[TRANSCRIPT] Found transcript under 'analysis.transcript'")
+            return at
+
+    return []
+
+
+async def fetch_elevenlabs_transcript(
+    conversation_id: str,
+) -> Tuple[Optional[list[dict]], str]:
+    """
+    Fetch transcript from ElevenLabs conversation detail endpoint.
+
+    Returns (transcript_entries, final_status) where final_status is
+    the last observed ``status`` field (e.g. "done", "processing", "failed").
+
+    The function is **status-aware**: if the conversation is still
+    ``processing`` and the transcript is empty, it retries with backoff
+    instead of returning immediately.
     """
     url = f"{ELEVENLABS_API_BASE}/convai/conversations/{conversation_id}"
     headers = {"xi-api-key": settings.ELEVENLABS_API_KEY}
+    last_status = "unknown"
 
-    for attempt in range(3):
+    for attempt in range(_MAX_FETCH_ATTEMPTS):
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
                 resp = await client.get(url, headers=headers)
 
                 if resp.status_code == 404:
                     logger.warning(
-                        f"[TRANSCRIPT] Conversation {conversation_id} not found (attempt {attempt + 1})"
+                        "[TRANSCRIPT] Conversation %s not found (attempt %d/%d)",
+                        conversation_id, attempt + 1, _MAX_FETCH_ATTEMPTS,
                     )
-                    if attempt < 2:
-                        await asyncio.sleep(5 * (attempt + 1))
+                    if attempt < _MAX_FETCH_ATTEMPTS - 1:
+                        delay = _RETRY_DELAYS[min(attempt, len(_RETRY_DELAYS) - 1)]
+                        await asyncio.sleep(delay)
                         continue
-                    return None
+                    return None, "not_found"
 
                 resp.raise_for_status()
                 data = resp.json()
-                transcript = data.get("transcript", [])
+
+                last_status = data.get("status", "unknown")
+                transcript = _extract_transcript(data)
+
+                top_keys = sorted(data.keys())
                 logger.info(
-                    f"[TRANSCRIPT] Fetched {len(transcript)} messages "
-                    f"for conversation {conversation_id}"
+                    "[TRANSCRIPT] conversation=%s attempt=%d/%d status=%s "
+                    "transcript_len=%d top_keys=%s",
+                    conversation_id, attempt + 1, _MAX_FETCH_ATTEMPTS,
+                    last_status, len(transcript), top_keys,
                 )
-                return transcript
+
+                if transcript:
+                    return transcript, last_status
+
+                # Transcript empty — decide whether to retry
+                if last_status in _PENDING_STATUSES:
+                    if attempt < _MAX_FETCH_ATTEMPTS - 1:
+                        delay = _RETRY_DELAYS[min(attempt, len(_RETRY_DELAYS) - 1)]
+                        logger.info(
+                            "[TRANSCRIPT] Status '%s' — transcript not ready, "
+                            "retrying in %ds (attempt %d/%d)",
+                            last_status, delay, attempt + 1, _MAX_FETCH_ATTEMPTS,
+                        )
+                        await asyncio.sleep(delay)
+                        continue
+                    else:
+                        logger.warning(
+                            "[TRANSCRIPT] Status still '%s' after %d attempts — giving up",
+                            last_status, _MAX_FETCH_ATTEMPTS,
+                        )
+                        return None, last_status
+
+                if last_status == "failed":
+                    logger.warning(
+                        "[TRANSCRIPT] Conversation %s has status 'failed'",
+                        conversation_id,
+                    )
+                    return None, "failed"
+
+                # status == "done" but transcript empty
+                logger.warning(
+                    "[TRANSCRIPT] Conversation %s status='%s' but transcript empty",
+                    conversation_id, last_status,
+                )
+                return [], last_status
 
         except Exception as e:
             logger.warning(
-                f"[TRANSCRIPT] Fetch failed for {conversation_id} "
-                f"(attempt {attempt + 1}): {e}"
+                "[TRANSCRIPT] Fetch error for %s (attempt %d/%d): %s",
+                conversation_id, attempt + 1, _MAX_FETCH_ATTEMPTS, e,
             )
-            if attempt < 2:
-                await asyncio.sleep(3 * (attempt + 1))
+            if attempt < _MAX_FETCH_ATTEMPTS - 1:
+                delay = _RETRY_DELAYS[min(attempt, len(_RETRY_DELAYS) - 1)]
+                await asyncio.sleep(delay)
 
-    return None
+    return None, last_status
 
 
 def save_transcript_records(
@@ -150,8 +246,8 @@ def save_transcript_records(
     ).count()
     if existing > 0:
         logger.info(
-            f"[TRANSCRIPT] Skipping save — {existing} records already exist "
-            f"for call_log {call_log_id}"
+            "[TRANSCRIPT] Skipping save — %d records already exist for call_log %s",
+            existing, call_log_id,
         )
         return 0
 
@@ -160,13 +256,13 @@ def save_transcript_records(
 
     for entry in transcript:
         role = entry.get("role", "")
-        message = (entry.get("message") or "").strip()
-        time_secs = entry.get("time_in_call_secs", 0)
+        message = (entry.get("message") or entry.get("text") or "").strip()
+        time_secs = entry.get("time_in_call_secs", entry.get("timestamp", 0))
 
         if not message:
             continue
 
-        speaker = "caller" if role == "user" else "ai"
+        speaker = "caller" if role in ("user", "caller", "human") else "ai"
         ts = base_time + timedelta(seconds=time_secs)
 
         record = CallTranscript(
@@ -180,7 +276,10 @@ def save_transcript_records(
 
     if saved:
         db.commit()
-        logger.info(f"[TRANSCRIPT] Saved {saved} transcript records for call_log {call_log_id}")
+        logger.info(
+            "[TRANSCRIPT] Saved %d transcript records for call_log %s",
+            saved, call_log_id,
+        )
 
     return saved
 
@@ -190,10 +289,10 @@ def build_transcript_text(transcript: list[dict]) -> str:
     lines = []
     for entry in transcript:
         role = entry.get("role", "")
-        message = (entry.get("message") or "").strip()
+        message = (entry.get("message") or entry.get("text") or "").strip()
         if not message:
             continue
-        label = "Klant" if role == "user" else "AI"
+        label = "Klant" if role in ("user", "caller", "human") else "AI"
         lines.append(f"{label}: {message}")
     return "\n".join(lines)
 
@@ -206,14 +305,17 @@ async def fetch_and_process_transcript(
     Full pipeline: fetch transcript from ElevenLabs, save records, run sentiment.
     Returns the sentiment result or None.
 
-    ElevenLabs needs a few seconds after the call ends to finalize the transcript,
-    so we wait briefly before the first attempt.
+    ElevenLabs needs time after a call ends to finalize the transcript (the
+    conversation transitions through ``processing`` → ``done``). We wait
+    before the first attempt and let ``fetch_elevenlabs_transcript`` handle
+    status-aware retries with backoff.
     """
     conversation_id = call_log.elevenlabs_conversation_id
     if not conversation_id:
         logger.info(
-            f"[TRANSCRIPT] No conversation_id for call_log {call_log.id} — "
-            f"trying conversations list fallback"
+            "[TRANSCRIPT] No conversation_id for call_log %s — "
+            "trying conversations list fallback",
+            call_log.id,
         )
         if call_log.started_at and call_log.duration_seconds:
             conversation_id = await find_conversation_id(
@@ -226,7 +328,8 @@ async def fetch_and_process_transcript(
 
     if not conversation_id:
         logger.warning(
-            f"[TRANSCRIPT] Could not find conversation_id for call_log {call_log.id}"
+            "[TRANSCRIPT] Could not find conversation_id for call_log %s",
+            call_log.id,
         )
         return None
 
@@ -234,12 +337,20 @@ async def fetch_and_process_transcript(
         logger.warning("[TRANSCRIPT] ELEVENLABS_API_KEY not set — skipping")
         return None
 
-    await asyncio.sleep(5)
+    await asyncio.sleep(_INITIAL_WAIT_SECS)
 
-    transcript = await fetch_elevenlabs_transcript(conversation_id)
+    transcript, final_status = await fetch_elevenlabs_transcript(conversation_id)
+
+    logger.info(
+        "[TRANSCRIPT] Pipeline result: conversation=%s final_status=%s messages=%d",
+        conversation_id, final_status, len(transcript) if transcript else 0,
+    )
+
     if not transcript:
         logger.warning(
-            f"[TRANSCRIPT] No transcript data for conversation {conversation_id}"
+            "[TRANSCRIPT] No transcript data for conversation %s "
+            "(final_status=%s)",
+            conversation_id, final_status,
         )
         return None
 
@@ -256,7 +367,8 @@ async def fetch_and_process_transcript(
             call_log.sentiment = sentiment
             db.commit()
             logger.info(
-                f"[TRANSCRIPT] Sentiment for call_log {call_log.id}: {sentiment}"
+                "[TRANSCRIPT] Sentiment for call_log %s: %s",
+                call_log.id, sentiment,
             )
 
             if sentiment == "negative":
@@ -280,6 +392,6 @@ async def fetch_and_process_transcript(
 
             return sentiment
     except Exception as e:
-        logger.warning(f"[TRANSCRIPT] Sentiment analysis failed: {e}")
+        logger.warning("[TRANSCRIPT] Sentiment analysis failed: %s", e)
 
     return None

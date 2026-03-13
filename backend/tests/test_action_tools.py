@@ -798,6 +798,196 @@ test_classes = [
 ]
 
 
+# ═══════════════════════════════════════════════════════════════════
+#  Spoken Dutch date formatting tests
+# ═══════════════════════════════════════════════════════════════════
+
+_call_tools_path = os.path.join(
+    os.path.dirname(__file__), "..", "app", "services", "call_tools.py"
+)
+
+
+def _load_date_helpers():
+    """Extract and exec only the date helper code block from call_tools."""
+    from datetime import datetime as _datetime, timedelta as _timedelta
+
+    with open(_call_tools_path) as f:
+        lines = f.readlines()
+
+    _HELPER_FUNCS = {
+        "format_spoken_date", "format_spoken_time",
+        "format_spoken_slot", "_format_slots_spoken",
+    }
+
+    block = []
+    capturing = False
+    for line in lines:
+        if "_NL_DAY_NAMES" in line and not capturing:
+            capturing = True
+        if capturing:
+            stripped = line.strip()
+            # Stop at any import statement after the helpers started
+            if stripped.startswith("from ") and "import" in stripped:
+                break
+            if stripped.startswith("import ") and not stripped.startswith("import logging"):
+                break
+            # Stop at any function that isn't one of our helpers
+            if stripped.startswith("def ") or stripped.startswith("async def "):
+                fn_name = stripped.split("(")[0].split()[-1]
+                if fn_name not in _HELPER_FUNCS:
+                    break
+            block.append(line)
+
+    code = "".join(block)
+    ns = {"datetime": _datetime, "timedelta": _timedelta}
+    exec(compile(code, "<date_helpers>", "exec"), ns)
+    return ns
+
+
+_helpers = _load_date_helpers()
+_format_spoken_date = _helpers["format_spoken_date"]
+_format_spoken_time = _helpers["format_spoken_time"]
+_format_spoken_slot = _helpers["format_spoken_slot"]
+_format_slots_spoken = _helpers["_format_slots_spoken"]
+_dt = __import__("datetime").datetime
+
+
+class TestSpokenDutchDates:
+
+    @staticmethod
+    def test_basic_date():
+        dt = _dt(2026, 3, 16, 10, 0)  # Monday
+        result = _format_spoken_date(dt)
+        _assert(result == "maandag 16 maart", f"spoken_date: basic → {result}")
+
+    @staticmethod
+    def test_no_ordinal_suffix():
+        dt = _dt(2026, 3, 16, 10, 0)
+        result = _format_spoken_date(dt)
+        _assert("16e" not in result, "spoken_date: no ordinal suffix '16e'")
+        _assert("de " not in result, "spoken_date: no 'de' before number")
+
+    @staticmethod
+    def test_single_digit_day():
+        dt = _dt(2026, 4, 5, 14, 0)  # Sunday
+        result = _format_spoken_date(dt)
+        _assert(result == "zondag 5 april", f"spoken_date: single digit → {result}")
+
+    @staticmethod
+    def test_dutch_month_names():
+        for month, name in [(1, "januari"), (2, "februari"), (3, "maart"),
+                            (4, "april"), (5, "mei"), (6, "juni"),
+                            (7, "juli"), (8, "augustus"), (9, "september"),
+                            (10, "oktober"), (11, "november"), (12, "december")]:
+            dt = _dt(2026, month, 15, 10, 0)
+            result = _format_spoken_date(dt)
+            _assert(name in result, f"spoken_date: month {month} → '{name}' in '{result}'")
+
+    @staticmethod
+    def test_all_weekdays():
+        # 2026-03-16 is Monday
+        for offset, day_name in enumerate(["maandag", "dinsdag", "woensdag",
+                                            "donderdag", "vrijdag", "zaterdag", "zondag"]):
+            dt = _dt(2026, 3, 16 + offset, 10, 0)
+            result = _format_spoken_date(dt)
+            _assert(result.startswith(day_name),
+                    f"spoken_date: weekday {offset} → starts with '{day_name}' in '{result}'")
+
+    @staticmethod
+    def test_time_whole_hour():
+        dt = _dt(2026, 3, 16, 10, 0)
+        result = _format_spoken_time(dt)
+        _assert(result == "10 uur", f"spoken_time: whole hour → {result}")
+
+    @staticmethod
+    def test_time_with_minutes():
+        dt = _dt(2026, 3, 16, 10, 30)
+        result = _format_spoken_time(dt)
+        _assert(result == "10:30", f"spoken_time: half hour → {result}")
+
+    @staticmethod
+    def test_time_odd_minutes():
+        dt = _dt(2026, 3, 16, 14, 45)
+        result = _format_spoken_time(dt)
+        _assert(result == "14:45", f"spoken_time: 45 min → {result}")
+
+    @staticmethod
+    def test_time_single_digit_minutes():
+        dt = _dt(2026, 3, 16, 9, 5)
+        result = _format_spoken_time(dt)
+        _assert(result == "9:05", f"spoken_time: single digit min → {result}")
+
+    @staticmethod
+    def test_slot_whole_hour():
+        dt = _dt(2026, 3, 16, 10, 0)
+        result = _format_spoken_slot(dt)
+        _assert(result == "maandag 16 maart om 10 uur",
+                f"spoken_slot: whole hour → {result}")
+
+    @staticmethod
+    def test_slot_with_minutes():
+        dt = _dt(2026, 6, 21, 14, 30)
+        result = _format_spoken_slot(dt)
+        _assert(result == "zondag 21 juni om 14:30",
+                f"spoken_slot: with minutes → {result}")
+
+    @staticmethod
+    def test_slot_never_has_de():
+        for day in range(1, 29):
+            dt = _dt(2026, 3, day, 10, 0)
+            result = _format_spoken_slot(dt)
+            _assert(" de " not in result,
+                    f"spoken_slot: day {day} has no ' de ' in '{result}'")
+
+    @staticmethod
+    def test_slot_never_has_ordinal():
+        for day in range(1, 29):
+            dt = _dt(2026, 3, day, 10, 0)
+            result = _format_spoken_slot(dt)
+            _assert(f"{day}e" not in result and f"{day}th" not in result,
+                    f"spoken_slot: day {day} has no ordinal in '{result}'")
+
+    @staticmethod
+    def test_format_slots_spoken_from_iso():
+        slots = [
+            {"start": "2026-03-16T10:00:00"},
+            {"start": "2026-03-17T14:30:00"},
+        ]
+        result = _format_slots_spoken(slots)
+        _assert(result[0] == "maandag 16 maart om 10 uur",
+                f"slots_spoken[0]: {result[0]}")
+        _assert(result[1] == "dinsdag 17 maart om 14:30",
+                f"slots_spoken[1]: {result[1]}")
+
+    @staticmethod
+    def test_format_slots_spoken_fallback():
+        slots = [{"start": "not-a-date"}]
+        result = _format_slots_spoken(slots)
+        _assert(len(result) == 1, "slots_spoken: fallback does not crash")
+
+    @staticmethod
+    def test_no_english_month_in_source():
+        """Verify strftime('%B') is no longer used for voice output."""
+        with open(_call_tools_path) as f:
+            src = f.read()
+        # %B can still exist in non-voice contexts, but check it's not in
+        # book/reschedule readable strings
+        _assert("strftime('%B')" not in src,
+                "source: no strftime('%B') (English month names) remaining")
+
+    @staticmethod
+    def test_format_helpers_used_in_source():
+        with open(_call_tools_path) as f:
+            src = f.read()
+        _assert("format_spoken_slot(" in src,
+                "source: format_spoken_slot used in call_tools")
+        _assert("_format_slots_spoken(" in src,
+                "source: _format_slots_spoken used in check_availability")
+
+
+test_classes.append(TestSpokenDutchDates)
+
+
 def main():
     global _pass_count, _fail_count
     _pass_count = 0

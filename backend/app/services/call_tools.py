@@ -19,6 +19,49 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 from uuid import UUID, uuid4
 
+# ── Dutch spoken date/time helpers ────────────────────────────────
+
+_NL_DAY_NAMES = [
+    "maandag", "dinsdag", "woensdag", "donderdag",
+    "vrijdag", "zaterdag", "zondag",
+]
+_NL_DAY_ABBR = ["ma", "di", "wo", "do", "vr", "za", "zo"]
+_NL_MONTH_NAMES = [
+    "", "januari", "februari", "maart", "april", "mei", "juni",
+    "juli", "augustus", "september", "oktober", "november", "december",
+]
+
+
+def format_spoken_date(dt: datetime) -> str:
+    """Format a datetime as natural spoken Dutch: 'maandag 16 maart'."""
+    return f"{_NL_DAY_NAMES[dt.weekday()]} {dt.day} {_NL_MONTH_NAMES[dt.month]}"
+
+
+def format_spoken_time(dt: datetime) -> str:
+    """Format a time as natural spoken Dutch: '10 uur' or '10:30'."""
+    if dt.minute == 0:
+        return f"{dt.hour} uur"
+    return f"{dt.hour}:{dt.minute:02d}"
+
+
+def format_spoken_slot(dt: datetime) -> str:
+    """Format a datetime as a full spoken Dutch timeslot: 'maandag 16 maart om 10 uur'."""
+    return f"{format_spoken_date(dt)} om {format_spoken_time(dt)}"
+
+
+def _format_slots_spoken(slots: list[dict]) -> list[str]:
+    """Convert ISO slot dicts to natural spoken Dutch strings."""
+    result = []
+    for s in slots:
+        raw = s.get("start", "")
+        try:
+            dt = datetime.fromisoformat(raw[:16])
+            result.append(format_spoken_slot(dt))
+        except (ValueError, TypeError):
+            result.append(raw[:16].replace("T", " "))
+    return result
+
+
 from sqlalchemy.orm import Session
 
 from app.models.calendar_integration import CalendarIntegration, CalendarProvider
@@ -167,7 +210,7 @@ async def tool_check_availability(
                 duration_minutes=duration_minutes,
             )
 
-            formatted = [s["start"][:16].replace("T", " ") for s in slots[:20]]
+            formatted = _format_slots_spoken(slots[:20])
             logger.info(
                 "[check_availability] source=external_calendar provider=%s slots=%d company=%s",
                 calendar.provider, len(formatted), company_id,
@@ -203,7 +246,7 @@ async def tool_check_availability(
     if has_availability_rules:
         try:
             slots = _get_internal_availability(db, calendar, start_date, end, duration_minutes)
-            formatted = [s["start"][:16].replace("T", " ") for s in slots[:20]]
+            formatted = _format_slots_spoken(slots[:20])
             logger.info(
                 "[check_availability] source=internal_calendar slots=%d company=%s",
                 len(formatted), company_id,
@@ -325,15 +368,13 @@ async def tool_book_appointment(
             company_id=company_id,
             type=NotificationType.APPOINTMENT_NEW,
             title=f"Nieuwe afspraak: {customer_name}",
-            message=f"Afspraak ingepland op {starts_at.strftime('%d-%m-%Y')} om {starts_at.strftime('%H:%M')}.",
+            message=f"Afspraak ingepland op {format_spoken_slot(starts_at)}.",
             url="/dashboard/appointments",
         )
     except Exception:
         pass
 
-    day_names = ["maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag", "zondag"]
-    day_name = day_names[starts_at.weekday()]
-    starts_at_readable = f"{day_name} {starts_at.day} {starts_at.strftime('%B')} om {starts_at.strftime('%H:%M')}"
+    starts_at_readable = format_spoken_slot(starts_at)
 
     # ── Post-booking confirmations (SMS + Email) ──
     try:
@@ -385,7 +426,7 @@ async def tool_book_appointment(
         "starts_at": starts_at.isoformat(),
         "starts_at_readable": starts_at_readable,
         "customer_name": customer_name,
-        "message": f"Afspraak ingepland op {day_name} om {starts_at.strftime('%H:%M')} voor {customer_name}.",
+        "message": f"Afspraak ingepland op {starts_at_readable} voor {customer_name}.",
         "in_external_calendar": external_event_id is not None,
         "next_action": "Bevestig de afspraak en vraag of er verder nog iets is.",
     }
@@ -1447,11 +1488,9 @@ def _find_appointment(
     if len(matches) == 1:
         return {"ok": True, "appointment": matches[0]}
 
-    day_names = ["ma", "di", "wo", "do", "vr", "za", "zo"]
     options = []
     for a in matches[:5]:
-        dn = day_names[a.starts_at.weekday()]
-        options.append(f"- {a.customer_name}: {dn} {a.starts_at.strftime('%d-%m-%Y %H:%M')}")
+        options.append(f"- {a.customer_name}: {format_spoken_slot(a.starts_at)}")
     return {
         "ok": False,
         "reason": "ambiguous",
@@ -1507,7 +1546,7 @@ async def tool_cancel_appointment(
             db=db, company_id=company_id,
             type=NotificationType.APPOINTMENT_CANCELLED,
             title=f"Afspraak geannuleerd: {appointment.customer_name}",
-            message=f"Afspraak op {appointment.starts_at.strftime('%d-%m-%Y %H:%M')} is geannuleerd door de klant.",
+            message=f"Afspraak op {format_spoken_slot(appointment.starts_at)} is geannuleerd door de klant.",
             url="/dashboard/appointments",
         )
     except Exception:
@@ -1517,7 +1556,7 @@ async def tool_cancel_appointment(
     return {
         "ok": True,
         "appointment_id": str(appointment.id),
-        "message": f"De afspraak van {appointment.customer_name} op {appointment.starts_at.strftime('%d-%m-%Y')} om {appointment.starts_at.strftime('%H:%M')} is geannuleerd.",
+        "message": f"De afspraak van {appointment.customer_name} op {format_spoken_slot(appointment.starts_at)} is geannuleerd.",
     }
 
 
@@ -1577,9 +1616,7 @@ async def tool_reschedule_appointment(
         except Exception as e:
             logger.error("Failed to update external calendar: %s", e, exc_info=True)
 
-    day_names = ["maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag", "zondag"]
-    day_name = day_names[new_starts_at.weekday()]
-    starts_at_readable = f"{day_name} {new_starts_at.day} {new_starts_at.strftime('%B')} om {new_starts_at.strftime('%H:%M')}"
+    starts_at_readable = format_spoken_slot(new_starts_at)
 
     # Send updated confirmations
     try:
