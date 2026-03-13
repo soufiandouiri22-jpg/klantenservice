@@ -209,7 +209,53 @@ def _collect_text_blocks(pages: List[Dict], chunks: List[Dict]) -> List[Dict]:
 # ── Pricing ───────────────────────────────────────────────────────
 
 def _parse_price(raw: str) -> Optional[Decimal]:
-    cleaned = raw.replace(".", "").replace(",", ".").strip()
+    """Parse a captured price string into a Decimal.
+
+    Handles both Dutch (dot=thousands, comma=decimal) and English
+    (comma=thousands, dot=decimal) formats by inspecting the number
+    of trailing digits after the last separator.
+
+    Key rule: a separator followed by exactly 1-2 digits is decimal;
+    3+ digits means thousands.  This prevents '1.45' → 145 bugs.
+    """
+    s = raw.strip()
+    if not s:
+        return None
+
+    has_comma = "," in s
+    has_dot = "." in s
+
+    if has_comma and has_dot:
+        last_comma = s.rfind(",")
+        last_dot = s.rfind(".")
+        if last_comma > last_dot:
+            # comma is decimal: "1.499,99"
+            cleaned = s.replace(".", "").replace(",", ".")
+        else:
+            # dot is decimal: "1,499.99"
+            cleaned = s.replace(",", "")
+    elif has_comma:
+        parts = s.rsplit(",", 1)
+        if len(parts[1]) <= 2:
+            # comma is decimal: "29,90"
+            cleaned = s.replace(",", ".")
+        else:
+            # comma is thousands: "1,499"
+            cleaned = s.replace(",", "")
+    elif has_dot:
+        parts = s.rsplit(".", 1)
+        if len(parts[1]) <= 2:
+            # dot is decimal: "29.90", "1.45", "14.5"
+            cleaned = s
+        elif parts[0] == "0":
+            # leading zero with 3+ trailing digits is always decimal: "0.145"
+            cleaned = s
+        else:
+            # dot is thousands: "1.499" (3 trailing digits)
+            cleaned = s.replace(".", "")
+    else:
+        cleaned = s
+
     try:
         return Decimal(cleaned)
     except (InvalidOperation, ValueError):
@@ -290,27 +336,34 @@ def _extract_pricing(
 
 
 _PROXIMITY_CHARS = 150
+_MIN_PLAN_PRICE = Decimal("5")
 
 
 def _find_price_after(text: str, start_pos: int) -> Tuple[Optional[Decimal], Optional[str]]:
-    """Find the first valid €-price in the text within _PROXIMITY_CHARS after start_pos."""
+    """Find the first valid plan-level €-price within _PROXIMITY_CHARS after start_pos.
+
+    Skips prices below _MIN_PLAN_PRICE (per-minute / per-call rates) to
+    avoid mis-assigning a small unit price as the plan price.
+    """
     end_pos = min(len(text), start_pos + _PROXIMITY_CHARS)
     window = text[start_pos:end_pos]
 
-    m = _PRICE_RE.search(window)
-    if not m:
-        return None, "EUR"
+    for m in _PRICE_RE.finditer(window):
+        raw = next((g for g in m.groups() if g), None)
+        if not raw:
+            continue
 
-    raw = next((g for g in m.groups() if g), None)
-    if not raw:
-        return None, "EUR"
+        price = _parse_price(raw)
+        if price is None or price <= 0:
+            continue
 
-    price = _parse_price(raw)
-    if price is None or price <= 0:
-        return None, "EUR"
+        if price < _MIN_PLAN_PRICE:
+            continue
 
-    currency = _detect_currency(window[m.start():m.end() + 20])
-    return price, currency
+        currency = _detect_currency(window[m.start():m.end() + 20])
+        return price, currency
+
+    return None, "EUR"
 
 
 def _parse_plans(text: str, default_url: str) -> List[Dict]:

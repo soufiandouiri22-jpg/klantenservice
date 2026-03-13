@@ -108,7 +108,38 @@ def classify_query(query: str) -> str:
 # ── Extraction helpers (mirrored from fact_extractor.py) ─────────
 
 def _parse_price(raw: str) -> Optional[Decimal]:
-    cleaned = raw.replace(".", "").replace(",", ".").strip()
+    """Mirror production _parse_price with correct decimal handling."""
+    s = raw.strip()
+    if not s:
+        return None
+
+    has_comma = "," in s
+    has_dot = "." in s
+
+    if has_comma and has_dot:
+        last_comma = s.rfind(",")
+        last_dot = s.rfind(".")
+        if last_comma > last_dot:
+            cleaned = s.replace(".", "").replace(",", ".")
+        else:
+            cleaned = s.replace(",", "")
+    elif has_comma:
+        parts = s.rsplit(",", 1)
+        if len(parts[1]) <= 2:
+            cleaned = s.replace(",", ".")
+        else:
+            cleaned = s.replace(",", "")
+    elif has_dot:
+        parts = s.rsplit(".", 1)
+        if len(parts[1]) <= 2:
+            cleaned = s
+        elif parts[0] == "0":
+            cleaned = s
+        else:
+            cleaned = s.replace(".", "")
+    else:
+        cleaned = s
+
     try:
         return Decimal(cleaned)
     except Exception:
@@ -129,19 +160,23 @@ def _detect_period(text: str) -> Optional[str]:
 
 
 PROXIMITY_CHARS = 150
+_MIN_PLAN_PRICE = Decimal("5")
 
 
 def _find_price_after(text: str, start_pos: int) -> Optional[Decimal]:
     end_pos = min(len(text), start_pos + PROXIMITY_CHARS)
     window = text[start_pos:end_pos]
-    m = _PRICE_RE.search(window)
-    if not m:
-        return None
-    raw = next((g for g in m.groups() if g), None)
-    if not raw:
-        return None
-    price = _parse_price(raw)
-    return price if price is not None and price > 0 else None
+    for m in _PRICE_RE.finditer(window):
+        raw = next((g for g in m.groups() if g), None)
+        if not raw:
+            continue
+        price = _parse_price(raw)
+        if price is None or price <= 0:
+            continue
+        if price < _MIN_PLAN_PRICE:
+            continue
+        return price
+    return None
 
 
 def _find_plan_boundary(text: str, name_pos: int) -> int:
@@ -971,6 +1006,154 @@ class TestExactPricingDeterminism:
                 _assert(p["price"] != Decimal("300"), f"rounding: {p['name']} != 300")
 
 
+# ── 13. _parse_price decimal handling (145 bug regression) ────────
+
+class TestParsePrice145Bug:
+    """Regression tests for the 145 bug: _parse_price must not turn
+    English-format decimals into inflated integers."""
+
+    @staticmethod
+    def test_clean_integer():
+        _assert(_parse_price("149") == Decimal("149"), "parse: '149' -> 149")
+        _assert(_parse_price("299") == Decimal("299"), "parse: '299' -> 299")
+        _assert(_parse_price("4999") == Decimal("4999"), "parse: '4999' -> 4999")
+
+    @staticmethod
+    def test_dutch_decimal():
+        _assert(_parse_price("29,90") == Decimal("29.90"), "parse: '29,90' -> 29.90")
+        _assert(_parse_price("149,00") == Decimal("149.00"), "parse: '149,00' -> 149.00")
+        _assert(_parse_price("1,45") == Decimal("1.45"), "parse: '1,45' -> 1.45")
+
+    @staticmethod
+    def test_english_decimal_NOT_145():
+        _assert(_parse_price("1.45") == Decimal("1.45"), "parse: '1.45' -> 1.45 NOT 145", f"got {_parse_price('1.45')}")
+        _assert(_parse_price("14.5") == Decimal("14.5"), "parse: '14.5' -> 14.5 NOT 145", f"got {_parse_price('14.5')}")
+        _assert(_parse_price("0.14") == Decimal("0.14"), "parse: '0.14' -> 0.14 NOT 14", f"got {_parse_price('0.14')}")
+        _assert(_parse_price("29.90") == Decimal("29.90"), "parse: '29.90' -> 29.90", f"got {_parse_price('29.90')}")
+        _assert(_parse_price("149.99") == Decimal("149.99"), "parse: '149.99' -> 149.99", f"got {_parse_price('149.99')}")
+
+    @staticmethod
+    def test_dutch_thousands():
+        _assert(_parse_price("1.499") == Decimal("1499"), "parse: '1.499' -> 1499")
+        _assert(_parse_price("12.345") == Decimal("12345"), "parse: '12.345' -> 12345")
+
+    @staticmethod
+    def test_mixed_separators():
+        _assert(_parse_price("1.499,99") == Decimal("1499.99"), "parse: '1.499,99' -> 1499.99")
+        _assert(_parse_price("1,499.99") == Decimal("1499.99"), "parse: '1,499.99' -> 1499.99")
+
+    @staticmethod
+    def test_never_produces_145():
+        """No plausible price input should produce 145 except literal '145'."""
+        dangerous = ["1.45", "14.5", "0.145"]
+        for raw in dangerous:
+            price = _parse_price(raw)
+            _assert(
+                price != Decimal("145"),
+                f"parse: '{raw}' must NOT produce 145",
+                f"got {price}",
+            )
+
+
+# ── 14. Minimum price threshold in _find_price_after ─────────────
+
+class TestMinPriceThreshold:
+
+    @staticmethod
+    def test_per_minute_rate_skipped():
+        text = "Starter €0.14 per belminuut €149 /maand"
+        m = _PLAN_NAME_RE.search(text)
+        price = _find_price_after(text, m.start()) if m else None
+        _assert(price == Decimal("149"), "threshold: skip €0.14, find €149", f"got {price}")
+
+    @staticmethod
+    def test_per_call_rate_skipped():
+        text = "Starter €1.45 per gesprek €149 /maand"
+        m = _PLAN_NAME_RE.search(text)
+        price = _find_price_after(text, m.start()) if m else None
+        _assert(price == Decimal("149"), "threshold: skip €1.45, find €149", f"got {price}")
+
+    @staticmethod
+    def test_normal_price_not_skipped():
+        text = "Starter €149 /maand"
+        m = _PLAN_NAME_RE.search(text)
+        price = _find_price_after(text, m.start()) if m else None
+        _assert(price == Decimal("149"), "threshold: €149 not skipped", f"got {price}")
+
+    @staticmethod
+    def test_cheap_plan_preserved():
+        text = "Lite €9 /maand"
+        m = _PLAN_NAME_RE.search(text)
+        price = _find_price_after(text, m.start()) if m else None
+        _assert(price == Decimal("9"), "threshold: €9 plan preserved", f"got {price}")
+
+
+# ── 15. Full pipeline 145→149 proof ──────────────────────────────
+
+class TestFull145BugProof:
+
+    @staticmethod
+    def test_starter_always_149_standard():
+        """Standard homepage text always gives Starter=149."""
+        for i in range(10):
+            plans = _parse_plans_from_text(_HOMEPAGE)
+            starter = next((p for p in plans if p["name"] == "Starter"), None)
+            _assert(
+                starter is not None and starter["price"] == Decimal("149"),
+                f"proof: run {i+1} Starter = 149",
+                f"got {starter['price'] if starter else 'None'}",
+            )
+
+    @staticmethod
+    def test_starter_149_with_per_minute_noise():
+        """Even with per-minute pricing nearby, Starter must be 149."""
+        noisy = """
+Starter
+Belminuten boven je bundel: €0.14 per minuut
+€149 /maand
+- 500 belminuten/maand
+
+Business
+€299 /maand
+"""
+        plans = _parse_plans_from_text(noisy)
+        starter = next((p for p in plans if p["name"] == "Starter"), None)
+        _assert(starter is not None, "proof-noisy: Starter found")
+        if starter:
+            _assert(
+                starter["price"] == Decimal("149"),
+                "proof-noisy: Starter = 149 (not 14, not 145)",
+                f"got {starter['price']}",
+            )
+
+    @staticmethod
+    def test_business_always_299():
+        plans = _parse_plans_from_text(_HOMEPAGE)
+        biz = next((p for p in plans if p["name"] == "Business"), None)
+        _assert(biz is not None and biz["price"] == Decimal("299"), "proof: Business = 299")
+
+    @staticmethod
+    def test_formatted_shows_149_not_145():
+        plans = _parse_plans_from_text(_HOMEPAGE)
+        formatted = _format_pricing_with_features(plans)
+        _assert("€149" in formatted, "proof-format: €149 in output", f"output: {formatted[:200]}")
+        _assert("€145" not in formatted, "proof-format: €145 NOT in output")
+        _assert("€299" in formatted, "proof-format: €299 in output")
+
+    @staticmethod
+    def test_pricing_query_returns_149():
+        plans = _parse_plans_from_text(_HOMEPAGE)
+        formatted = _format_pricing_with_features(plans)
+        for query in [
+            "Wat kost het starter pakket?",
+            "Wat zijn de prijzen van Klantenservice.ai?",
+        ]:
+            _assert(
+                "149" in formatted,
+                f"proof-query: '{query}' -> 149 in response",
+            )
+
+
 # ═══════════════════════════════════════════════════════════════════
 # Runner
 # ═══════════════════════════════════════════════════════════════════
@@ -988,6 +1171,9 @@ test_classes = [
     TestFeatureExtraction,
     TestPackageComparison,
     TestExactPricingDeterminism,
+    TestParsePrice145Bug,
+    TestMinPriceThreshold,
+    TestFull145BugProof,
 ]
 
 
