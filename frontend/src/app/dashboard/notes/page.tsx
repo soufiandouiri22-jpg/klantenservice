@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { Plus, FileText, Search, Check, RotateCcw, Trash2, AlertTriangle, Phone, Mail, User } from 'lucide-react'
+import { Plus, FileText, Check, RotateCcw, Trash2, AlertTriangle, Phone, Mail, User } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { Header } from '@/components/layout/Header'
@@ -24,17 +24,15 @@ export default function NotesPage() {
   const canEdit = user?.role !== 'viewer'
   const [page, setPage] = useState(1)
   const [selectedNote, setSelectedNote] = useState<any>(null)
-  const [searchQuery, setSearchQuery] = useState('')
   const [showResolved, setShowResolved] = useState(false)
   const [actionRequiredOnly, setActionRequiredOnly] = useState(false)
   const [resolutionNotes, setResolutionNotes] = useState('')
 
   const { data: notesData, isLoading } = useQuery({
-    queryKey: ['notes', page, searchQuery, showResolved, actionRequiredOnly],
+    queryKey: ['notes', page, showResolved, actionRequiredOnly],
     queryFn: () => notesApi.list({
       page,
       page_size: 20,
-      search: searchQuery || undefined,
       is_resolved: showResolved ? undefined : false,
       action_required: actionRequiredOnly ? true : undefined,
     }),
@@ -124,16 +122,6 @@ export default function NotesPage() {
         <Card>
           <CardBody>
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Zoek in notities..."
-                  className="input pl-10"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
               <div className="flex items-center gap-4">
                 <label className="flex items-center gap-2 cursor-pointer whitespace-nowrap">
                   <input
@@ -169,7 +157,7 @@ export default function NotesPage() {
                 <EmptyState
                   icon={FileText}
                   title="Geen notities gevonden"
-                  description="Er zijn nog geen notities of uw zoekopdracht leverde geen resultaten op."
+                  description="Er zijn nog geen notities."
                 />
               </div>
             ) : (

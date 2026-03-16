@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { Calendar, Clock, User, X, Search, Filter, List, CalendarDays } from 'lucide-react'
+import { Calendar, Clock, User, X, Filter, List, CalendarDays } from 'lucide-react'
 import toast from 'react-hot-toast'
 import FullCalendar from '@fullcalendar/react'
 import dayGridPlugin from '@fullcalendar/daygrid'
@@ -69,7 +69,6 @@ export default function AppointmentsPage() {
   const canEdit = user?.role !== 'viewer'
   const [page, setPage] = useState(1)
   const [selectedAppointment, setSelectedAppointment] = useState<any>(null)
-  const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list')
   const [isMobile, setIsMobile] = useState(false)
@@ -82,13 +81,12 @@ export default function AppointmentsPage() {
   }, [])
 
   const { data: appointmentsData, isLoading } = useQuery({
-    queryKey: ['appointments', page, searchQuery, statusFilter],
+    queryKey: ['appointments', page, statusFilter],
     queryFn: async () => {
       try {
         return await appointmentsApi.list({
           page,
           page_size: 20,
-          search: searchQuery || undefined,
           status: statusFilter || undefined,
         })
       } catch {
@@ -331,20 +329,10 @@ export default function AppointmentsPage() {
           </Card>
         )}
 
-        {/* Search & Filter */}
+        {/* Filter */}
         <Card>
           <CardBody>
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Zoek op naam of titel..."
-                  className="input pl-10"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
               <Select
                 className="w-full sm:w-48"
                 value={statusFilter}
@@ -371,7 +359,7 @@ export default function AppointmentsPage() {
                 <EmptyState
                   icon={Calendar}
                   title="Geen afspraken gevonden"
-                  description="Er zijn nog geen afspraken gemaakt of uw zoekopdracht leverde geen resultaten op."
+                  description="Er zijn nog geen afspraken gemaakt."
                 />
               </div>
             ) : (

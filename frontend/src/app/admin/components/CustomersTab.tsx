@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { 
-  Search,
   AlertTriangle,
   Power,
   Settings,
@@ -61,7 +60,6 @@ interface CustomerDetail extends Customer {
 
 export function CustomersTab() {
   const queryClient = useQueryClient()
-  const [searchQuery, setSearchQuery] = useState('')
   const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null)
 
   const { data: customersData, isLoading } = useQuery({
@@ -127,12 +125,7 @@ export function CustomersTab() {
 
   const customers: Customer[] = customersData?.customers || []
 
-  const filteredCustomers = customers.filter(
-    (c) =>
-      c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.slug.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  const filteredCustomers = customers
 
   const formatCurrency = (cents: number) => `€${(cents / 100).toFixed(2)}`
 
@@ -155,17 +148,7 @@ export function CustomersTab() {
 
   return (
     <div className="space-y-6">
-      {/* Search */}
-      <div className="flex items-center gap-4">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <Input
-            placeholder="Zoek op naam, email of slug..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
-        </div>
+      <div className="flex items-center justify-between">
         <Badge variant="gray">{filteredCustomers.length} klanten</Badge>
       </div>
 
