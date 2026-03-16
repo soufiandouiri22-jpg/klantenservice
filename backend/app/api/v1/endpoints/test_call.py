@@ -188,7 +188,7 @@ async def get_test_call_signed_url(
             "agent": {
                 "prompt": {"prompt": full_instructions},
             },
-            "tts": {"voiceId": voice_id},
+            "tts": {"voice_id": voice_id},
         },
         "dynamic_variables": {
             "company_id": str(company.id),

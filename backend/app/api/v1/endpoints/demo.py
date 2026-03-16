@@ -225,7 +225,7 @@ async def get_demo_signed_url(
                 "prompt": {"prompt": full_instructions},
                 "firstMessage": first_msg,
             },
-            "tts": {"voiceId": voice_id},
+            "tts": {"voice_id": voice_id},
         },
         "dynamic_variables": {
             "company_id": str(company.id),
