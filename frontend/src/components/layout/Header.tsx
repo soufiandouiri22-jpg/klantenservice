@@ -12,6 +12,8 @@ import {
   AlertTriangle,
   CheckCircle,
   XCircle,
+  StickyNote,
+  Calendar,
 } from 'lucide-react'
 import { useAuthStore, useSidebarStore } from '@/lib/store'
 import { getInitials } from '@/lib/utils'
