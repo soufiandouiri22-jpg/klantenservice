@@ -160,6 +160,7 @@ export default function TrainingPage() {
       <Header
         title="Training"
         description="Configureer het gedrag en de kennis van uw AI-medewerkers."
+        hideSearch
         actions={
           canEdit ? (
             <Button

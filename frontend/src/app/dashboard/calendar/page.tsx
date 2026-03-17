@@ -537,6 +537,7 @@ function CalendarPageInner() {
       <Header
         title="Agenda"
         description="Beheer uw agenda-integraties voor het inplannen van afspraken."
+        hideSearch
         actions={canEdit ? (
           <Button
             leftIcon={<Plus className="h-4 w-4" />}

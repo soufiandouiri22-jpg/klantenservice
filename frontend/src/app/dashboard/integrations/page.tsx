@@ -149,6 +149,7 @@ function IntegrationsPageInner() {
       <Header
         title="Integraties"
         description="Koppel externe systemen zodat de AI uw klanten herkent en gespreksverslagen terugschrijft."
+        hideSearch
         actions={canEdit ? (
           <Button
             leftIcon={<Plus className="h-4 w-4" />}

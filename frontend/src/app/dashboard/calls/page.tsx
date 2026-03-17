@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { Phone, Filter, Play, Clock, User, MessageSquare, X } from 'lucide-react'
+import { Phone, Search, Filter, Play, Clock, User, MessageSquare, X } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { Header } from '@/components/layout/Header'
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card'
@@ -19,17 +19,29 @@ import { formatDateTime, formatDuration, formatPhoneNumber, getStatusLabel, getS
 export default function CallsPage() {
   const [page, setPage] = useState(1)
   const [selectedCall, setSelectedCall] = useState<any>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [showFilters, setShowFilters] = useState(false)
   const [statusFilter, setStatusFilter] = useState('')
   const [outcomeFilter, setOutcomeFilter] = useState('')
 
+  // Debounce search input so it doesn't fire on every keystroke
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery)
+      setPage(1)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+
   const activeFilterCount = [statusFilter, outcomeFilter].filter(Boolean).length
 
   const { data: callsData, isLoading } = useQuery({
-    queryKey: ['calls', page, statusFilter, outcomeFilter],
+    queryKey: ['calls', page, debouncedSearch, statusFilter, outcomeFilter],
     queryFn: () => callsApi.list({
       page,
       page_size: 20,
+      search: debouncedSearch || undefined,
       status: statusFilter || undefined,
       outcome: outcomeFilter || undefined,
     }),
@@ -95,10 +107,20 @@ export default function CallsPage() {
           </div>
         )}
 
-        {/* Filter */}
+        {/* Search & Filter */}
         <Card>
           <CardBody className="space-y-4">
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Zoek op telefoonnummer of naam..."
+                  className="input pl-10"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
               <Button
                 variant={activeFilterCount > 0 ? 'primary' : 'outline'}
                 leftIcon={<Filter className="h-4 w-4" />}
@@ -171,7 +193,7 @@ export default function CallsPage() {
                 <EmptyState
                   icon={Phone}
                   title="Geen gesprekken gevonden"
-                  description="Er zijn nog geen gesprekken gevoerd."
+                  description="Er zijn nog geen gesprekken gevoerd of uw zoekopdracht leverde geen resultaten op."
                 />
               </div>
             ) : (
