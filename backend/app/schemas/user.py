@@ -52,7 +52,10 @@ class UserResponse(UserBase):
     oauth_provider: str = "email"
     last_login_at: Optional[datetime]
     created_at: datetime
-    
+
+    # Override: allow empty last_name for OAuth users (Google may not provide family_name)
+    last_name: str = Field(..., min_length=0, max_length=100)
+
     class Config:
         from_attributes = True
 
