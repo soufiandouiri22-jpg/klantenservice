@@ -16,6 +16,7 @@ import {
   CreditCard,
   ArrowRight,
 } from 'lucide-react'
+import { useAuthStore } from '@/lib/store'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { Header } from '@/components/layout/Header'
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card'
@@ -43,6 +44,15 @@ const item = {
 
 export default function DashboardPage() {
   const [hideOnboarding, setHideOnboarding] = useState(false)
+  const { user } = useAuthStore()
+
+  const getGreeting = () => {
+    const hour = new Date().getHours()
+    if (hour < 6) return 'Goedenacht'
+    if (hour < 12) return 'Goedemorgen'
+    if (hour < 18) return 'Goedemiddag'
+    return 'Goedenavond'
+  }
   
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ['dashboard-stats'],
@@ -172,8 +182,8 @@ export default function DashboardPage() {
   return (
     <DashboardLayout>
       <Header
-        title="Overzicht"
-        description="Welkom terug! Hier is een overzicht van uw klantenservice."
+        title={`${getGreeting()}, ${user?.first_name || 'daar'}`}
+        description="Hier is een overzicht van uw klantenservice."
       />
 
       <motion.div
