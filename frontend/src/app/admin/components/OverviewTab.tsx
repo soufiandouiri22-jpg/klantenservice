@@ -424,7 +424,7 @@ export function OverviewTab() {
                     <p className="font-medium text-gray-900 flex items-center gap-2">
                       ElevenLabs
                       {costs?.elevenlabs_cost_source === 'api' && (
-                        <Badge variant="outline" className="text-xs font-normal text-green-600 border-green-200">
+                        <Badge variant="success" className="text-xs font-normal">
                           {costs?.elevenlabs_tier || 'API'}
                         </Badge>
                       )}
