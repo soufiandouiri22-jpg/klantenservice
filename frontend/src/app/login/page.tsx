@@ -7,7 +7,8 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
-import { Headphones, ArrowLeft, Loader2 } from 'lucide-react'
+import { ArrowLeft, Loader2 } from 'lucide-react'
+import Image from 'next/image'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { authApi, companyApi } from '@/lib/api'
@@ -145,9 +146,7 @@ function LoginContent() {
           {/* Logo */}
           <div className="text-center mb-8">
             <Link href="/" className="inline-flex items-center gap-2">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary-600">
-                <Headphones className="h-6 w-6 text-white" />
-              </div>
+              <Image src="/logo-icon.png" alt="klantenservice.ai" width={48} height={48} className="h-12 w-12 rounded-xl" />
             </Link>
             <h1 className="mt-6 text-2xl font-display font-bold text-gray-900">
               Welkom terug

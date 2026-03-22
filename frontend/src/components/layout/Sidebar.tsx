@@ -22,6 +22,7 @@ import {
   Headphones,
   X,
 } from 'lucide-react'
+import Image from 'next/image'
 import { cn } from '@/lib/utils'
 import { useSidebarStore, useAuthStore } from '@/lib/store'
 
@@ -55,9 +56,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       {/* Logo */}
       <div className="flex h-16 flex-shrink-0 items-center justify-between border-b border-gray-100 px-4">
         <Link href="/dashboard" className="flex items-center gap-2" onClick={onNavigate}>
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-600">
-            <Headphones className="h-5 w-5 text-white" />
-          </div>
+          <Image src="/logo-icon.png" alt="klantenservice.ai" width={36} height={36} className="h-9 w-9 rounded-lg" />
           {showLabel && (
             <span className="font-display text-lg font-bold text-gray-900">
               klantenservice<span className="text-primary-600">.ai</span>

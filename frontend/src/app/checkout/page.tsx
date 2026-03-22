@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { Headphones, ArrowLeft, Loader2, CreditCard } from 'lucide-react'
+import { ArrowLeft, Loader2, CreditCard } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { paymentsApi } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'

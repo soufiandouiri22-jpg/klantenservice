@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { Headphones, Linkedin, Facebook, Instagram } from 'lucide-react'
+import { Linkedin, Facebook, Instagram } from 'lucide-react'
+import Image from 'next/image'
 
 export default function Footer() {
   return (
@@ -11,9 +12,7 @@ export default function Footer() {
           {/* Logo & Description */}
           <div className="col-span-1 sm:col-span-2 md:col-span-1">
             <Link href="/" className="flex items-center gap-2 mb-4">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-600">
-                <Headphones className="h-4 w-4 text-white" />
-              </div>
+              <Image src="/logo-icon.png" alt="klantenservice.ai" width={32} height={32} className="h-8 w-8 rounded-lg" />
               <span className="font-display text-lg font-bold text-gray-900">
                 klantenservice<span className="text-primary-600">.ai</span>
               </span>

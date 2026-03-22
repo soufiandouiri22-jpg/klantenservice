@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import toast from 'react-hot-toast'
-import { Headphones } from 'lucide-react'
+import Image from 'next/image'
 import { authApi, companyApi } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 
@@ -126,9 +126,7 @@ export default function GoogleCallbackPage() {
       <div className="text-center">
         {/* Logo */}
         <div className="flex justify-center mb-6">
-          <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-primary-600">
-            <Headphones className="h-8 w-8 text-white" />
-          </div>
+          <Image src="/logo-icon.png" alt="klantenservice.ai" width={64} height={64} className="h-16 w-16 rounded-xl" />
         </div>
 
         <Suspense fallback={<LoadingFallback />}>

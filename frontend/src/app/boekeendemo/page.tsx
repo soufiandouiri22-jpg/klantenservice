@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Calendar, Clock, Video, CheckCircle2, Users, Headphones } from 'lucide-react'
+import { ArrowLeft, Calendar, Clock, Video, CheckCircle2, Users } from 'lucide-react'
+import Image from 'next/image'
 import PublicHeader from '@/components/layout/PublicHeader'
 import Footer from '@/components/layout/Footer'
 
@@ -124,9 +125,7 @@ export default function BookDemoPage() {
               {/* Calendar Header */}
               <div className="bg-primary-600 text-white p-4 sm:p-6">
                 <div className="flex items-center gap-3 mb-2">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/20">
-                    <Headphones className="h-5 w-5 text-white" />
-                  </div>
+                  <Image src="/logo-icon.png" alt="klantenservice.ai" width={40} height={40} className="h-10 w-10 rounded-lg" />
                   <div>
                     <p className="font-semibold">klantenservice.ai</p>
                     <p className="text-sm text-primary-200">Product Demo</p>

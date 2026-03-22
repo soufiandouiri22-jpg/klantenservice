@@ -4,7 +4,8 @@ import { Suspense, useState, useRef, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
-import { Headphones, ArrowLeft, Mail, RefreshCw, Loader2 } from 'lucide-react'
+import { ArrowLeft, Mail, RefreshCw, Loader2 } from 'lucide-react'
+import Image from 'next/image'
 import { Button } from '@/components/ui/Button'
 import { api, authApi, companyApi } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
@@ -171,9 +172,7 @@ function VerifyContent() {
           {/* Logo */}
           <div className="mb-8 text-center">
             <Link href="/" className="inline-flex items-center gap-2 justify-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary-600">
-                <Headphones className="h-6 w-6 text-white" />
-              </div>
+              <Image src="/logo-icon.png" alt="klantenservice.ai" width={48} height={48} className="h-12 w-12 rounded-lg" />
             </Link>
           </div>
 

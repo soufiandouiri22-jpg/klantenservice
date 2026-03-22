@@ -136,8 +136,9 @@ export function OverviewTab() {
     refetchBusiness()
   }
 
-  const formatCurrency = (cents: number) => {
-    return `€${(cents / 100).toFixed(2)}`
+  const formatCurrency = (cents: number, currency: 'eur' | 'usd' = 'eur') => {
+    const symbol = currency === 'usd' ? '$' : '€'
+    return `${symbol}${(cents / 100).toFixed(2)}`
   }
 
   const totalCosts = (costs?.total_cost_today_cents || 0)
@@ -420,11 +421,23 @@ export function OverviewTab() {
                     <img src="/app-icons/elevenlabs.svg" alt="ElevenLabs" className="h-5 w-5" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
                   </div>
                   <div>
-                    <p className="font-medium text-gray-900">ElevenLabs</p>
-                    <p className="text-xs text-gray-400">{(costs?.elevenlabs_characters_today || 0).toLocaleString()} characters</p>
+                    <p className="font-medium text-gray-900 flex items-center gap-2">
+                      ElevenLabs
+                      {costs?.elevenlabs_cost_source === 'api' && (
+                        <Badge variant="outline" className="text-xs font-normal text-green-600 border-green-200">
+                          {costs?.elevenlabs_tier || 'API'}
+                        </Badge>
+                      )}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      {(costs?.elevenlabs_characters_today || 0).toLocaleString()} characters
+                      {costs?.elevenlabs_cost_source === 'api' && ' · Factuur'}
+                    </p>
                   </div>
                 </div>
-                <span className="text-lg font-semibold text-gray-900">{formatCurrency(elCosts)}</span>
+                <span className="text-lg font-semibold text-gray-900">
+                  {formatCurrency(elCosts, (costs?.elevenlabs_currency === 'eur' ? 'eur' : 'usd') as 'eur' | 'usd')}
+                </span>
               </div>
 
               <div className="flex items-center justify-between py-3 border-b border-gray-100">
@@ -490,8 +503,19 @@ export function OverviewTab() {
                     <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400" />Twilio</span>
                   </div>
                   <div className="text-right">
-                    <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalCosts)}</p>
-                    <p className="text-xs text-gray-400 capitalize">{format(costMonth, 'MMMM yyyy', { locale: nl })}</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {formatCurrency(totalCosts, (costs?.elevenlabs_currency === 'eur' ? 'eur' : 'usd') as 'eur' | 'usd')}
+                    </p>
+                    <p className="text-xs text-gray-400 capitalize">
+                      {format(costMonth, 'MMMM yyyy', { locale: nl })}
+                      {costs?.elevenlabs_cost_source === 'api' && costs?.elevenlabs_currency === 'usd' && ' · USD'}
+                    </p>
+                    {business && (business.mrr_cents || 0) > 0 && totalCosts > 0 && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        ≈ {((totalCosts / business.mrr_cents) * 100).toFixed(1)}% van MRR
+                        {(costs?.elevenlabs_currency === 'usd') && ' (indicatief, valuta kunnen verschillen)'}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>

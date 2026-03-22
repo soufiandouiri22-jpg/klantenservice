@@ -99,6 +99,9 @@ class CostMetrics(BaseModel):
     elevenlabs_characters_month: int = 0
     elevenlabs_cost_today_cents: int = 0
     elevenlabs_cost_month_cents: int = 0
+    elevenlabs_cost_source: str = "estimated"  # "api" = from subscription API, "estimated" = fallback calc
+    elevenlabs_tier: str = ""
+    elevenlabs_currency: str = "usd"
 
     # Twilio (totals)
     twilio_cost_today_cents: int = 0

@@ -544,6 +544,41 @@ async def _fetch_elevenlabs_usage(start_unix_ms: int, end_unix_ms: int) -> dict:
     return {"characters": 0}
 
 
+async def _fetch_elevenlabs_subscription() -> dict:
+    """Fetch subscription and actual costs from ElevenLabs API.
+    Returns actual amount_due from next_invoice + open_invoices (real billing data).
+    Fallback: empty dict if API fails.
+    """
+    if not settings.ELEVENLABS_API_KEY:
+        return {}
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(
+                "https://api.elevenlabs.io/v1/user/subscription",
+                headers={"xi-api-key": settings.ELEVENLABS_API_KEY},
+            )
+            if resp.status_code != 200:
+                logger.warning(f"[COSTS] ElevenLabs subscription API returned {resp.status_code}")
+                return {}
+            data = resp.json()
+            # Sum: next invoice + open invoices (actual amount owed to ElevenLabs)
+            total_cents = 0
+            next_inv = data.get("next_invoice") or {}
+            total_cents += int(next_inv.get("amount_due_cents", 0) or 0)
+            for inv in data.get("open_invoices") or []:
+                total_cents += int(inv.get("amount_due_cents", 0) or 0)
+            return {
+                "cost_cents": total_cents,
+                "tier": data.get("tier", ""),
+                "character_count": int(data.get("character_count", 0) or 0),
+                "character_limit": int(data.get("character_limit", 0) or 0),
+                "currency": data.get("currency", "usd"),
+            }
+    except Exception as e:
+        logger.warning(f"[COSTS] ElevenLabs subscription fetch failed: {e}")
+    return {}
+
+
 async def _fetch_twilio_usage(start_date: str, end_date: str) -> dict:
     """Fetch usage records from Twilio API for a date range with breakdown."""
     result = {
@@ -627,8 +662,8 @@ async def _fetch_twilio_usage(start_date: str, end_date: str) -> dict:
     return result
 
 
-# ElevenLabs pricing: roughly $0.30 per 1,000 characters (Scale tier)
-ELEVENLABS_COST_PER_1K_CHARS_CENTS = 30
+# Fallback: estimated cost per 1k chars when subscription API unavailable (Starter tier)
+ELEVENLABS_COST_PER_1K_CHARS_CENTS_FALLBACK = 30
 
 
 @router.get("/metrics/costs", response_model=CostMetrics)
@@ -666,15 +701,32 @@ async def get_cost_metrics(
     month_start_ms = int(now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).timestamp() * 1000)
     now_ms = int(now.timestamp() * 1000)
 
-    el_range, el_month, tw_range, tw_month = await asyncio.gather(
+    el_range, el_month, tw_range, tw_month, el_sub = await asyncio.gather(
         _fetch_elevenlabs_usage(range_start_ms, range_end_ms),
         _fetch_elevenlabs_usage(month_start_ms, now_ms),
         _fetch_twilio_usage(range_start_str, range_end_str),
         _fetch_twilio_usage(month_start_str, today_str),
+        _fetch_elevenlabs_subscription(),
     )
 
-    el_cost_range = int(el_range["characters"] / 1000 * ELEVENLABS_COST_PER_1K_CHARS_CENTS)
-    el_cost_month = int(el_month["characters"] / 1000 * ELEVENLABS_COST_PER_1K_CHARS_CENTS)
+    # ElevenLabs cost: use actual billing from subscription API for current month only
+    # (subscription API gives current billing period; for past months we estimate from usage)
+    is_current_month = (
+        range_start_dt.month == now.month
+        and range_start_dt.year == now.year
+    )
+    if is_current_month and el_sub.get("cost_cents", 0) > 0:
+        el_cost_range = el_sub["cost_cents"]
+        el_cost_month = el_sub["cost_cents"]
+        el_cost_source = "api"
+        el_tier = el_sub.get("tier", "")
+        el_currency = el_sub.get("currency", "usd")
+    else:
+        el_cost_range = int(el_range["characters"] / 1000 * ELEVENLABS_COST_PER_1K_CHARS_CENTS_FALLBACK)
+        el_cost_month = int(el_month["characters"] / 1000 * ELEVENLABS_COST_PER_1K_CHARS_CENTS_FALLBACK)
+        el_cost_source = "estimated"
+        el_tier = el_sub.get("tier", "") if el_sub else ""
+        el_currency = el_sub.get("currency", "usd") if el_sub else "usd"
 
     total_range = el_cost_range + tw_range["cost_cents"]
     total_month = el_cost_month + tw_month["cost_cents"]
@@ -684,6 +736,9 @@ async def get_cost_metrics(
         elevenlabs_characters_month=el_month["characters"],
         elevenlabs_cost_today_cents=el_cost_range,
         elevenlabs_cost_month_cents=el_cost_month,
+        elevenlabs_cost_source=el_cost_source,
+        elevenlabs_tier=el_tier,
+        elevenlabs_currency=el_currency,
         twilio_cost_today_cents=tw_range["cost_cents"],
         twilio_cost_month_cents=tw_month["cost_cents"],
         twilio_calls_today=tw_range["calls_inbound"],

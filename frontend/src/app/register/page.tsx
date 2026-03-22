@@ -7,7 +7,8 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
-import { Headphones, ArrowLeft, Check, Loader2, Building2 } from 'lucide-react'
+import { ArrowLeft, Check, Loader2, Building2 } from 'lucide-react'
+import Image from 'next/image'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { api, authApi, kvkApi } from '@/lib/api'
@@ -257,9 +258,7 @@ function RegisterContent() {
             {/* Logo */}
             <div className="mb-8">
               <Link href="/" className="inline-flex items-center gap-2">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-600">
-                  <Headphones className="h-5 w-5 text-white" />
-                </div>
+                <Image src="/logo-icon.png" alt="klantenservice.ai" width={40} height={40} className="h-10 w-10 rounded-lg" />
               </Link>
               <h1 className="mt-6 text-2xl font-display font-bold text-gray-900">
                 Account aanmaken
