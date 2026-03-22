@@ -227,8 +227,8 @@ export function Header({ title, description, actions, showActionsOnMobile = fals
 
   return (
     <>
-      <header className="sticky top-0 z-30 border-b border-gray-200 bg-white">
-        <div className="flex h-14 items-center justify-between px-4 sm:px-6">
+      <header className="sticky top-0 z-30 border-b border-gray-200 bg-white/80 backdrop-blur-sm">
+        <div className="flex h-16 items-center justify-between px-4 sm:px-6">
           {/* Left: Hamburger + Page title */}
           <div className="flex items-center gap-3 min-w-0">
             <button
@@ -269,7 +269,7 @@ export function Header({ title, description, actions, showActionsOnMobile = fals
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onFocus={() => setIsSearchFocused(true)}
                     placeholder="Zoeken... (⌘K)"
-                    className="h-9 w-64 rounded-lg border border-gray-200 bg-gray-50 pl-10 pr-8 text-sm placeholder:text-gray-400 focus:border-gray-300 focus:bg-white focus:outline-none focus:ring-1 focus:ring-gray-200 focus:w-80 transition-all"
+                    className="h-9 w-64 rounded-lg border border-gray-200 bg-gray-50 pl-10 pr-8 text-sm placeholder:text-gray-400 focus:border-primary-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:w-80 transition-all"
                   />
                   {searchQuery && (
                     <button
@@ -361,8 +361,8 @@ export function Header({ title, description, actions, showActionsOnMobile = fals
 
             {/* User menu */}
             <div className="flex items-center gap-3 border-l border-gray-200 pl-3 sm:pl-4">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-900 text-xs font-medium text-white">
-                {user ? getInitials(user.first_name, user.last_name) : <User className="h-4 w-4" />}
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-100 text-sm font-medium text-primary-700">
+                {user ? getInitials(user.first_name, user.last_name) : <User className="h-5 w-5" />}
               </div>
               <div className="hidden md:block">
                 <p className="text-sm font-medium text-gray-900">

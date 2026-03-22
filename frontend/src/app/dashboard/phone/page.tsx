@@ -294,8 +294,8 @@ export default function PhonePage() {
         description={`${phoneNumbers?.length || 0} van ${maxPhoneNumbers} nummers gekoppeld`}
         actions={
           canEdit && phoneNumbers?.length > 0 ? (
-            <Button onClick={openWizard} disabled={!canAddPhone}>
-              Nog een nummer koppelen
+            <Button onClick={openWizard} disabled={!canAddPhone} leftIcon={<Plus className="h-4 w-4" />}>
+              Nummer koppelen
             </Button>
           ) : null
         }

@@ -130,25 +130,25 @@ export default function DashboardPage() {
       label: 'Actieve AI-medewerkers',
       value: `${stats?.active_ai_workers || 0}/${stats?.total_ai_workers || 0}`,
       icon: Headphones,
-      color: 'text-gray-600 bg-gray-100',
+      color: 'text-primary-600 bg-primary-100',
     },
     {
       label: 'Gesprekken vandaag',
       value: stats?.calls_today || 0,
       icon: Phone,
-      color: 'text-gray-600 bg-gray-100',
+      color: 'text-green-600 bg-green-100',
     },
     {
       label: 'Afspraken vandaag',
       value: stats?.appointments_today || 0,
       icon: Calendar,
-      color: 'text-gray-600 bg-gray-100',
+      color: 'text-amber-600 bg-amber-100',
     },
     {
       label: 'Openstaande acties',
       value: stats?.unresolved_notes || 0,
       icon: AlertCircle,
-      color: 'text-gray-600 bg-gray-100',
+      color: 'text-red-600 bg-red-100',
     },
   ]
 
@@ -345,15 +345,15 @@ export default function DashboardPage() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {statCards.map((stat) => (
             <motion.div key={stat.label} variants={item}>
-              <Card>
-                <CardBody className="p-5">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg ${stat.color}`}>
-                      <stat.icon className="h-4 w-4" />
-                    </div>
-                    <p className="text-sm text-gray-500">{stat.label}</p>
+              <Card className="hover:shadow-soft-lg transition-shadow">
+                <CardBody className="flex items-center gap-3 p-4">
+                  <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg ${stat.color}`}>
+                    <stat.icon className="h-5 w-5" />
                   </div>
-                  <p className="text-2xl font-semibold text-gray-900">{stat.value}</p>
+                  <div className="min-w-0">
+                    <p className="text-xs text-gray-500 truncate">{stat.label}</p>
+                    <p className="text-xl font-bold text-gray-900">{stat.value}</p>
+                  </div>
                 </CardBody>
               </Card>
             </motion.div>
@@ -524,7 +524,9 @@ export default function DashboardPage() {
                           </span>
                         </div>
                       )}
-                      {usage.overage_minutes > 0 && (
+                    </div>
+
+                    {usage.overage_minutes > 0 && (
                         <div className="flex justify-between text-sm">
                           <span className="text-red-600">Extra minuten</span>
                           <span className="font-medium text-red-600">
@@ -532,11 +534,10 @@ export default function DashboardPage() {
                           </span>
                         </div>
                       )}
-                    </div>
 
                     <Link
                       href="/dashboard/settings?tab=subscription"
-                      className="block text-center text-sm text-gray-500 hover:text-gray-900 pt-2 border-t"
+                      className="block text-center text-sm text-primary-600 hover:text-primary-700 pt-2 border-t"
                     >
                       Abonnement beheren
                     </Link>
@@ -553,7 +554,7 @@ export default function DashboardPage() {
             <Card className="h-full">
               <CardHeader className="flex items-center justify-between">
                 <CardTitle>AI-medewerkers</CardTitle>
-                <Link href="/dashboard/ai-workers" className="text-sm text-gray-500 hover:text-gray-900">
+                <Link href="/dashboard/ai-workers" className="text-sm text-primary-600 hover:text-primary-700">
                   Beheren
                 </Link>
               </CardHeader>
@@ -569,8 +570,8 @@ export default function DashboardPage() {
                       className="flex items-center justify-between p-3 rounded-lg bg-gray-50"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100">
-                          <Headphones className="h-5 w-5 text-gray-600" />
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-100">
+                          <Headphones className="h-5 w-5 text-primary-600" />
                         </div>
                         <div>
                           <p className="text-sm font-medium text-gray-900">{worker.name}</p>
@@ -597,7 +598,7 @@ export default function DashboardPage() {
             <Card className="h-full">
               <CardHeader className="flex items-center justify-between">
                 <CardTitle>Recente gesprekken</CardTitle>
-                <Link href="/dashboard/calls" className="text-sm text-gray-500 hover:text-gray-900">
+                <Link href="/dashboard/calls" className="text-sm text-primary-600 hover:text-primary-700">
                   Alles bekijken
                 </Link>
               </CardHeader>
@@ -645,7 +646,7 @@ export default function DashboardPage() {
             <Card className="h-full">
               <CardHeader className="flex items-center justify-between">
                 <CardTitle>Komende afspraken</CardTitle>
-                <Link href="/dashboard/appointments" className="text-sm text-gray-500 hover:text-gray-900">
+                <Link href="/dashboard/appointments" className="text-sm text-primary-600 hover:text-primary-700">
                   Alles bekijken
                 </Link>
               </CardHeader>
@@ -696,7 +697,7 @@ export default function DashboardPage() {
                   <AlertCircle className="h-5 w-5 text-amber-500" />
                   Actie vereist
                 </CardTitle>
-                <Link href="/dashboard/notes?action_required=true" className="text-sm text-gray-500 hover:text-gray-900">
+                <Link href="/dashboard/notes?action_required=true" className="text-sm text-primary-600 hover:text-primary-700">
                   Alles bekijken
                 </Link>
               </CardHeader>
