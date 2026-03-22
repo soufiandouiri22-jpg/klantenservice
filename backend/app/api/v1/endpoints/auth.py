@@ -9,6 +9,7 @@ from uuid import uuid4
 import re
 import secrets
 import httpx
+from urllib.parse import urlencode
 
 from app.core.database import get_db
 from app.core.config import settings
@@ -265,6 +266,7 @@ async def verify_code(
     user.is_verified = True
     user.verified_at = datetime.utcnow()
     user.verification_token = None
+    user.failed_login_attempts = 0
     user.last_login_at = datetime.utcnow()
     db.commit()
     
@@ -355,7 +357,7 @@ async def login(
             user.failed_login_attempts = 0
             user.locked_until = None
     
-    if not user or not verify_password(credentials.password, user.hashed_password):
+    if not user or not user.hashed_password or not verify_password(credentials.password, user.hashed_password):
         if user:
             user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
             if user.failed_login_attempts >= 5:
@@ -598,6 +600,11 @@ async def change_password(
     """
     Change current user's password.
     """
+    if not current_user.hashed_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Account gebruikt Google login. Stel eerst een wachtwoord in via 'Wachtwoord vergeten'.",
+        )
     if not verify_password(password_data.current_password, current_user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -815,7 +822,7 @@ async def get_google_oauth_url():
         "prompt": "select_account",
     }
     
-    query_string = "&".join(f"{k}={v}" for k, v in params.items())
+    query_string = urlencode(params)
     auth_url = f"https://accounts.google.com/o/oauth2/v2/auth?{query_string}"
     
     return {
@@ -905,6 +912,11 @@ async def google_oauth_callback(
         user = db.query(User).filter(User.email == email).first()
         
         if user:
+            if not user.is_active:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Uw account is nog niet geactiveerd. Gebruik de uitnodigingslink die u per e-mail heeft ontvangen.",
+                )
             if user.hashed_password:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,

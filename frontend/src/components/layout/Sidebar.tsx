@@ -54,17 +54,17 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <>
       {/* Logo */}
-      <div className={cn("flex h-16 flex-shrink-0 items-center border-b border-gray-100", showLabel ? "justify-between px-4" : "justify-center")}>
+      <div className={cn("flex h-16 flex-shrink-0 items-center border-b border-gray-800/60", showLabel ? "justify-between px-4" : "justify-center")}>
         <Link href="/dashboard" className="flex items-center gap-2" onClick={onNavigate}>
           <Image src="/logo-icon.png" alt="klantenservice.ai" width={36} height={36} className="h-9 w-9 rounded-lg flex-shrink-0" />
           {showLabel && (
-            <span className="font-display text-lg font-bold text-gray-900">
-              klantenservice<span className="text-primary-600">.ai</span>
+            <span className="font-display text-lg font-bold text-white">
+              klantenservice<span className="text-primary-400">.ai</span>
             </span>
           )}
         </Link>
         {isMobile && (
-          <button onClick={onNavigate} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+          <button onClick={onNavigate} className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-800 hover:text-gray-300">
             <X className="h-5 w-5" />
           </button>
         )}
@@ -72,15 +72,15 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
       {/* Company name */}
       {showLabel && company && (
-        <div className="flex-shrink-0 border-b border-gray-100 px-4 py-3">
+        <div className="flex-shrink-0 border-b border-gray-800/60 px-4 py-3">
           <p className="text-xs font-medium text-gray-500">Bedrijf</p>
-          <p className="truncate text-sm font-medium text-gray-900">{company.name}</p>
+          <p className="truncate text-sm font-medium text-gray-200">{company.name}</p>
         </div>
       )}
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto p-4">
-        <ul className="space-y-1">
+      <nav className="flex-1 overflow-y-auto p-3">
+        <ul className="space-y-0.5">
           {navigation.map((item) => {
             const isActive = item.href === '/dashboard'
               ? pathname === '/dashboard'
@@ -91,13 +91,13 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                   href={item.href}
                   onClick={onNavigate}
                   className={cn(
-                    'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                    'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                     isActive
-                      ? 'bg-primary-50 text-primary-700'
-                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                      ? 'bg-white/10 text-white'
+                      : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
                   )}
                 >
-                  <item.icon className={cn('h-5 w-5 flex-shrink-0', isActive ? 'text-primary-600' : 'text-gray-400')} />
+                  <item.icon className={cn('h-[18px] w-[18px] flex-shrink-0', isActive ? 'text-white' : 'text-gray-500')} />
                   {showLabel && <span>{item.name}</span>}
                 </Link>
               </li>
@@ -107,8 +107,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       </nav>
 
       {/* Bottom navigation */}
-      <div className="flex-shrink-0 border-t border-gray-100 p-4">
-        <ul className="space-y-1">
+      <div className="flex-shrink-0 border-t border-gray-800/60 p-3">
+        <ul className="space-y-0.5">
           {bottomNavigation.map((item) => {
             const isActive = pathname === item.href
             return (
@@ -117,13 +117,13 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                   href={item.href}
                   onClick={onNavigate}
                   className={cn(
-                    'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                    'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                     isActive
-                      ? 'bg-primary-50 text-primary-700'
-                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                      ? 'bg-white/10 text-white'
+                      : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
                   )}
                 >
-                  <item.icon className={cn('h-5 w-5 flex-shrink-0', isActive ? 'text-primary-600' : 'text-gray-400')} />
+                  <item.icon className={cn('h-[18px] w-[18px] flex-shrink-0', isActive ? 'text-white' : 'text-gray-500')} />
                   {showLabel && <span>{item.name}</span>}
                 </Link>
               </li>
@@ -132,9 +132,9 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           <li>
             <button
               onClick={() => { onNavigate?.(); logout() }}
-              className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-gray-400 hover:bg-white/5 hover:text-gray-200 transition-colors"
             >
-              <LogOut className="h-5 w-5 flex-shrink-0 text-gray-400" />
+              <LogOut className="h-[18px] w-[18px] flex-shrink-0 text-gray-500" />
               {showLabel && <span>Uitloggen</span>}
             </button>
           </li>
@@ -158,7 +158,7 @@ export function Sidebar() {
       {/* Desktop sidebar */}
       <aside
         className={cn(
-          'fixed left-0 top-0 z-40 hidden md:flex h-screen flex-col border-r border-gray-200 bg-white transition-all duration-300',
+          'fixed left-0 top-0 z-40 hidden md:flex h-screen flex-col bg-gray-950 transition-all duration-300',
           isCollapsed ? 'w-20' : 'w-64'
         )}
       >
@@ -180,7 +180,7 @@ export function Sidebar() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="fixed inset-0 z-50 bg-black/50 md:hidden"
+              className="fixed inset-0 z-50 bg-black/60 md:hidden"
               onClick={() => setMobileOpen(false)}
             />
             <motion.aside
@@ -188,7 +188,7 @@ export function Sidebar() {
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="fixed left-0 top-0 z-50 flex h-screen w-72 flex-col bg-white shadow-xl md:hidden pb-[max(1.5rem,env(safe-area-inset-bottom))]"
+              className="fixed left-0 top-0 z-50 flex h-screen w-72 flex-col bg-gray-950 shadow-xl md:hidden pb-[max(1.5rem,env(safe-area-inset-bottom))]"
             >
               <SidebarContent onNavigate={() => setMobileOpen(false)} />
             </motion.aside>

@@ -129,10 +129,10 @@ async def create_phone_number(
         owned_twilio_numbers = client.incoming_phone_numbers.list(limit=50)
         company_name_tag = f"klantenservice.ai - {company.name}"
 
-        # Numbers currently tracked in our DB for this company
+        # Numbers currently tracked in our DB across ALL companies
         db_numbers = {
             pn.number
-            for pn in db.query(PhoneNumber.number).filter(PhoneNumber.company_id == company.id).all()
+            for pn in db.query(PhoneNumber.number).all()
         }
 
         reusable = None
@@ -479,11 +479,24 @@ async def purchase_phone_number(
             ai_worker_id=data.ai_worker_id,
             number=data.phone_number,
             friendly_name=data.friendly_name or purchased.friendly_name,
+            twilio_sid=purchased.sid,
             is_active=True,
         )
         
         db.add(phone_number)
-        db.commit()
+        try:
+            db.commit()
+        except Exception as db_err:
+            logger.error(f"DB commit failed after Twilio purchase: {db_err}")
+            try:
+                purchased.delete()
+                logger.info(f"Rolled back Twilio purchase for {data.phone_number}")
+            except Exception as rollback_err:
+                logger.critical(f"ORPHANED TWILIO NUMBER {data.phone_number} (sid={purchased.sid}) - manual cleanup required: {rollback_err}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Kon nummer niet opslaan. De aankoop is teruggedraaid.",
+            )
         db.refresh(phone_number)
         
         return PurchaseNumberResponse(

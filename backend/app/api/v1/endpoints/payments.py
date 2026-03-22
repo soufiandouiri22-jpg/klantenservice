@@ -33,8 +33,8 @@ PLAN_PRICES = {
 # Plan limits (AI workers per plan)
 PLAN_LIMITS = {
     "starter": 1,
-    "business": 3,
-    "enterprise": 10,
+    "business": 5,
+    "enterprise": 7,
 }
 
 # Belminuten per plan per maand
@@ -572,9 +572,10 @@ async def handle_invoice_paid(invoice: dict, db: Session):
                 company.stripe_subscription_id = subscription_id
     
     if company:
-        company.subscription_status = "active"
+        if company.subscription_status != "trialing":
+            company.subscription_status = "active"
         db.commit()
-        logger.info(f"Invoice paid for company {company.name}")
+        logger.info(f"Invoice paid for company {company.name} (status: {company.subscription_status})")
 
 
 async def handle_payment_failed(invoice: dict, db: Session):

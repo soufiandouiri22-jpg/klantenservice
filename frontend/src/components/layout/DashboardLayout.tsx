@@ -49,17 +49,17 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   // Show loading state while checking verification
   if (isCheckingVerification) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600 mx-auto mb-4" />
-          <p className="text-gray-600">Laden...</p>
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-gray-900 mx-auto mb-4" />
+          <p className="text-gray-500">Laden...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-white">
       <Sidebar />
       <main
         className={cn(

@@ -2,7 +2,9 @@
 klantenservice.ai - Company Endpoints
 """
 import logging
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from uuid import UUID
 
@@ -136,12 +138,16 @@ async def get_privacy_settings(
     }
 
 
+class PrivacySettingsUpdate(BaseModel):
+    data_retention_days: Optional[int] = None
+    call_recording_enabled: Optional[bool] = None
+    call_recording_consent_required: Optional[bool] = None
+    disclosure_message: Optional[str] = None
+
+
 @router.patch("/me/privacy-settings")
 async def update_privacy_settings(
-    data_retention_days: int = None,
-    call_recording_enabled: bool = None,
-    call_recording_consent_required: bool = None,
-    disclosure_message: str = None,
+    data: PrivacySettingsUpdate,
     current_user: User = Depends(require_admin),
     company: Company = Depends(get_current_company),
     db: Session = Depends(get_db)
@@ -150,22 +156,22 @@ async def update_privacy_settings(
     Update privacy settings.
     Requires admin or owner role.
     """
-    if data_retention_days is not None:
-        if data_retention_days < 30 or data_retention_days > 365:
+    if data.data_retention_days is not None:
+        if data.data_retention_days < 30 or data.data_retention_days > 365:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Data retentie moet tussen 30 en 365 dagen zijn",
             )
-        company.data_retention_days = data_retention_days
+        company.data_retention_days = data.data_retention_days
     
-    if call_recording_enabled is not None:
-        company.call_recording_enabled = call_recording_enabled
+    if data.call_recording_enabled is not None:
+        company.call_recording_enabled = data.call_recording_enabled
     
-    if call_recording_consent_required is not None:
-        company.call_recording_consent_required = call_recording_consent_required
+    if data.call_recording_consent_required is not None:
+        company.call_recording_consent_required = data.call_recording_consent_required
     
-    if disclosure_message is not None:
-        company.disclosure_message = disclosure_message
+    if data.disclosure_message is not None:
+        company.disclosure_message = data.disclosure_message
     
     db.commit()
     

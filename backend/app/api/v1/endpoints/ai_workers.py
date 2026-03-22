@@ -260,6 +260,15 @@ async def update_ai_worker(
             detail="AI-medewerker niet gevonden",
         )
     
+    if worker.status == AIWorkerStatus.BUSY:
+        dangerous_fields = {"is_active", "voice_id", "language"}
+        attempted = set(data.model_dump(exclude_unset=True).keys()) & dangerous_fields
+        if attempted:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="AI-medewerker is momenteel in gesprek. Wacht tot het gesprek is afgelopen.",
+            )
+
     update_data = data.model_dump(exclude_unset=True)
     
     # Handle behavior_settings separately

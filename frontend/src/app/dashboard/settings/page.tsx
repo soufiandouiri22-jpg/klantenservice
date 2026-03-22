@@ -830,6 +830,17 @@ function SettingsContent() {
                         defaultValue={privacySettings?.data_retention_days}
                         min={30}
                         max={365}
+                        onBlur={(e: React.FocusEvent<HTMLInputElement>) => {
+                          const v = parseInt(e.target.value)
+                          if (isNaN(v) || v < 30 || v > 365) {
+                            e.target.value = String(privacySettings?.data_retention_days ?? 90)
+                            toast.error('Data retentie moet tussen 30 en 365 dagen zijn')
+                            return
+                          }
+                          if (v !== privacySettings?.data_retention_days) {
+                            updatePrivacyMutation.mutate({ data_retention_days: v })
+                          }
+                        }}
                       />
                       <p className="mt-1.5 text-sm text-gray-500">
                         Gesprekslogs worden na dit aantal dagen automatisch verwijderd.

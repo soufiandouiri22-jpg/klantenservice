@@ -257,7 +257,8 @@ def save_transcript_records(
     for entry in transcript:
         role = entry.get("role", "")
         message = (entry.get("message") or entry.get("text") or "").strip()
-        time_secs = entry.get("time_in_call_secs", entry.get("timestamp", 0))
+        raw_time = entry.get("time_in_call_secs") or entry.get("timestamp") or 0
+        time_secs = raw_time if isinstance(raw_time, (int, float)) else 0
 
         if not message:
             continue

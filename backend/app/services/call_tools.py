@@ -338,6 +338,21 @@ async def tool_book_appointment(
     except Exception as e:
         logger.error(f"Failed to create external calendar event: {e}", exc_info=True)
 
+    conflict = db.query(Appointment).filter(
+        Appointment.company_id == UUID(company_id),
+        Appointment.calendar_integration_id == UUID(calendar_integration_id),
+        Appointment.status.in_([AppointmentStatus.CONFIRMED]),
+        Appointment.starts_at < ends_at,
+        Appointment.ends_at > starts_at,
+    ).first()
+
+    if conflict:
+        return {
+            "ok": False,
+            "reason": "slot_taken",
+            "message": "Dit tijdslot is zojuist geboekt door iemand anders. Vraag de klant een ander moment te kiezen.",
+        }
+
     appointment = Appointment(
         id=uuid4(),
         company_id=UUID(company_id),
@@ -1021,8 +1036,7 @@ def tool_create_note(
 
                     from app.services.sms_service import send_sms
                     send_sms(
-                        to_number=customer_phone,
-                        from_number=phone.number,
+                        to=customer_phone,
                         body=sms_text,
                     )
                     logger.info(f"Sent callback SMS to {customer_phone}")

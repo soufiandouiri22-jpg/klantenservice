@@ -61,6 +61,7 @@ async def _run_post_call_analysis(call_log_id, db_url=None):
     """
     Background task: fetch transcript from ElevenLabs and run sentiment analysis.
     Uses its own DB session so it can run after the webhook response is sent.
+    After transcript is processed, writes call summary to CRM if configured.
     """
     from app.core.database import SessionLocal
     from app.services.transcript_service import fetch_and_process_transcript
@@ -72,10 +73,44 @@ async def _run_post_call_analysis(call_log_id, db_url=None):
             logger.warning(f"[POST-CALL] call_log {call_log_id} not found")
             return
         await fetch_and_process_transcript(db, call_log)
+
+        db.refresh(call_log)
+        if call_log.summary:
+            await _write_crm_note(db, call_log)
     except Exception as e:
         logger.warning(f"[POST-CALL] Analysis failed for {call_log_id}: {e}", exc_info=True)
     finally:
         db.close()
+
+
+async def _write_crm_note(db, call_log):
+    """Write call summary to CRM if configured for this company."""
+    try:
+        from app.models.crm_integration import CRMIntegration
+        from app.services import hubspot_service as hubspot
+        crm = db.query(CRMIntegration).filter(
+            CRMIntegration.company_id == call_log.company_id,
+            CRMIntegration.is_active == True,
+            CRMIntegration.write_call_notes == True,
+        ).first()
+        if crm and crm.access_token_encrypted:
+            access_token = await hubspot.get_valid_access_token(crm, db)
+            contact = await hubspot.search_contact_by_phone(
+                access_token, call_log.caller_number
+            )
+            if contact:
+                duration = call_log.duration_seconds or 0
+                note_body = (
+                    f"Telefoongesprek via klantenservice.ai\n"
+                    f"Duur: {duration}s\n\n"
+                    f"{call_log.summary}"
+                )
+                await hubspot.create_engagement_note(
+                    access_token, contact["id"], note_body
+                )
+                logger.info(f"CRM note created for contact {contact['id']}")
+    except Exception as crm_err:
+        logger.warning(f"CRM post-call note failed (non-blocking): {crm_err}")
 
 
 def verify_twilio_signature(request: Request, signature: str) -> bool:
@@ -597,33 +632,8 @@ async def twilio_status_webhook(
             except Exception as e:
                 logger.warning(f"Post-call analysis scheduling failed: {e}")
 
-        # Write call summary back to CRM if configured
-        if call_status == "completed" and call_log.summary:
-            try:
-                from app.models.crm_integration import CRMIntegration
-                from app.services import hubspot_service as hubspot
-                crm = db.query(CRMIntegration).filter(
-                    CRMIntegration.company_id == call_log.company_id,
-                    CRMIntegration.is_active == True,
-                    CRMIntegration.write_call_notes == True,
-                ).first()
-                if crm and crm.access_token_encrypted:
-                    access_token = await hubspot.get_valid_access_token(crm, db)
-                    contact = await hubspot.search_contact_by_phone(
-                        access_token, call_log.caller_number
-                    )
-                    if contact:
-                        note_body = (
-                            f"Telefoongesprek via klantenservice.ai\n"
-                            f"Duur: {call_duration}s\n\n"
-                            f"{call_log.summary}"
-                        )
-                        await hubspot.create_engagement_note(
-                            access_token, contact["id"], note_body
-                        )
-                        logger.info(f"CRM note created for contact {contact['id']}")
-            except Exception as crm_err:
-                logger.warning(f"CRM post-call note failed (non-blocking): {crm_err}")
+        # CRM note writing is now handled inside _run_post_call_analysis
+        # after the transcript and summary are available.
 
         # Usage alert emails (80% and 100% thresholds)
         if call_status == "completed" and call_log.company_id:
