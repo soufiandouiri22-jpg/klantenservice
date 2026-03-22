@@ -54,9 +54,9 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <>
       {/* Logo */}
-      <div className="flex h-16 flex-shrink-0 items-center justify-between border-b border-gray-100 px-4">
+      <div className={cn("flex h-16 flex-shrink-0 items-center border-b border-gray-100", showLabel ? "justify-between px-4" : "justify-center")}>
         <Link href="/dashboard" className="flex items-center gap-2" onClick={onNavigate}>
-          <Image src="/logo-icon.png" alt="klantenservice.ai" width={36} height={36} className="h-9 w-9 rounded-lg" />
+          <Image src="/logo-icon.png" alt="klantenservice.ai" width={36} height={36} className="h-9 w-9 rounded-lg flex-shrink-0" />
           {showLabel && (
             <span className="font-display text-lg font-bold text-gray-900">
               klantenservice<span className="text-primary-600">.ai</span>
