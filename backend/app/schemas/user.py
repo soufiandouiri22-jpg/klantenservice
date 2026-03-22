@@ -112,6 +112,16 @@ class PasswordResetConfirm(BaseModel):
     token: str
     new_password: str = Field(..., min_length=8, max_length=100)
 
+    @validator("new_password")
+    def password_strength(cls, v):
+        if not any(c.isupper() for c in v):
+            raise ValueError("Wachtwoord moet minimaal één hoofdletter bevatten")
+        if not any(c.islower() for c in v):
+            raise ValueError("Wachtwoord moet minimaal één kleine letter bevatten")
+        if not any(c.isdigit() for c in v):
+            raise ValueError("Wachtwoord moet minimaal één cijfer bevatten")
+        return v
+
 
 class UserInvite(BaseModel):
     """Schema for inviting a new user."""

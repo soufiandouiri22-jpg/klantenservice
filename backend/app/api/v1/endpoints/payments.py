@@ -114,9 +114,11 @@ async def create_checkout_session(
         if company.btw_number:
             _sync_tax_id_to_stripe(customer_id, company.btw_number)
         
-        # Default URLs
-        success_url = request.success_url or f"{settings.FRONTEND_URL}/dashboard/settings?payment=success"
-        cancel_url = request.cancel_url or f"{settings.FRONTEND_URL}/dashboard/settings?payment=cancelled"
+        # Validate redirect URLs to prevent open redirect
+        default_success = f"{settings.FRONTEND_URL}/dashboard/settings?payment=success"
+        default_cancel = f"{settings.FRONTEND_URL}/dashboard/settings?payment=cancelled"
+        success_url = request.success_url if request.success_url and request.success_url.startswith(settings.FRONTEND_URL) else default_success
+        cancel_url = request.cancel_url if request.cancel_url and request.cancel_url.startswith(settings.FRONTEND_URL) else default_cancel
         
         # Create checkout session
         # Add 14-day trial for starter and business plans — but only if they haven't used their trial yet
@@ -157,8 +159,8 @@ async def create_checkout_session(
         }
         
     except stripe.error.StripeError as e:
-        logger.error(f"Stripe error: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error(f"Stripe error creating checkout: {e}")
+        raise HTTPException(status_code=400, detail="Er is een betaalfout opgetreden. Probeer het opnieuw.")
 
 
 @router.post("/create-portal-session")
@@ -179,7 +181,8 @@ async def create_portal_session(
         )
     
     try:
-        return_url = request.return_url or f"{settings.FRONTEND_URL}/dashboard/settings"
+        default_return = f"{settings.FRONTEND_URL}/dashboard/settings"
+        return_url = request.return_url if request.return_url and request.return_url.startswith(settings.FRONTEND_URL) else default_return
         
         portal_session = stripe.billing_portal.Session.create(
             customer=company.stripe_customer_id,
@@ -189,8 +192,8 @@ async def create_portal_session(
         return {"portal_url": portal_session.url}
         
     except stripe.error.StripeError as e:
-        logger.error(f"Stripe error: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error(f"Stripe error creating portal session: {e}")
+        raise HTTPException(status_code=400, detail="Er is een betaalfout opgetreden. Probeer het opnieuw.")
 
 
 @router.get("/subscription")
@@ -288,10 +291,13 @@ async def stripe_webhook(
     payload = await request.body()
     
     if not settings.STRIPE_WEBHOOK_SECRET:
-        logger.warning("Stripe webhook secret not configured")
-        # In development, process without verification
+        if settings.APP_ENV == "production":
+            logger.error("STRIPE_WEBHOOK_SECRET not configured in production — rejecting webhook")
+            raise HTTPException(status_code=500, detail="Webhook misconfigured")
+        logger.warning("Stripe webhook secret not configured — DEV MODE")
+        import json
         event = stripe.Event.construct_from(
-            stripe.util.convert_to_stripe_object(payload.decode()),
+            json.loads(payload.decode()),
             stripe.api_key
         )
     else:

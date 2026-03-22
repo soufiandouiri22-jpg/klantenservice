@@ -81,8 +81,9 @@ function RegisterContent() {
   const kvkRef = useRef<HTMLDivElement>(null)
   const kvkDebounceRef = useRef<NodeJS.Timeout | null>(null)
   
-  // Get redirect URL from query params (used for checkout flow)
-  const redirectUrl = searchParams.get('redirect') || '/dashboard'
+  // Get redirect URL from query params (validated to prevent open redirect)
+  const rawRedirect = searchParams.get('redirect') || '/dashboard'
+  const redirectUrl = rawRedirect.startsWith('/') && !rawRedirect.startsWith('//') ? rawRedirect : '/dashboard'
 
   const {
     register,

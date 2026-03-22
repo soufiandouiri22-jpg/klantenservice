@@ -44,14 +44,14 @@ from app.schemas.user import (
 from app.schemas.company import CompanyCreate
 from app.api.deps import get_current_user
 from app.core.email import send_welcome_email, send_verification_code_email, send_password_reset_email
-import random
+import random  # only used for non-security purposes
 
 router = APIRouter()
 
 
 def generate_verification_code() -> str:
-    """Generate a random 6-digit verification code."""
-    return str(random.randint(100000, 999999))
+    """Generate a cryptographically secure random 6-digit verification code."""
+    return str(secrets.randbelow(900000) + 100000)
 
 # Store OAuth state tokens temporarily (in production, use Redis)
 oauth_states: dict[str, datetime] = {}
@@ -227,20 +227,13 @@ async def verify_code(
     
     Returns tokens after successful verification.
     """
-    # Find user by email
+    # Find user by email (generic error to prevent enumeration)
     user = db.query(User).filter(User.email == data.email).first()
     
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Gebruiker niet gevonden",
-        )
-    
-    # Already verified
-    if user.is_verified:
+    if not user or user.is_verified:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="E-mail is al geverifieerd",
+            detail="Ongeldige verificatiecode",
         )
     
     # Check if code is expired (10 minutes)
@@ -252,8 +245,17 @@ async def verify_code(
                 detail="Verificatiecode is verlopen. Vraag een nieuwe code aan.",
             )
     
+    # Brute-force protection: max 5 failed attempts
+    if hasattr(user, 'failed_login_attempts') and (user.failed_login_attempts or 0) >= 10:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Te veel pogingen. Vraag een nieuwe verificatiecode aan.",
+        )
+    
     # Check code
     if user.verification_token != data.code:
+        user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
+        db.commit()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Ongeldige verificatiecode",
@@ -341,10 +343,21 @@ async def login(
     """
     user = db.query(User).filter(User.email == credentials.email).first()
     
+    # Check lockout BEFORE expensive bcrypt (prevents CPU DoS)
+    if user and user.locked_until:
+        if user.locked_until > datetime.utcnow():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account is tijdelijk vergrendeld. Probeer het later opnieuw.",
+            )
+        else:
+            # Lock expired, reset counters
+            user.failed_login_attempts = 0
+            user.locked_until = None
+    
     if not user or not verify_password(credentials.password, user.hashed_password):
-        # Increment failed attempts
         if user:
-            user.failed_login_attempts += 1
+            user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
             if user.failed_login_attempts >= 5:
                 user.locked_until = datetime.utcnow() + timedelta(minutes=15)
             db.commit()
@@ -354,17 +367,16 @@ async def login(
             detail="Onjuist e-mailadres of wachtwoord",
         )
     
-    # Check if locked
-    if user.locked_until and user.locked_until > datetime.utcnow():
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account is tijdelijk vergrendeld. Probeer het later opnieuw.",
-        )
-    
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Uw account is gedeactiveerd",
+        )
+    
+    if not user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Verifieer eerst uw e-mailadres. Controleer uw inbox.",
         )
     
     # Reset failed attempts and update last login
@@ -893,10 +905,15 @@ async def google_oauth_callback(
         user = db.query(User).filter(User.email == email).first()
         
         if user:
-            # Link existing account to Google
+            if user.hashed_password:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Dit e-mailadres is al in gebruik met een wachtwoord. Log in met uw wachtwoord en koppel Google via instellingen.",
+                )
+            # Only auto-link password-less (OAuth-only) accounts
             user.google_id = google_id
             user.oauth_provider = OAuthProvider.google
-            user.is_verified = True  # Google verified the email
+            user.is_verified = True
             user.verified_at = datetime.utcnow()
             db.commit()
         else:

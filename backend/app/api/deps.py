@@ -61,6 +61,12 @@ def get_current_user(
             detail="Gebruikersaccount is gedeactiveerd",
         )
     
+    if not user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Verifieer eerst uw e-mailadres",
+        )
+    
     return user
 
 

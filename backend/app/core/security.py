@@ -54,7 +54,7 @@ def create_access_token(
 
 def create_refresh_token(subject: str, company_id: str, remember_me: bool = False) -> str:
     """Create a JWT refresh token."""
-    days = settings.REFRESH_TOKEN_EXPIRE_DAYS
+    days = 30 if remember_me else 7
     expire = datetime.utcnow() + timedelta(days=days)
     
     to_encode = {

@@ -90,14 +90,10 @@ export const authApi = {
     return response.data
   },
   
-  devLogin: async () => {
-    const response = await api.post('/auth/dev-login')
-    return response.data
-  },
-  
   register: async (companyData: any, userData: any) => {
-    const response = await api.post('/auth/register', companyData, {
-      params: userData,
+    const response = await api.post('/auth/register', {
+      company_data: companyData,
+      user_data: userData,
     })
     return response.data
   },

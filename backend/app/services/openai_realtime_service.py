@@ -102,12 +102,6 @@ def build_system_instructions(
     from zoneinfo import ZoneInfo
     from datetime import datetime as _dt
 
-    import locale
-    try:
-        locale.setlocale(locale.LC_TIME, "nl_NL.UTF-8")
-    except locale.Error:
-        pass
-
     ams_now = _dt.now(ZoneInfo("Europe/Amsterdam"))
     ams_hour = ams_now.hour
     if ams_hour < 12:
@@ -127,17 +121,10 @@ def build_system_instructions(
 
     formatted_disclosure = ""
     if disclosure_message:
-        try:
-            formatted_disclosure = disclosure_message.format(
-                greeting=time_greeting,
-                company_name=company_name,
-                ai_worker_name=worker.name,
-            )
-        except KeyError:
-            formatted_disclosure = disclosure_message.format(
-                company_name=company_name,
-                ai_worker_name=worker.name,
-            )
+        formatted_disclosure = disclosure_message
+        formatted_disclosure = formatted_disclosure.replace("{greeting}", time_greeting)
+        formatted_disclosure = formatted_disclosure.replace("{company_name}", company_name)
+        formatted_disclosure = formatted_disclosure.replace("{ai_worker_name}", worker.name)
 
     if formatted_disclosure:
         greeting = f'Begin ALTIJD met: "{formatted_disclosure}"'
