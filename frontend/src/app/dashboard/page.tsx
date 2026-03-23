@@ -497,12 +497,12 @@ export default function DashboardPage() {
                       )}
                       {!usage.is_unlimited && usage.percentage >= 100 && (
                         <p className="text-sm text-red-600 mt-2">
-                          U heeft uw limiet bereikt. Extra minuten worden gefactureerd a €0,25 per minuut.
+                          U heeft uw limiet bereikt. Extra minuten worden gefactureerd à €{usage.overage_price_per_minute?.toFixed(2).replace('.', ',')} per minuut.
                         </p>
                       )}
                       {!usage.is_unlimited && usage.percentage >= 80 && usage.percentage < 100 && (
                         <p className="text-sm text-amber-600 mt-2">
-                          U nadert uw limiet. Na het bereiken worden extra minuten gefactureerd a €0,25 per minuut.
+                          U nadert uw limiet. Na het bereiken worden extra minuten gefactureerd à €{usage.overage_price_per_minute?.toFixed(2).replace('.', ',')} per minuut.
                         </p>
                       )}
                     </div>

@@ -345,6 +345,7 @@ def send_usage_warning_email(
     percentage: float,
     minutes_used: int,
     minutes_limit: int,
+    overage_price: float = 0.75,
 ) -> bool:
     """Send a warning email when usage reaches 80% of the plan limit."""
     if not settings.RESEND_API_KEY:
@@ -377,7 +378,7 @@ def send_usage_warning_email(
 
                 <div style="background: #fffbeb; border: 1px solid #f59e0b; border-radius: 8px; padding: 16px; margin: 20px 0;">
                     <p style="margin: 0; font-size: 14px; color: #92400e;">
-                        Na het bereiken van uw limiet worden extra minuten automatisch gefactureerd tegen <strong>&euro;0,25 per minuut</strong>. Uw gesprekken worden niet onderbroken.
+                        Na het bereiken van uw limiet worden extra minuten automatisch gefactureerd tegen <strong>&euro;{overage_price:.2f} per minuut</strong>. Uw gesprekken worden niet onderbroken.
                     </p>
                 </div>
 
@@ -415,6 +416,7 @@ def send_usage_exceeded_email(
     company_name: str,
     minutes_used: int,
     minutes_limit: int,
+    overage_price: float = 0.75,
 ) -> bool:
     """Send an email when usage exceeds 100% of the plan limit."""
     if not settings.RESEND_API_KEY:
@@ -447,7 +449,7 @@ def send_usage_exceeded_email(
 
                 <div style="background: #fef2f2; border: 1px solid #ef4444; border-radius: 8px; padding: 16px; margin: 20px 0;">
                     <p style="margin: 0; font-size: 14px; color: #991b1b;">
-                        Vanaf nu worden extra minuten automatisch gefactureerd tegen <strong>&euro;0,25 per minuut</strong>. Uw gesprekken worden niet onderbroken.
+                        Vanaf nu worden extra minuten automatisch gefactureerd tegen <strong>&euro;{overage_price:.2f} per minuut</strong>. Uw gesprekken worden niet onderbroken.
                     </p>
                 </div>
 

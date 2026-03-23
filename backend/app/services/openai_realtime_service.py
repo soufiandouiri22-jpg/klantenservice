@@ -278,7 +278,7 @@ def build_system_instructions(
         "**Resultaten:** De tool retourneert exacte prijzen en pakketnamen. "
         "Als een resultaat een PRIJSINSTRUCTIE bevat, volg die LETTERLIJK.\n"
         "Neem prijzen en bedragen EXACT over. "
-        "Rond NIET af en wijzig GEEN cijfers. €149 = honderdnegenveertig euro, niet honderdvijftig."
+        "Rond NIET af en wijzig GEEN cijfers. €99 = negenennegentig euro, niet honderd."
     )
 
     tool_lines.append(

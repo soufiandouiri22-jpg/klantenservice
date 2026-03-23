@@ -92,7 +92,7 @@ BELANGRIJKE REGELS:
 
 PRIJZEN — STRIKT:
 - Kopieer prijzen, bedragen en getallen EXACT uit tool-resultaten naar het "facts" veld.
-- Wijzig GEEN enkel cijfer. Rond NIET af. €149 moet €149 blijven, NIET €150.
+- Wijzig GEEN enkel cijfer. Rond NIET af. €99 moet €99 blijven, NIET €100.
 - Als een tool-resultaat een PRIJSINSTRUCTIE bevat, neem die op in "instructions".
 
 AFSCHEID / TEVREDEN — STRIKT:

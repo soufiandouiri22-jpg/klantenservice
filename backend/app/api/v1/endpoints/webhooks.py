@@ -510,7 +510,7 @@ def _check_usage_alerts(db: Session, company_id):
     Uses billing_runs chain to determine the current billing period start,
     so alerts reset correctly at the real Stripe billing boundary.
     """
-    from app.api.v1.endpoints.payments import PLAN_MINUTES
+    from app.api.v1.endpoints.payments import PLAN_MINUTES, get_overage_rate
     from app.services.billing_helpers import (
         get_current_billing_period_start,
         calculate_minutes_used,
@@ -531,6 +531,7 @@ def _check_usage_alerts(db: Session, company_id):
 
     from app.core.email import send_usage_warning_email, send_usage_exceeded_email
 
+    overage_rate = get_overage_rate(plan)
     now = datetime.utcnow()
 
     if percentage >= 100:
@@ -540,6 +541,7 @@ def _check_usage_alerts(db: Session, company_id):
                 company_name=company.name,
                 minutes_used=int(minutes_used),
                 minutes_limit=limit,
+                overage_price=overage_rate,
             )
             company.usage_exceeded_sent_at = now
             db.commit()
@@ -552,6 +554,7 @@ def _check_usage_alerts(db: Session, company_id):
                 percentage=percentage,
                 minutes_used=int(minutes_used),
                 minutes_limit=limit,
+                overage_price=overage_rate,
             )
             company.usage_warning_sent_at = now
             db.commit()

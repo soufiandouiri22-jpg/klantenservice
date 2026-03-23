@@ -905,7 +905,7 @@ function SettingsContent() {
                             {subscription?.plan} Plan
                           </h3>
                           <p className="text-sm text-primary-700">
-                            {subscription?.max_ai_workers} AI-medewerker(s)
+                            {subscription?.max_ai_workers >= 999 ? 'Onbeperkt' : subscription?.max_ai_workers} AI-medewerker{subscription?.max_ai_workers === 1 ? '' : 's'}
                           </p>
                         </div>
                         <Badge variant={subscription?.status === 'trialing' ? 'warning' : 'success'}>
@@ -965,12 +965,12 @@ function SettingsContent() {
                         )}
                         {!usage.is_unlimited && usage.percentage >= 100 && (
                           <p className="text-sm text-red-600">
-                            U heeft uw limiet bereikt. Extra minuten worden gefactureerd a €0,25 per minuut.
+                            U heeft uw limiet bereikt. Extra minuten worden gefactureerd à €{usage.overage_price_per_minute?.toFixed(2).replace('.', ',')} per minuut.
                           </p>
                         )}
                         {!usage.is_unlimited && usage.percentage >= 80 && usage.percentage < 100 && (
                           <p className="text-sm text-amber-600">
-                            U nadert uw limiet. Na het bereiken worden extra minuten gefactureerd a €0,25 per minuut.
+                            U nadert uw limiet. Na het bereiken worden extra minuten gefactureerd à €{usage.overage_price_per_minute?.toFixed(2).replace('.', ',')} per minuut.
                           </p>
                         )}
                         {usage.overage_minutes > 0 && (
@@ -1032,7 +1032,7 @@ function SettingsContent() {
                         <h4 className="text-xl font-bold text-gray-900">Starter</h4>
                         <p className="text-sm text-gray-500 mt-1">Perfect voor kleine ondernemers</p>
                         <div className="mt-4">
-                          <span className="text-3xl font-bold text-gray-900">€{billingInterval === 'yearly' ? '1.499' : '149'}</span>
+                          <span className="text-3xl font-bold text-gray-900">€{billingInterval === 'yearly' ? '1.008' : '99'}</span>
                           <span className="text-gray-500">{billingInterval === 'yearly' ? '/jaar' : '/maand'}</span>
                         </div>
                         <ul className="mt-4 space-y-2">
@@ -1042,7 +1042,7 @@ function SettingsContent() {
                           </li>
                           <li className="flex items-center text-sm text-gray-600">
                             <Check className="h-4 w-4 text-green-500 mr-2" />
-                            500 belminuten/maand
+                            100 belminuten/maand
                           </li>
                           <li className="flex items-center text-sm text-gray-600">
                             <Check className="h-4 w-4 text-green-500 mr-2" />
@@ -1054,7 +1054,7 @@ function SettingsContent() {
                           </li>
                           <li className="flex items-center text-sm text-gray-600">
                             <Check className="h-4 w-4 text-green-500 mr-2" />
-                            Website kennis
+                            Daarna €0,75/min
                           </li>
                         </ul>
                         {(subscription?.status === 'active' || subscription?.status === 'trialing') && subscription?.plan === 'starter' ? (
@@ -1092,17 +1092,17 @@ function SettingsContent() {
                         <h4 className="text-xl font-bold text-gray-900">Business</h4>
                         <p className="text-sm text-gray-500 mt-1">Ideaal voor groeiende bedrijven</p>
                         <div className="mt-4">
-                          <span className="text-3xl font-bold text-gray-900">€{billingInterval === 'yearly' ? '3.099' : '299'}</span>
+                          <span className="text-3xl font-bold text-gray-900">€{billingInterval === 'yearly' ? '5.088' : '499'}</span>
                           <span className="text-gray-500">{billingInterval === 'yearly' ? '/jaar' : '/maand'}</span>
                         </div>
                         <ul className="mt-4 space-y-2">
                           <li className="flex items-center text-sm text-gray-600">
                             <Check className="h-4 w-4 text-green-500 mr-2" />
-                            3 AI-medewerkers
+                            5 AI-medewerkers
                           </li>
                           <li className="flex items-center text-sm text-gray-600">
                             <Check className="h-4 w-4 text-green-500 mr-2" />
-                            2000 belminuten/maand
+                            500 belminuten/maand
                           </li>
                           <li className="flex items-center text-sm text-gray-600">
                             <Check className="h-4 w-4 text-green-500 mr-2" />
@@ -1114,7 +1114,7 @@ function SettingsContent() {
                           </li>
                           <li className="flex items-center text-sm text-gray-600">
                             <Check className="h-4 w-4 text-green-500 mr-2" />
-                            Dedicated onboarding
+                            Daarna €0,40/min
                           </li>
                         </ul>
                         {(subscription?.status === 'active' || subscription?.status === 'trialing') && subscription?.plan === 'business' ? (
@@ -1148,12 +1148,17 @@ function SettingsContent() {
                         <h4 className="text-xl font-bold text-gray-900">Enterprise</h4>
                         <p className="text-sm text-gray-500 mt-1">Voor grote organisaties</p>
                         <div className="mt-4">
-                          <span className="text-3xl font-bold text-gray-900">Op aanvraag</span>
+                          <span className="text-3xl font-bold text-gray-900">€{billingInterval === 'yearly' ? '8.148' : '799'}</span>
+                          <span className="text-gray-500">{billingInterval === 'yearly' ? '/jaar' : '/maand'}</span>
                         </div>
                         <ul className="mt-4 space-y-2">
                           <li className="flex items-center text-sm text-gray-600">
                             <Check className="h-4 w-4 text-green-500 mr-2" />
-                            5+ AI-medewerkers
+                            Onbeperkt AI-medewerkers
+                          </li>
+                          <li className="flex items-center text-sm text-gray-600">
+                            <Check className="h-4 w-4 text-green-500 mr-2" />
+                            1000 belminuten/maand
                           </li>
                           <li className="flex items-center text-sm text-gray-600">
                             <Check className="h-4 w-4 text-green-500 mr-2" />
@@ -1165,11 +1170,7 @@ function SettingsContent() {
                           </li>
                           <li className="flex items-center text-sm text-gray-600">
                             <Check className="h-4 w-4 text-green-500 mr-2" />
-                            Onbeperkte logs
-                          </li>
-                          <li className="flex items-center text-sm text-gray-600">
-                            <Check className="h-4 w-4 text-green-500 mr-2" />
-                            Custom integraties
+                            Daarna €0,30/min
                           </li>
                         </ul>
                         {(subscription?.status === 'active' || subscription?.status === 'trialing') && subscription?.plan === 'enterprise' ? (
@@ -1179,12 +1180,14 @@ function SettingsContent() {
                         ) : (
                           <Button
                             className="mt-6 w-full"
-                            variant="outline"
-                            onClick={() => window.location.href = '/contact'}
+                            variant={subscription?.status !== 'active' && subscription?.status !== 'trialing' ? 'primary' : 'outline'}
+                            onClick={() => handleUpgrade('enterprise', billingInterval)}
+                            disabled={checkoutMutation.isPending || portalMutation.isPending}
                           >
-                            {(subscription?.status === 'active' || subscription?.status === 'trialing')
-                              ? 'Upgraden'
-                              : 'Aanvragen'}
+                            {(checkoutMutation.isPending || portalMutation.isPending) && loadingPlan === 'enterprise' ? 'Laden...' :
+                              subscription?.status !== 'active' && subscription?.status !== 'trialing'
+                                ? 'Start gratis proefperiode'
+                                : 'Upgraden'}
                           </Button>
                         )}
                       </div>

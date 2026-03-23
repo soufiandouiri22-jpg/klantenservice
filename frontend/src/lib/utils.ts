@@ -129,7 +129,7 @@ export function getStatusLabel(status: string) {
     confirmed: 'Bevestigd',
     cancelled: 'Geannuleerd',
     pending: 'In afwachting',
-    crawling: 'Crawlen...',
+    crawling: 'Indexeren...',
     processing: 'Verwerken...',
     outdated: 'Verouderd',
     indexing: 'Indexeren',

@@ -14,7 +14,7 @@ from app.core.database import Base
 class SubscriptionPlan(str, Enum):
     starter = "starter"      # 1 AI-medewerker
     business = "business"    # 5 AI-medewerkers
-    enterprise = "enterprise"  # 7 AI-medewerkers
+    enterprise = "enterprise"  # Onbeperkt AI-medewerkers
 
 
 class BillingInterval(str, Enum):
@@ -145,6 +145,6 @@ class Company(Base):
         limits = {
             SubscriptionPlan.starter: 1,
             SubscriptionPlan.business: 5,
-            SubscriptionPlan.enterprise: 7,
+            SubscriptionPlan.enterprise: 999,
         }
         return limits.get(self.subscription_plan, 1)

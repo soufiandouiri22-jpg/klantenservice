@@ -14,7 +14,7 @@ since the current period hasn't ended yet.
 Overage rounding rule:
     OVERAGE_ROUNDING_RULE = "ceil_to_whole_minute"
     Total overage is rounded UP to the nearest whole minute via math.ceil().
-    Displayed on invoices as "X extra belminuten à €0,25/min".
+    Displayed on invoices as "X extra belminuten à €Y/min" (rate varies per plan).
 """
 import math
 import logging

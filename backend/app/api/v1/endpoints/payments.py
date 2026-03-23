@@ -34,18 +34,29 @@ PLAN_PRICES = {
 PLAN_LIMITS = {
     "starter": 1,
     "business": 5,
-    "enterprise": 7,
+    "enterprise": 999,
 }
 
 # Belminuten per plan per maand
 PLAN_MINUTES = {
-    "starter": 500,
-    "business": 2000,
-    "enterprise": None,  # Onbeperkt
+    "starter": 100,
+    "business": 500,
+    "enterprise": 1000,
 }
 
-# Overage pricing (EUR per extra minute beyond plan limit)
-OVERAGE_PRICE_PER_MINUTE = 0.25
+# Overage pricing per plan (EUR per extra minute beyond plan limit)
+OVERAGE_PRICE_PER_MINUTE = {
+    "starter": 0.75,
+    "business": 0.40,
+    "enterprise": 0.30,
+}
+
+
+def get_overage_rate(plan: str) -> float:
+    """Get overage rate for a plan. Falls back to highest rate."""
+    if isinstance(OVERAGE_PRICE_PER_MINUTE, dict):
+        return OVERAGE_PRICE_PER_MINUTE.get(plan, 0.75)
+    return OVERAGE_PRICE_PER_MINUTE
 
 
 class CheckoutRequest(BaseModel):
@@ -209,8 +220,9 @@ async def get_subscription_status(
     if not company:
         raise HTTPException(status_code=400, detail="User has no company")
     
+    plan = company.subscription_plan.value
     result = {
-        "plan": company.subscription_plan.value,
+        "plan": plan,
         "status": company.subscription_status,
         "billing_interval": company.billing_interval.value if company.billing_interval else "monthly",
         "max_ai_workers": company.ai_worker_limit,
@@ -218,6 +230,8 @@ async def get_subscription_status(
         "stripe_subscription_id": company.stripe_subscription_id,
         "ends_at": company.subscription_ends_at.isoformat() if company.subscription_ends_at else None,
         "trial_used": company.trial_used or False,
+        "minutes_included": PLAN_MINUTES.get(plan),
+        "overage_price_per_minute": get_overage_rate(plan),
     }
     
     # Get more details from Stripe if available
@@ -260,11 +274,12 @@ async def get_usage(
     plan = company.subscription_plan.value
     minutes_limit = PLAN_MINUTES.get(plan)
 
+    overage_rate = get_overage_rate(plan)
     overage_minutes = 0
     overage_cost = 0.0
     if minutes_limit and minutes_used > minutes_limit:
         overage_minutes = round_overage_minutes(minutes_used - minutes_limit)
-        overage_cost = round(overage_minutes * OVERAGE_PRICE_PER_MINUTE, 2)
+        overage_cost = round(overage_minutes * overage_rate, 2)
 
     return {
         "minutes_used": minutes_used_display,
@@ -275,7 +290,7 @@ async def get_usage(
         "period_start": period_start.isoformat(),
         "overage_minutes": overage_minutes,
         "overage_cost": overage_cost,
-        "overage_price_per_minute": OVERAGE_PRICE_PER_MINUTE,
+        "overage_price_per_minute": overage_rate,
     }
 
 
@@ -701,7 +716,8 @@ async def handle_invoice_created(invoice: dict, db: Session):
     )
     raw_overage = minutes_used - limit
     overage_minutes = round_overage_minutes(raw_overage)
-    amount_cents = overage_minutes * int(round(OVERAGE_PRICE_PER_MINUTE * 100))
+    overage_rate = get_overage_rate(plan)
+    amount_cents = overage_minutes * int(round(overage_rate * 100))
 
     # --- Create or update billing_run row ---
     billing_run = existing_run  # may be a previous error run
@@ -755,7 +771,7 @@ async def handle_invoice_created(invoice: dict, db: Session):
             invoice=invoice_id,
             amount=amount_cents,
             currency="eur",
-            description=f"{overage_minutes} extra belminuten à €{OVERAGE_PRICE_PER_MINUTE:.2f}/min",
+            description=f"{overage_minutes} extra belminuten à €{overage_rate:.2f}/min",
             idempotency_key=idempotency_key,
         )
         billing_run.stripe_invoice_item_id = item.id
@@ -778,7 +794,7 @@ async def handle_invoice_created(invoice: dict, db: Session):
                     amount=amount_cents,
                     currency="eur",
                     description=(
-                        f"{overage_minutes} extra belminuten à €{OVERAGE_PRICE_PER_MINUTE:.2f}/min "
+                        f"{overage_minutes} extra belminuten à €{overage_rate:.2f}/min "
                         f"(periode {overage_period_start.date()}→{overage_period_end.date()})"
                     ),
                     idempotency_key=fallback_key,

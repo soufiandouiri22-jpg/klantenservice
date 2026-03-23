@@ -406,7 +406,7 @@ function CustomerDetailContent({ customer, onSave, onSubscriptionSave, onDelete,
           >
             <option value="starter">Starter (1 AI-medewerker)</option>
             <option value="business">Business (5 AI-medewerkers)</option>
-            <option value="enterprise">Enterprise (7 AI-medewerkers)</option>
+            <option value="enterprise">Enterprise (onbeperkt AI-medewerkers)</option>
           </Select>
           <Select
             label="Status"

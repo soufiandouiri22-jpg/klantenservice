@@ -106,18 +106,21 @@ async def request_upgrade(
                 "name": "Starter",
                 "ai_workers": 1,
                 "price": "€99/maand",
+                "minutes": 100,
             },
             {
                 "id": "business",
                 "name": "Business",
                 "ai_workers": 5,
-                "price": "€399/maand",
+                "price": "€499/maand",
+                "minutes": 500,
             },
             {
                 "id": "enterprise",
                 "name": "Enterprise",
-                "ai_workers": 7,
-                "price": "Op aanvraag",
+                "ai_workers": "Onbeperkt",
+                "price": "€799/maand",
+                "minutes": 1000,
             },
         ]
     }

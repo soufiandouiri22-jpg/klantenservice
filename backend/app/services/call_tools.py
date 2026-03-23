@@ -533,7 +533,7 @@ def _format_overview_response(overview) -> Dict[str, Any]:
 
 
 def _format_price_str(price) -> str:
-    """Format price for voice: €149 (not €149,00) to prevent LLM rounding."""
+    """Format price for voice: €99 (not €99,00) to prevent LLM rounding."""
     if price is None:
         return ""
     if price == int(price):
@@ -568,7 +568,7 @@ def _format_pricing_response(plans: List) -> Dict[str, Any]:
     verbal_instruction = (
         "PRIJSINSTRUCTIE: Noem onderstaande prijzen en pakketten EXACT zoals ze hier staan. "
         "Wijzig GEEN enkel bedrag. Rond NIET af. "
-        "Zeg het getal precies: €149 = honderdnegenveertig euro, €299 = tweehonderdnegenennegentig euro. "
+        "Zeg het getal precies: €99 = negenennegentig euro, €499 = vierhonderdnegenennegentig euro. "
         "Als er eerdere zoekresultaten in het gesprek staan, NEGEER die voor de prijsvraag en gebruik ALLEEN deze gegevens.\n\n"
     )
 

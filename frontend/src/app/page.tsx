@@ -46,30 +46,31 @@ const features = [
 const plans = [
   {
     name: 'Starter',
-    monthlyPrice: '149',
-    yearlyPrice: '125',
-    yearlyTotal: '1.499',
+    monthlyPrice: '99',
+    yearlyPrice: '84',
+    yearlyTotal: '1.008',
     workers: 1,
     description: 'Perfect voor kleine ondernemers',
-    features: ['1 AI-medewerker', '500 belminuten/maand', 'Agenda integratie', 'CRM integratie', 'Website kennis'],
+    features: ['1 AI-medewerker', '100 belminuten/maand', 'Agenda integratie', 'CRM integratie', 'Website kennis', 'Daarna €0,75/min'],
   },
   {
     name: 'Business',
-    monthlyPrice: '299',
-    yearlyPrice: '258',
-    yearlyTotal: '3.099',
-    workers: 3,
+    monthlyPrice: '499',
+    yearlyPrice: '424',
+    yearlyTotal: '5.088',
+    workers: 5,
     popular: true,
     description: 'Ideaal voor groeiende bedrijven',
-    features: ['3 AI-medewerkers', '2000 belminuten/maand', 'Alles van Starter', 'Prioriteit support', 'Dedicated onboarding'],
+    features: ['5 AI-medewerkers', '500 belminuten/maand', 'Alles van Starter', 'Prioriteit support', 'Dedicated onboarding', 'Daarna €0,40/min'],
   },
   {
     name: 'Enterprise',
-    monthlyPrice: 'Op aanvraag',
-    yearlyPrice: 'Op aanvraag',
-    workers: 7,
+    monthlyPrice: '799',
+    yearlyPrice: '679',
+    yearlyTotal: '8.148',
+    workers: 999,
     description: 'Voor grote organisaties',
-    features: ['5+ AI-medewerkers', 'Alles van Business', 'Dedicated support', 'Onbeperkte logs', 'Custom integraties'],
+    features: ['Onbeperkt AI-medewerkers', '1000 belminuten/maand', 'Alles van Business', 'Dedicated support', 'Custom integraties', 'Daarna €0,30/min'],
   },
 ]
 
@@ -208,7 +209,7 @@ const faqs = [
   },
   {
     question: 'Wat kost het?',
-    answer: 'Ons Starter-abonnement begint bij \u20ac149 per maand met 1 AI-medewerker. Het Business-abonnement kost \u20ac299 per maand met meerdere AI-medewerkers en uitgebreide integraties. U kunt 14 dagen gratis proberen.',
+    answer: 'Ons Starter-abonnement begint bij \u20ac99 per maand met 1 AI-medewerker en 100 belminuten. Het Business-abonnement kost \u20ac499 per maand met 5 AI-medewerkers en 500 belminuten. Enterprise kost \u20ac799 per maand met onbeperkt AI-medewerkers en 1000 belminuten. U kunt 14 dagen gratis proberen.',
   },
   {
     question: 'Hoe zit het met privacy en AVG?',

@@ -928,11 +928,11 @@ async def get_business_metrics(
     enterprise_customers = plan_counts.enterprise or 0
     
     # Calculate MRR (only active, not trialing)
-    # Monthly prices in cents: starter=€149, business=€299
-    # Yearly prices in cents (total/year): starter=€1490, business=€2990
+    # Monthly prices in cents: starter=€99, business=€499, enterprise=€799
+    # Yearly with ~15% discount: starter=€1.008, business=€5.088, enterprise=€8.148
     # MRR for yearly = yearly_price / 12
-    MONTHLY_PRICES = {"starter": 14900, "business": 29900, "enterprise": 0}
-    YEARLY_PRICES_MRR = {"starter": 12417, "business": 24917, "enterprise": 0}  # yearly / 12
+    MONTHLY_PRICES = {"starter": 9900, "business": 49900, "enterprise": 79900}
+    YEARLY_PRICES_MRR = {"starter": 8400, "business": 42400, "enterprise": 67900}  # yearly / 12 (~15% discount)
 
     active_companies = db.query(
         Company.subscription_plan, Company.billing_interval
@@ -1222,7 +1222,7 @@ async def update_customer_subscription(
         plan_limits = {
             "starter": 1,
             "business": 5,
-            "enterprise": 7,
+            "enterprise": 999,
         }
         company.max_ai_workers = plan_limits.get(data.subscription_plan, 1)
     
@@ -2010,7 +2010,7 @@ async def retry_billing_run(
     """Retry a failed billing run. Safe to call multiple times (Stripe idempotency key).
     If the original invoice is finalized, creates a standalone InvoiceItem for the next invoice."""
     import stripe as stripe_mod
-    from app.api.v1.endpoints.payments import OVERAGE_PRICE_PER_MINUTE
+    from app.api.v1.endpoints.payments import get_overage_rate
 
     billing_run = db.query(BillingRun).filter(BillingRun.id == run_id).first()
     if not billing_run:
@@ -2032,8 +2032,9 @@ async def retry_billing_run(
     if not company:
         raise HTTPException(status_code=400, detail="Company not found for billing run")
 
+    overage_rate = get_overage_rate(company.subscription_plan.value)
     idempotency_key = billing_run.stripe_idempotency_key or f"overage-{billing_run.id}"
-    description = f"{billing_run.overage_minutes} extra belminuten à €{OVERAGE_PRICE_PER_MINUTE:.2f}/min"
+    description = f"{billing_run.overage_minutes} extra belminuten à €{overage_rate:.2f}/min"
 
     try:
         item = stripe_mod.InvoiceItem.create(
