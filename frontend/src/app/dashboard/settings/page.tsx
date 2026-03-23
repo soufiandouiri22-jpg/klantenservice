@@ -1052,10 +1052,6 @@ function SettingsContent() {
                             <Check className="h-4 w-4 text-green-500 mr-2" />
                             CRM integratie
                           </li>
-                          <li className="flex items-center text-sm text-gray-600">
-                            <Check className="h-4 w-4 text-green-500 mr-2" />
-                            Daarna €0,75/min
-                          </li>
                         </ul>
                         {(subscription?.status === 'active' || subscription?.status === 'trialing') && subscription?.plan === 'starter' ? (
                           <div className="mt-6 py-2 text-center text-sm font-medium text-primary-600">
@@ -1112,10 +1108,6 @@ function SettingsContent() {
                             <Check className="h-4 w-4 text-green-500 mr-2" />
                             Prioriteit support
                           </li>
-                          <li className="flex items-center text-sm text-gray-600">
-                            <Check className="h-4 w-4 text-green-500 mr-2" />
-                            Daarna €0,40/min
-                          </li>
                         </ul>
                         {(subscription?.status === 'active' || subscription?.status === 'trialing') && subscription?.plan === 'business' ? (
                           <div className="mt-6 py-2 text-center text-sm font-medium text-primary-600">
@@ -1168,10 +1160,6 @@ function SettingsContent() {
                             <Check className="h-4 w-4 text-green-500 mr-2" />
                             Dedicated support
                           </li>
-                          <li className="flex items-center text-sm text-gray-600">
-                            <Check className="h-4 w-4 text-green-500 mr-2" />
-                            Daarna €0,30/min
-                          </li>
                         </ul>
                         {(subscription?.status === 'active' || subscription?.status === 'trialing') && subscription?.plan === 'enterprise' ? (
                           <div className="mt-6 py-2 text-center text-sm font-medium text-primary-600">
@@ -1192,6 +1180,9 @@ function SettingsContent() {
                         )}
                       </div>
                     </div>
+                    <p className="mt-4 text-center text-xs text-gray-400">
+                      Extra belminuten boven uw limiet worden automatisch gefactureerd. Starter: €0,75/min · Business: €0,40/min · Enterprise: €0,30/min.
+                    </p>
 
                     {/* Manage subscription button for existing Stripe customers */}
                     {subscription?.has_stripe && (subscription?.status === 'active' || subscription?.status === 'trialing') && (

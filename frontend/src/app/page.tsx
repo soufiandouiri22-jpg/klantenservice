@@ -51,7 +51,7 @@ const plans = [
     yearlyTotal: '999',
     workers: 1,
     description: 'Perfect voor kleine ondernemers',
-    features: ['1 AI-medewerker', '100 belminuten/maand', 'Agenda integratie', 'CRM integratie', 'Website kennis', 'Daarna €0,75/min'],
+    features: ['1 AI-medewerker', '100 belminuten/maand', 'Agenda integratie', 'CRM integratie', 'Website kennis'],
   },
   {
     name: 'Business',
@@ -61,7 +61,7 @@ const plans = [
     workers: 5,
     popular: true,
     description: 'Ideaal voor groeiende bedrijven',
-    features: ['5 AI-medewerkers', '500 belminuten/maand', 'Alles van Starter', 'Prioriteit support', 'Dedicated onboarding', 'Daarna €0,40/min'],
+    features: ['5 AI-medewerkers', '500 belminuten/maand', 'Alles van Starter', 'Prioriteit support', 'Dedicated onboarding'],
   },
   {
     name: 'Enterprise',
@@ -70,7 +70,7 @@ const plans = [
     yearlyTotal: '7.999',
     workers: 999,
     description: 'Voor grote organisaties',
-    features: ['Onbeperkt AI-medewerkers', '1000 belminuten/maand', 'Alles van Business', 'Dedicated support', 'Custom integraties', 'Daarna €0,30/min'],
+    features: ['Onbeperkt AI-medewerkers', '1000 belminuten/maand', 'Alles van Business', 'Dedicated support', 'Custom integraties'],
   },
 ]
 
@@ -210,6 +210,10 @@ const faqs = [
   {
     question: 'Wat kost het?',
     answer: 'Ons Starter-abonnement begint bij \u20ac99 per maand met 1 AI-medewerker en 100 belminuten. Het Business-abonnement kost \u20ac499 per maand met 5 AI-medewerkers en 500 belminuten. Enterprise kost \u20ac799 per maand met onbeperkt AI-medewerkers en 1000 belminuten. U kunt 14 dagen gratis proberen.',
+  },
+  {
+    question: 'Wat gebeurt er als ik mijn belminuten overschrijd?',
+    answer: 'Uw gesprekken worden nooit onderbroken. Extra minuten boven uw limiet worden automatisch gefactureerd aan het einde van uw facturatieperiode. De kosten per extra minuut zijn afhankelijk van uw plan: \u20ac0,75/min voor Starter, \u20ac0,40/min voor Business en \u20ac0,30/min voor Enterprise.',
   },
   {
     question: 'Hoe zit het met privacy en AVG?',
@@ -1082,6 +1086,9 @@ export default function HomePage() {
               </div>
             ))}
           </div>
+          <p className="mt-8 text-center text-sm text-gray-500">
+            Belminuten overschreden? Uw gesprekken worden nooit onderbroken. Extra minuten worden automatisch gefactureerd: Starter €0,75/min · Business €0,40/min · Enterprise €0,30/min.
+          </p>
         </div>
       </section>
 
