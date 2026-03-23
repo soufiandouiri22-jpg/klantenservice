@@ -285,7 +285,7 @@ export function OverviewTab() {
                     <div className="flex items-center justify-between">
                       <div>
                         <span className="text-sm text-gray-600">Starter</span>
-                        <p className="text-xs text-gray-400">€99/mo • €1.008/jr</p>
+                        <p className="text-xs text-gray-400">€99/mo • €999/jr</p>
                       </div>
                       <span className="text-lg font-semibold">{business?.starter_customers || 0}</span>
                     </div>
@@ -300,7 +300,7 @@ export function OverviewTab() {
                     <div className="flex items-center justify-between">
                       <div>
                         <span className="text-sm text-gray-600">Business</span>
-                        <p className="text-xs text-gray-400">€499/mo • €5.088/jr</p>
+                        <p className="text-xs text-gray-400">€499/mo • €4.999/jr</p>
                       </div>
                       <span className="text-lg font-semibold">{business?.business_customers || 0}</span>
                     </div>
@@ -315,7 +315,7 @@ export function OverviewTab() {
                     <div className="flex items-center justify-between">
                       <div>
                         <span className="text-sm text-gray-600">Enterprise</span>
-                        <p className="text-xs text-gray-400">€799/mo • €8.148/jr</p>
+                        <p className="text-xs text-gray-400">€799/mo • €7.999/jr</p>
                       </div>
                       <span className="text-lg font-semibold">{business?.enterprise_customers || 0}</span>
                     </div>

@@ -929,10 +929,10 @@ async def get_business_metrics(
     
     # Calculate MRR (only active, not trialing)
     # Monthly prices in cents: starter=€99, business=€499, enterprise=€799
-    # Yearly with ~15% discount: starter=€1.008, business=€5.088, enterprise=€8.148
+    # Yearly with ~15% discount: starter=€999, business=€4.999, enterprise=€7.999
     # MRR for yearly = yearly_price / 12
     MONTHLY_PRICES = {"starter": 9900, "business": 49900, "enterprise": 79900}
-    YEARLY_PRICES_MRR = {"starter": 8400, "business": 42400, "enterprise": 67900}  # yearly / 12 (~15% discount)
+    YEARLY_PRICES_MRR = {"starter": 8325, "business": 41658, "enterprise": 66658}  # yearly / 12 (~15% discount)
 
     active_companies = db.query(
         Company.subscription_plan, Company.billing_interval

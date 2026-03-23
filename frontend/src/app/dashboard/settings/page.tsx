@@ -1032,7 +1032,7 @@ function SettingsContent() {
                         <h4 className="text-xl font-bold text-gray-900">Starter</h4>
                         <p className="text-sm text-gray-500 mt-1">Perfect voor kleine ondernemers</p>
                         <div className="mt-4">
-                          <span className="text-3xl font-bold text-gray-900">€{billingInterval === 'yearly' ? '1.008' : '99'}</span>
+                          <span className="text-3xl font-bold text-gray-900">€{billingInterval === 'yearly' ? '999' : '99'}</span>
                           <span className="text-gray-500">{billingInterval === 'yearly' ? '/jaar' : '/maand'}</span>
                         </div>
                         <ul className="mt-4 space-y-2">
@@ -1092,7 +1092,7 @@ function SettingsContent() {
                         <h4 className="text-xl font-bold text-gray-900">Business</h4>
                         <p className="text-sm text-gray-500 mt-1">Ideaal voor groeiende bedrijven</p>
                         <div className="mt-4">
-                          <span className="text-3xl font-bold text-gray-900">€{billingInterval === 'yearly' ? '5.088' : '499'}</span>
+                          <span className="text-3xl font-bold text-gray-900">€{billingInterval === 'yearly' ? '4.999' : '499'}</span>
                           <span className="text-gray-500">{billingInterval === 'yearly' ? '/jaar' : '/maand'}</span>
                         </div>
                         <ul className="mt-4 space-y-2">
@@ -1148,7 +1148,7 @@ function SettingsContent() {
                         <h4 className="text-xl font-bold text-gray-900">Enterprise</h4>
                         <p className="text-sm text-gray-500 mt-1">Voor grote organisaties</p>
                         <div className="mt-4">
-                          <span className="text-3xl font-bold text-gray-900">€{billingInterval === 'yearly' ? '8.148' : '799'}</span>
+                          <span className="text-3xl font-bold text-gray-900">€{billingInterval === 'yearly' ? '7.999' : '799'}</span>
                           <span className="text-gray-500">{billingInterval === 'yearly' ? '/jaar' : '/maand'}</span>
                         </div>
                         <ul className="mt-4 space-y-2">

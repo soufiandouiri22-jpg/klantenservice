@@ -47,8 +47,8 @@ const plans = [
   {
     name: 'Starter',
     monthlyPrice: '99',
-    yearlyPrice: '84',
-    yearlyTotal: '1.008',
+    yearlyPrice: '83',
+    yearlyTotal: '999',
     workers: 1,
     description: 'Perfect voor kleine ondernemers',
     features: ['1 AI-medewerker', '100 belminuten/maand', 'Agenda integratie', 'CRM integratie', 'Website kennis', 'Daarna €0,75/min'],
@@ -56,8 +56,8 @@ const plans = [
   {
     name: 'Business',
     monthlyPrice: '499',
-    yearlyPrice: '424',
-    yearlyTotal: '5.088',
+    yearlyPrice: '417',
+    yearlyTotal: '4.999',
     workers: 5,
     popular: true,
     description: 'Ideaal voor groeiende bedrijven',
@@ -66,8 +66,8 @@ const plans = [
   {
     name: 'Enterprise',
     monthlyPrice: '799',
-    yearlyPrice: '679',
-    yearlyTotal: '8.148',
+    yearlyPrice: '667',
+    yearlyTotal: '7.999',
     workers: 999,
     description: 'Voor grote organisaties',
     features: ['Onbeperkt AI-medewerkers', '1000 belminuten/maand', 'Alles van Business', 'Dedicated support', 'Custom integraties', 'Daarna €0,30/min'],
