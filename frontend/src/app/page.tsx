@@ -1090,7 +1090,7 @@ export default function HomePage() {
             ))}
           </div>
           <p className="mt-8 text-center text-sm text-gray-500">
-            Belminuten overschreden? Uw gesprekken worden nooit onderbroken. Extra minuten worden automatisch gefactureerd: Starter €0,75/min · Business €0,40/min · Enterprise €0,30/min.
+            Extra belminuten worden automatisch gefactureerd. Starter: €0,75/min · Business: €0,40/min · Enterprise: €0,30/min
           </p>
         </div>
       </section>
