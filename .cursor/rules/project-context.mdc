@@ -1,0 +1,161 @@
+---
+description: Complete project context and architecture for klantenservice.ai
+alwaysApply: true
+---
+
+# Klantenservice.ai — Project Context
+
+AI-powered phone customer service platform. Dutch B2B SaaS. Companies connect their phone number, configure an AI worker, and the AI handles inbound calls using ElevenLabs voice + RAG knowledge base.
+
+## User preferences
+
+- Keep UI text SHORT. No verbose copy. The user hates long text.
+- Dutch for all customer-facing text. English for code/comments.
+- Minimal changes — don't over-engineer.
+
+## Tech stack
+
+**Backend:** Python 3.11, FastAPI, SQLAlchemy (PostgreSQL + pgvector), Pydantic v2, Alembic migrations
+**Frontend:** Next.js 14 (App Router), React, TypeScript, Tailwind CSS, Zustand, React Query, Axios
+**Deploy:** Render (separate services for API + Web). Auto-deploy on web, manual on API.
+**External services:** ElevenLabs (voice AI), Twilio (telephony), Stripe (billing), OpenAI (embeddings + orchestrator), Resend (email), Google/Microsoft (calendar OAuth), HubSpot (CRM), Plausible (analytics)
+
+## Monorepo structure
+
+```
+backend/
+  app/
+    api/v1/endpoints/    # FastAPI routers (auth, payments, webhooks, admin, ai_workers, etc.)
+    core/                # config.py (Settings), security.py (JWT), email.py
+    models/              # SQLAlchemy models (company, user, ai_worker, call_log, etc.)
+    services/            # Business logic (orchestrator, call_tools, billing_helpers, transcript_service)
+      indexing/          # Website crawl + chunk + embed pipeline
+      retrieval/         # RAG hybrid search (vector + fulltext + rerank)
+frontend/
+  src/
+    app/                 # Next.js App Router pages
+      dashboard/         # Authenticated dashboard pages
+      admin/             # Superadmin panel (tabs: overview, analytics, customers, policies, evaluations, voice, logs)
+    components/
+      layout/            # DashboardLayout, Sidebar, Header, PublicHeader
+      ui/                # Custom components (Button, Input, Card, Modal, Badge — NOT shadcn)
+    lib/
+      api.ts             # Axios client + all API modules (authApi, dashboardApi, paymentsApi, adminApi, etc.)
+      store.ts           # Zustand stores (useAuthStore, useSidebarStore)
+      utils.ts           # cn(), date helpers, formatters
+```
+
+## Pricing (current)
+
+| Plan | Monthly | Yearly | Minutes | Overage | AI Workers |
+|------|---------|--------|---------|---------|------------|
+| Starter | €99 | €999/yr | 100 | €0.75/min | 1 |
+| Business | €499 | €4.999/yr | 500 | €0.40/min | 5 |
+| Enterprise | €799 | €7.999/yr | 1000 | €0.30/min | Unlimited (999) |
+
+Constants in `backend/app/api/v1/endpoints/payments.py`: `PLAN_LIMITS`, `PLAN_MINUTES`, `OVERAGE_PRICE_PER_MINUTE` (dict), `get_overage_rate()`.
+Mirrored in `company.py` `ai_worker_limit` property and `admin.py` `MONTHLY_PRICES`/`YEARLY_PRICES_MRR`.
+
+## Database models (key ones)
+
+- **Company** — tenant. Has `subscription_plan` (starter/business/enterprise), `subscription_status`, `stripe_customer_id`, `effective_business_type`, `inferred_topics`, `custom_instructions`. Owns all other resources.
+- **User** — belongs to company. Roles: owner, admin, manager, viewer. OAuth support (Google). `is_superadmin` for admin panel.
+- **AIWorker** — virtual employee. `voice_id`, `language`, `address_form` (u/jij), `tone_of_voice`, `behavior_settings` (JSON), permissions (`can_make_appointments`, `can_view_prices`, etc.), `status` (available/busy/offline).
+- **PhoneNumber** — Twilio number linked to company + AI worker. Business hours (JSON), queue/voicemail/transfer settings.
+- **CallLog** — one per call. `twilio_call_sid`, `elevenlabs_conversation_id`, timing, `summary`, `sentiment`, `topics`. Linked: transcripts, appointments, notes.
+- **CallTranscript** — speaker + message per turn.
+- **BillingRun** — overage billing record per invoice cycle. Status: calculated/charged/skipped/error.
+- **WebsiteKnowledge** / **KnowledgeChunk** — crawled website content + pgvector embeddings (384d).
+- **CalendarIntegration** — Google/Microsoft/CalDAV + Zoom/Teams/GMeet tokens.
+- **CRMIntegration** — HubSpot/Pipedrive/Salesforce.
+- **Appointment** — booked via AI during calls. Status: held/confirmed/cancelled/completed/no_show.
+- **InternalNote** — AI-created notes from calls. Priority levels, action tracking.
+- **TrainingRule** / **ExampleAnswer** — custom behavior rules + Q&A pairs for RAG fallback.
+- **SystemPrompt** — global prompt sections (personality, goal, tone, guardrails, steps). Seed defaults in `DEFAULT_SYSTEM_PROMPTS`.
+- **Business facts** — structured tables: `CompanyOverview`, `PricingPlan`, `ContactInfo`, `OpeningHours`, `BusinessLocation`, `BusinessService`. Auto-extracted from website indexing.
+- **VoiceSession** / **PolicyDecisionLog** — call phase tracking + policy audit trail.
+
+## How calls work (end-to-end)
+
+1. Twilio hits `POST /api/v1/webhooks/twilio/voice` with inbound call
+2. Resolve PhoneNumber → Company. Check: kill switch, subscription active/trialing, business hours
+3. Pick available AIWorker (linked to number or any available). Set worker BUSY.
+4. Create CallLog. Build system instructions via `build_system_instructions()` (prompts from DB + worker config + company context + training rules + CRM caller lookup)
+5. Register call with ElevenLabs ConvAI API (`/v1/convai/twilio/register-call`). Pass dynamic variables (company_id, worker_id, call_log_id, etc.)
+6. Return TwiML to Twilio to connect the ElevenLabs voice stream
+7. During call: ElevenLabs invokes server tools at `/api/v1/elevenlabs/tools/<tool_name>` → `_run_tool()` in orchestrator → `call_tools.py` (search_knowledge, book_appointment, get_pricing, create_note, transfer_call, etc.)
+8. Status webhook updates CallLog, frees AI worker, triggers post-call analysis + usage alerts
+
+## Business type / tag system
+
+Companies get auto-tagged with a business type (e.g. `pizza_restaurant`, `dentist`, `car_garage`, `hair_salon`, `ai_saas`, `general`).
+
+**How it works:**
+- `domain_inference.py` has `PROFILES` mapping business types to `name_hints`, `content_keywords`, `scope_re` (regex for on-topic detection)
+- When website indexing completes, `update_company_inference()` scores all indexed content against profiles
+- Result stored on Company: `inferred_business_type`, `inferred_business_confidence`, `inferred_topics`
+- `business_type_override` allows manual override. `effective_business_type` = override or inferred.
+
+**Runtime effect:**
+- `intent_classifier.py`: `CompanyScope` uses business type + topics for `is_off_topic()` checks. A pizza restaurant AI won't answer montage questions; a garage won't discuss menu items.
+- `PolicyEngine`: scope_guard, escalation triggers based on intent + business scope
+- This is NOT a separate prompt per business type — it's scope/policy filtering at runtime
+
+## Knowledge base pipeline
+
+1. **Crawl** (configurable provider, max pages/depth) → **Clean** → **Chunk** (semantic + FAQ/pricing extractors)
+2. **Embed** (OpenAI embeddings, 384d vectors in pgvector)
+3. **Store** as IdxChunk rows with metadata
+4. **Extract structured facts** → CompanyOverview, PricingPlan, ContactInfo, OpeningHours, etc.
+5. **Domain inference** → update company business type
+
+**Retrieval at call time:** `tool_search_knowledge` → hybrid search (vector + metadata + fulltext) → rerank → score → top chunks. Also merges verified ExampleAnswer matches.
+
+## Billing system
+
+- Stripe Checkout with 14-day trial (starter/business only, once per company)
+- Lifecycle: pending → trialing → active → past_due / canceled
+- Overage: on `invoice.created` webhook, calculate minutes used in billing period, create Stripe InvoiceItem if over limit
+- `BillingRun` tracks each overage calculation (idempotent via Stripe idempotency keys)
+- Usage alerts at 80% and 100% thresholds (email via Resend)
+
+## Auth system
+
+- Email/password registration + 6-digit email verification code
+- Google OAuth (state stored in-memory, 10min expiry)
+- JWT access + refresh tokens (localStorage on frontend)
+- Invite system for team members
+- Client-side route protection in DashboardLayout (no Next.js middleware)
+- Superadmin check for `/admin` panel
+
+## Key API prefixes
+
+All under `/api/v1`:
+- `/auth` — register, login, OAuth, verify, invite
+- `/dashboard` — stats, recent calls, upcoming appointments
+- `/companies/me` — tenant company CRUD
+- `/ai-workers` — AI worker CRUD + voice previews
+- `/phone-numbers` — Twilio number management
+- `/calendars` — calendar OAuth + booking
+- `/crm` — CRM integrations
+- `/websites` — knowledge base sites + reindex
+- `/training` — rules + example answers
+- `/calls` — call logs + transcripts + recordings
+- `/appointments` — appointment CRUD
+- `/notes` — internal notes
+- `/payments` — Stripe checkout/portal/subscription/usage/webhook
+- `/webhooks/twilio/*` — voice, status, recording callbacks
+- `/elevenlabs/tools/*` — 20 server tools called by ElevenLabs during calls
+- `/admin` — superadmin: prompts, metrics, customers, billing, evaluations, config
+
+## Environment variables (key ones)
+
+Stripe: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_*` (6 price IDs)
+ElevenLabs: `ELEVENLABS_API_KEY`, `ELEVENLABS_AGENT_ID`
+Twilio: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `WEBSOCKET_URL`
+OpenAI: `OPENAI_API_KEY`, `ORCHESTRATOR_MODEL`
+DB: `DATABASE_URL`
+Auth: `SECRET_KEY`, `JWT_SECRET_KEY`
+Google OAuth: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
+Email: `RESEND_API_KEY`
+Frontend: `FRONTEND_URL`, `NEXT_PUBLIC_API_URL`
