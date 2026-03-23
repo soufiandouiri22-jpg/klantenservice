@@ -1126,7 +1126,7 @@ export default function HomePage() {
               Sluit u aan bij 500+ bedrijven die hun klantenservice al hebben geautomatiseerd.
             </p>
             <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/register" className="bg-gray-900 text-white px-8 py-4 rounded-lg text-base font-semibold hover:bg-gray-800 transition-colors inline-flex items-center">
+              <Link href="/register" className="bg-primary-600 text-white px-8 py-4 rounded-lg text-base font-semibold hover:bg-primary-700 transition-colors inline-flex items-center shadow-lg shadow-primary-600/30">
                 Start gratis proefperiode
                 <ArrowRight className="ml-2 h-5 w-5" />
               </Link>
