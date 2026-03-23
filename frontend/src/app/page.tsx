@@ -430,6 +430,9 @@ function ShowcaseSection() {
           <h2 className="text-3xl md:text-4xl lg:text-5xl font-display font-bold text-gray-900">
             Gebouwd voor miljoenen, afgestemd op één
           </h2>
+          <p className="mt-4 text-lg text-gray-600">
+            Ontdek hoe onze AI-technologie uw klantenservice naar een hoger niveau tilt
+          </p>
         </FadeUp>
 
         {/* Tabs */}
