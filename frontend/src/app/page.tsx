@@ -1089,8 +1089,8 @@ export default function HomePage() {
               </div>
             ))}
           </div>
-          <p className="mt-8 text-center text-sm text-gray-500">
-            Extra belminuten worden automatisch gefactureerd. Starter: €0,75/min · Business: €0,40/min · Enterprise: €0,30/min
+          <p className="mt-8 text-center text-sm text-gray-500 italic">
+            * Extra belminuten worden automatisch gefactureerd. Starter: €0,75/min · Business: €0,40/min · Enterprise: €0,30/min
           </p>
         </div>
       </section>
