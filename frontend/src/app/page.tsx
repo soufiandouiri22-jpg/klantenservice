@@ -121,7 +121,7 @@ const testimonials = [
     logo: '/company-logos/dentacare.png',
     logoType: 'image',
     gradient: 'from-blue-500 to-blue-600',
-    stat: '+340 uur/maand',
+    stat: '+340 uur',
     statColor: 'bg-primary-100 text-primary-700',
     challenge: 'Receptie overbelast met telefoontjes',
     quote: 'Nu handelt de AI 80% van de afspraken af. Onze receptie kan zich eindelijk focussen op patiënten in de praktijk.',
