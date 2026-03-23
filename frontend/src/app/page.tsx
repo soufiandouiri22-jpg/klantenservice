@@ -431,7 +431,7 @@ function ShowcaseSection() {
             Gebouwd voor miljoenen, afgestemd op één
           </h2>
           <p className="mt-4 text-lg text-gray-600">
-            Ontdek hoe onze AI-technologie uw klantenservice naar een hoger niveau tilt
+            Alles wat u nodig heeft, op één plek
           </p>
         </FadeUp>
 
