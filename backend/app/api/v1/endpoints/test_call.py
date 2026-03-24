@@ -191,7 +191,6 @@ async def get_test_call_signed_url(
             },
             "tts": {
                 "voice_id": voice_id,
-                "stability": 0.7,
             },
             "turn": {
                 "soft_timeout_config": {
