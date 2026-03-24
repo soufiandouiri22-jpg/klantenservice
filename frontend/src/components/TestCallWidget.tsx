@@ -17,6 +17,7 @@ export function TestCallWidget() {
   const [expanded, setExpanded] = useState(false)
   const callLogIdRef = useRef<string | null>(null)
   const firstMessageRef = useRef<string>('')
+  const ringbackRef = useRef<HTMLAudioElement | null>(null)
 
   const { data: checkData } = useQuery({
     queryKey: ['test-call-check'],
@@ -38,6 +39,7 @@ export function TestCallWidget() {
     onError: (error: any) => {
       console.error('Test call error:', error)
       toast.error('Verbinding verbroken. Probeer het opnieuw.')
+      if (ringbackRef.current) { ringbackRef.current.pause(); ringbackRef.current.src = ''; ringbackRef.current.load(); ringbackRef.current = null }
       if (callLogIdRef.current) {
         testCallApi.endCall(callLogIdRef.current).catch(() => {})
         callLogIdRef.current = null
@@ -51,7 +53,18 @@ export function TestCallWidget() {
       setPhase('connecting')
       setExpanded(true)
 
-      await navigator.mediaDevices.getUserMedia({ audio: true })
+      const permStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+
+      const ringback = new Audio('/sounds/ringback.mp3')
+      ringbackRef.current = ringback
+      ringback.play().catch(() => {})
+      await new Promise(resolve => setTimeout(resolve, 4000))
+      ringback.pause()
+      ringback.src = ''
+      ringback.load()
+      ringbackRef.current = null
+
+      permStream.getTracks().forEach(t => t.stop())
 
       const data = await testCallApi.getSignedUrl()
       setWorkerName(data.worker_name)
@@ -71,6 +84,7 @@ export function TestCallWidget() {
       }
     } catch (err: any) {
       console.error('Failed to start test call:', err)
+      if (ringbackRef.current) { ringbackRef.current.pause(); ringbackRef.current.src = ''; ringbackRef.current.load(); ringbackRef.current = null }
       if (callLogIdRef.current) {
         testCallApi.endCall(callLogIdRef.current).catch(() => {})
         callLogIdRef.current = null
@@ -95,6 +109,7 @@ export function TestCallWidget() {
 
   useEffect(() => {
     return () => {
+      if (ringbackRef.current) { ringbackRef.current.pause(); ringbackRef.current.src = ''; ringbackRef.current.load(); ringbackRef.current = null }
       if (callLogIdRef.current) {
         testCallApi.endCall(callLogIdRef.current).catch(() => {})
       }
