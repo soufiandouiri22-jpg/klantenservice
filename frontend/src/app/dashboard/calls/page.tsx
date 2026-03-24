@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { Suspense, useState, useEffect, useCallback } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
@@ -24,6 +24,14 @@ const sentimentConfig: Record<string, { label: string; color: string }> = {
 }
 
 export default function CallsPage() {
+  return (
+    <Suspense fallback={<DashboardLayout><PageLoader /></DashboardLayout>}>
+      <CallsPageContent />
+    </Suspense>
+  )
+}
+
+function CallsPageContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const [page, setPage] = useState(1)
