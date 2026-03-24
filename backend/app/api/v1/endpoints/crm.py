@@ -26,6 +26,7 @@ from app.schemas.crm import (
 )
 from app.api.deps import get_current_user, get_current_company, require_admin
 from app.services import hubspot_service as hubspot
+from app.services import salesdock_service as salesdock
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -34,23 +35,28 @@ router = APIRouter()
 
 def _to_response(crm: CRMIntegration) -> dict:
     """Convert a CRMIntegration to a response dict with is_connected."""
-    data = {
+    if crm.provider == CRMProvider.SALESDOCK:
+        is_connected = crm.api_key_encrypted is not None
+    else:
+        is_connected = crm.access_token_encrypted is not None
+
+    return {
         "id": crm.id,
         "company_id": crm.company_id,
         "name": crm.name,
         "provider": crm.provider,
         "hubspot_portal_id": crm.hubspot_portal_id,
+        "account_domain": crm.account_domain,
         "sync_contacts_on_call": crm.sync_contacts_on_call,
         "write_call_notes": crm.write_call_notes,
         "auto_create_contacts": crm.auto_create_contacts,
         "last_sync_at": crm.last_sync_at,
         "sync_error": crm.sync_error,
         "is_active": crm.is_active,
-        "is_connected": crm.access_token_encrypted is not None,
+        "is_connected": is_connected,
         "created_at": crm.created_at,
         "updated_at": crm.updated_at,
     }
-    return data
 
 
 # ── OAuth Flow ──────────────────────────────────────────
@@ -65,10 +71,15 @@ async def get_oauth_url(
     db: Session = Depends(get_db),
 ):
     """Get OAuth authorization URL for the CRM provider."""
+    if provider == CRMProvider.SALESDOCK:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Salesdock gebruikt API-key authenticatie, geen OAuth.",
+        )
     if provider != CRMProvider.HUBSPOT:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Alleen HubSpot wordt momenteel ondersteund",
+            detail="Alleen HubSpot en Salesdock worden momenteel ondersteund",
         )
 
     crm = _get_crm_or_404(crm_id, company.id, db)
@@ -197,6 +208,16 @@ async def create_crm_integration(
         provider=data.provider,
         is_active=True,
     )
+
+    if data.provider == CRMProvider.SALESDOCK:
+        if not data.api_key or not data.account_domain:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Salesdock vereist een API key en account domein.",
+            )
+        crm.api_key_encrypted = encrypt_value(data.api_key)
+        crm.account_domain = data.account_domain
+
     db.add(crm)
     db.commit()
     db.refresh(crm)
@@ -226,6 +247,10 @@ async def update_crm_integration(
     """Update CRM integration settings."""
     crm = _get_crm_or_404(crm_id, company.id, db)
     update_data = data.model_dump(exclude_unset=True)
+
+    new_api_key = update_data.pop("api_key", None)
+    if new_api_key and crm.provider == CRMProvider.SALESDOCK:
+        crm.api_key_encrypted = encrypt_value(new_api_key)
 
     for field, value in update_data.items():
         setattr(crm, field, value)
@@ -258,12 +283,16 @@ async def test_crm_connection(
     """Test the CRM connection by fetching account info."""
     crm = _get_crm_or_404(crm_id, company.id, db)
 
-    if not crm.access_token_encrypted:
-        raise HTTPException(status_code=400, detail="CRM is nog niet gekoppeld.")
-
     try:
-        access_token = await hubspot.get_valid_access_token(crm, db)
-        account_info = await hubspot.get_account_info(access_token)
+        if crm.provider == CRMProvider.SALESDOCK:
+            api_key, domain = salesdock.get_valid_credentials(crm, db)
+            account_info = await salesdock.test_connection(api_key, domain)
+        else:
+            if not crm.access_token_encrypted:
+                raise HTTPException(status_code=400, detail="CRM is nog niet gekoppeld.")
+            access_token = await hubspot.get_valid_access_token(crm, db)
+            account_info = await hubspot.get_account_info(access_token)
+
         crm.last_sync_at = datetime.utcnow()
         crm.sync_error = None
         db.commit()

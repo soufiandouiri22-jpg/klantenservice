@@ -12,6 +12,8 @@ from app.models.crm_integration import CRMProvider
 class CRMIntegrationCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     provider: CRMProvider
+    api_key: Optional[str] = Field(None, description="Salesdock API key (write-only)")
+    account_domain: Optional[str] = Field(None, max_length=100, description="Salesdock account domain")
 
 
 class CRMIntegrationUpdate(BaseModel):
@@ -20,6 +22,8 @@ class CRMIntegrationUpdate(BaseModel):
     write_call_notes: Optional[bool] = None
     auto_create_contacts: Optional[bool] = None
     is_active: Optional[bool] = None
+    api_key: Optional[str] = Field(None, description="Salesdock API key (write-only)")
+    account_domain: Optional[str] = Field(None, max_length=100)
 
 
 class CRMIntegrationResponse(BaseModel):
@@ -28,6 +32,7 @@ class CRMIntegrationResponse(BaseModel):
     name: str
     provider: CRMProvider
     hubspot_portal_id: Optional[str] = None
+    account_domain: Optional[str] = None
     sync_contacts_on_call: bool
     write_call_notes: bool
     auto_create_contacts: bool

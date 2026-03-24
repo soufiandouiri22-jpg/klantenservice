@@ -15,6 +15,7 @@ class CRMProvider(str, Enum):
     HUBSPOT = "hubspot"
     PIPEDRIVE = "pipedrive"
     SALESFORCE = "salesforce"
+    SALESDOCK = "salesdock"
 
 
 class CRMIntegration(Base):
@@ -43,6 +44,10 @@ class CRMIntegration(Base):
 
     # Provider-specific IDs
     hubspot_portal_id = Column(String(50), nullable=True)
+
+    # Salesdock-specific fields (API key auth, no OAuth)
+    api_key_encrypted = Column(Text, nullable=True)
+    account_domain = Column(String(100), nullable=True)
 
     # Feature toggles
     sync_contacts_on_call = Column(Boolean, default=True)

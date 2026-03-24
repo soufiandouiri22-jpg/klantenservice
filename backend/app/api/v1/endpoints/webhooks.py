@@ -86,25 +86,42 @@ async def _run_post_call_analysis(call_log_id, db_url=None):
 async def _write_crm_note(db, call_log):
     """Write call summary to CRM if configured for this company."""
     try:
-        from app.models.crm_integration import CRMIntegration
+        from app.models.crm_integration import CRMIntegration, CRMProvider
         from app.services import hubspot_service as hubspot
+        from app.services import salesdock_service as salesdock
         crm = db.query(CRMIntegration).filter(
             CRMIntegration.company_id == call_log.company_id,
             CRMIntegration.is_active == True,
             CRMIntegration.write_call_notes == True,
         ).first()
-        if crm and crm.access_token_encrypted:
+        if not crm:
+            return
+
+        duration = call_log.duration_seconds or 0
+        note_body = (
+            f"Telefoongesprek via klantenservice.ai\n"
+            f"Duur: {duration}s\n\n"
+            f"{call_log.summary}"
+        )
+
+        if crm.provider == CRMProvider.SALESDOCK and crm.api_key_encrypted:
+            api_key, domain = salesdock.get_valid_credentials(crm, db)
+            contact = await salesdock.search_relation_by_phone(
+                api_key, domain, call_log.caller_number
+            )
+            if contact:
+                await salesdock.create_call_task(
+                    api_key, domain, contact["id"],
+                    title="Telefoongesprek via klantenservice.ai",
+                    description=note_body,
+                )
+                logger.info(f"Salesdock task created for relation {contact['id']}")
+        elif crm.access_token_encrypted:
             access_token = await hubspot.get_valid_access_token(crm, db)
             contact = await hubspot.search_contact_by_phone(
                 access_token, call_log.caller_number
             )
             if contact:
-                duration = call_log.duration_seconds or 0
-                note_body = (
-                    f"Telefoongesprek via klantenservice.ai\n"
-                    f"Duur: {duration}s\n\n"
-                    f"{call_log.summary}"
-                )
                 await hubspot.create_engagement_note(
                     access_token, contact["id"], note_body
                 )
@@ -364,17 +381,23 @@ async def twilio_voice_webhook(
     # ── CRM caller lookup ──────────────────────────────────────
     caller_context = None
     try:
-        from app.models.crm_integration import CRMIntegration
+        from app.models.crm_integration import CRMIntegration, CRMProvider
         from app.services import hubspot_service as hubspot
+        from app.services import salesdock_service as salesdock
         crm_integration = db.query(CRMIntegration).filter(
             CRMIntegration.company_id == company.id,
             CRMIntegration.is_active == True,
             CRMIntegration.sync_contacts_on_call == True,
         ).first()
-        if crm_integration and crm_integration.access_token_encrypted:
+        if crm_integration:
             try:
-                access_token = await hubspot.get_valid_access_token(crm_integration, db)
-                contact = await hubspot.search_contact_by_phone(access_token, from_number)
+                contact = None
+                if crm_integration.provider == CRMProvider.SALESDOCK and crm_integration.api_key_encrypted:
+                    api_key, domain = salesdock.get_valid_credentials(crm_integration, db)
+                    contact = await salesdock.search_relation_by_phone(api_key, domain, from_number)
+                elif crm_integration.access_token_encrypted:
+                    access_token = await hubspot.get_valid_access_token(crm_integration, db)
+                    contact = await hubspot.search_contact_by_phone(access_token, from_number)
                 if contact:
                     caller_context = contact
                     logger.info(f"CRM lookup found contact: {contact.get('first_name')} {contact.get('last_name')}")

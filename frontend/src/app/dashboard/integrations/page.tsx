@@ -35,6 +35,16 @@ const providers = [
     color: 'bg-orange-100',
     logo: '/company-logos/hubspot.png',
     available: true,
+    authType: 'oauth' as const,
+  },
+  {
+    id: 'salesdock',
+    name: 'Salesdock',
+    description: 'Koppel uw Salesdock CRM voor contactherkenning en gespreksverslagen',
+    color: 'bg-orange-50',
+    logo: '/company-logos/salesdock.png',
+    available: true,
+    authType: 'api_key' as const,
   },
   {
     id: 'pipedrive',
@@ -43,6 +53,7 @@ const providers = [
     color: 'bg-green-100',
     logo: '/company-logos/pipedrive.png',
     available: false,
+    authType: 'oauth' as const,
   },
   {
     id: 'salesforce',
@@ -51,6 +62,7 @@ const providers = [
     color: 'bg-blue-100',
     logo: '/company-logos/salesforce.png',
     available: false,
+    authType: 'oauth' as const,
   },
 ]
 
@@ -69,6 +81,9 @@ function IntegrationsPageInner() {
   const canEdit = user?.role === 'owner' || user?.role === 'admin'
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [selectedIntegration, setSelectedIntegration] = useState<any>(null)
+  const [salesdockModal, setSalesdockModal] = useState(false)
+  const [salesdockDomain, setSalesdockDomain] = useState('')
+  const [salesdockApiKey, setSalesdockApiKey] = useState('')
 
   useEffect(() => {
     if (searchParams.get('connected') === 'true') {
@@ -89,14 +104,25 @@ function IntegrationsPageInner() {
   })
 
   const createMutation = useMutation({
-    mutationFn: async (provider: string) => {
+    mutationFn: async ({ provider, apiKey, accountDomain }: { provider: string; apiKey?: string; accountDomain?: string }) => {
       const providerInfo = providers.find((p) => p.id === provider)
-      const crm = await crmApi.create({
-        name: providerInfo?.name || 'CRM',
-        provider,
-      })
-      const response = await crmApi.getOAuthUrl(provider, crm.id)
-      window.location.href = response.auth_url
+      if (providerInfo?.authType === 'api_key') {
+        await crmApi.create({
+          name: providerInfo.name,
+          provider,
+          api_key: apiKey,
+          account_domain: accountDomain,
+        })
+        queryClient.invalidateQueries({ queryKey: ['crm-integrations'] })
+        toast.success('CRM succesvol gekoppeld!')
+      } else {
+        const crm = await crmApi.create({
+          name: providerInfo?.name || 'CRM',
+          provider,
+        })
+        const response = await crmApi.getOAuthUrl(provider, crm.id)
+        window.location.href = response.auth_url
+      }
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Fout bij starten koppeling')
@@ -227,6 +253,11 @@ function IntegrationsPageInner() {
                                 Portal ID: {integration.hubspot_portal_id}
                               </p>
                             )}
+                            {integration.account_domain && (
+                              <p className="text-xs text-gray-400 mt-1">
+                                Domein: {integration.account_domain}
+                              </p>
+                            )}
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
@@ -306,6 +337,11 @@ function IntegrationsPageInner() {
                             size="sm"
                             leftIcon={<ExternalLink className="h-4 w-4" />}
                             onClick={async () => {
+                              if (providerInfo.authType === 'api_key') {
+                                setSalesdockModal(true)
+                                setSelectedIntegration(integration)
+                                return
+                              }
                               try {
                                 const res = await crmApi.getOAuthUrl(
                                   integration.provider,
@@ -376,8 +412,15 @@ function IntegrationsPageInner() {
               key={provider.id}
               disabled={!provider.available || createMutation.isPending}
               onClick={() => {
-                if (provider.available) {
-                  createMutation.mutate(provider.id)
+                if (!provider.available) return
+                if (provider.authType === 'api_key') {
+                  setIsAddModalOpen(false)
+                  setSalesdockDomain('')
+                  setSalesdockApiKey('')
+                  setSalesdockModal(true)
+                  setSelectedIntegration(null)
+                } else {
+                  createMutation.mutate({ provider: provider.id })
                 }
               }}
               className={`flex items-center gap-4 p-4 rounded-lg border text-left transition-colors ${
@@ -403,6 +446,97 @@ function IntegrationsPageInner() {
             </button>
           ))}
         </div>
+      </Modal>
+
+      {/* Salesdock API Key Modal */}
+      <Modal
+        isOpen={salesdockModal}
+        onClose={() => {
+          setSalesdockModal(false)
+          setSelectedIntegration(null)
+        }}
+        title="Salesdock koppelen"
+        description="Voer uw Salesdock account domein en API key in."
+        size="md"
+      >
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault()
+            if (!salesdockDomain.trim() || !salesdockApiKey.trim()) {
+              toast.error('Vul beide velden in')
+              return
+            }
+            try {
+              if (selectedIntegration) {
+                await crmApi.update(selectedIntegration.id, {
+                  api_key: salesdockApiKey.trim(),
+                  account_domain: salesdockDomain.trim(),
+                })
+                queryClient.invalidateQueries({ queryKey: ['crm-integrations'] })
+                toast.success('Salesdock gekoppeld!')
+              } else {
+                await createMutation.mutateAsync({
+                  provider: 'salesdock',
+                  apiKey: salesdockApiKey.trim(),
+                  accountDomain: salesdockDomain.trim(),
+                })
+              }
+              setSalesdockModal(false)
+              setSalesdockDomain('')
+              setSalesdockApiKey('')
+              setSelectedIntegration(null)
+            } catch (err: any) {
+              toast.error(err.response?.data?.detail || 'Koppeling mislukt')
+            }
+          }}
+          className="space-y-4"
+        >
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Account domein
+            </label>
+            <input
+              type="text"
+              value={salesdockDomain}
+              onChange={(e) => setSalesdockDomain(e.target.value)}
+              placeholder="bijv. mijnbedrijf"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500 outline-none"
+            />
+            <p className="mt-1 text-xs text-gray-400">
+              Het deel na de / in uw Salesdock URL (app.salesdock.nl/uw-domein)
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              API key
+            </label>
+            <input
+              type="password"
+              value={salesdockApiKey}
+              onChange={(e) => setSalesdockApiKey(e.target.value)}
+              placeholder="Plak uw API token"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500 outline-none"
+            />
+            <p className="mt-1 text-xs text-gray-400">
+              Genereer een token via Account &gt; Gebruikers &gt; API Token
+            </p>
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button
+              variant="outline"
+              type="button"
+              onClick={() => {
+                setSalesdockModal(false)
+                setSelectedIntegration(null)
+              }}
+            >
+              Annuleren
+            </Button>
+            <Button type="submit" isLoading={createMutation.isPending}>
+              Koppelen
+            </Button>
+          </div>
+        </form>
       </Modal>
     </DashboardLayout>
   )
