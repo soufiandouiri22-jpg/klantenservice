@@ -13,8 +13,6 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.execute("ALTER TYPE crmprovider ADD VALUE IF NOT EXISTS 'salesdock'")
-
     op.add_column(
         "crm_integrations",
         sa.Column("api_key_encrypted", sa.Text(), nullable=True),
