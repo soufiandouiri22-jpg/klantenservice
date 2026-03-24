@@ -224,7 +224,6 @@ async def get_demo_signed_url(
             "agent": {
                 "prompt": {"prompt": full_instructions},
                 "firstMessage": first_msg,
-                "language": "nl",
             },
             "tts": {
                 "voice_id": voice_id,

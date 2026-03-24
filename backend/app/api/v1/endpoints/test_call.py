@@ -187,7 +187,6 @@ async def get_test_call_signed_url(
         "overrides": {
             "agent": {
                 "prompt": {"prompt": full_instructions},
-                "language": "nl",
             },
             "tts": {
                 "voice_id": voice_id,

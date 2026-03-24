@@ -497,7 +497,6 @@ async def twilio_voice_webhook(
                         "prompt": full_instructions,
                     },
                     "first_message": first_msg,
-                    "language": "nl",
                 },
                 "tts": {
                     "voice_id": voice_id,

@@ -1179,7 +1179,7 @@ async def update_customer_overrides(
     
     if data.feature_flags is not None:
         company.feature_flags = data.feature_flags
-
+    
     if data.business_type_override is not None:
         company.business_type_override = data.business_type_override or None
 
