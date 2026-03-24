@@ -16,6 +16,7 @@ class CRMProvider(str, Enum):
     PIPEDRIVE = "pipedrive"
     SALESFORCE = "salesforce"
     SALESDOCK = "salesdock"
+    SALESLANE = "saleslane"
 
 
 class CRMIntegration(Base):
@@ -45,9 +46,12 @@ class CRMIntegration(Base):
     # Provider-specific IDs
     hubspot_portal_id = Column(String(50), nullable=True)
 
-    # Salesdock-specific fields (API key auth, no OAuth)
+    # Salesdock/Saleslane-specific fields (API key / JWT auth, no OAuth)
     api_key_encrypted = Column(Text, nullable=True)
     account_domain = Column(String(100), nullable=True)
+
+    # Saleslane-specific: API Context ID (JWT subject claim)
+    api_context_id = Column(String(255), nullable=True)
 
     # Feature toggles
     sync_contacts_on_call = Column(Boolean, default=True)

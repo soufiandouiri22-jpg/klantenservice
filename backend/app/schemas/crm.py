@@ -12,8 +12,9 @@ from app.models.crm_integration import CRMProvider
 class CRMIntegrationCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     provider: CRMProvider
-    api_key: Optional[str] = Field(None, description="Salesdock API key (write-only)")
-    account_domain: Optional[str] = Field(None, max_length=100, description="Salesdock account domain")
+    api_key: Optional[str] = Field(None, description="API key (Salesdock) or RSA private key PEM (Saleslane), write-only")
+    account_domain: Optional[str] = Field(None, max_length=100, description="Account domain (Salesdock) or client prefix (Saleslane)")
+    api_context_id: Optional[str] = Field(None, max_length=255, description="Saleslane API Context ID")
 
 
 class CRMIntegrationUpdate(BaseModel):
@@ -22,8 +23,9 @@ class CRMIntegrationUpdate(BaseModel):
     write_call_notes: Optional[bool] = None
     auto_create_contacts: Optional[bool] = None
     is_active: Optional[bool] = None
-    api_key: Optional[str] = Field(None, description="Salesdock API key (write-only)")
+    api_key: Optional[str] = Field(None, description="API key (Salesdock) or RSA private key PEM (Saleslane), write-only")
     account_domain: Optional[str] = Field(None, max_length=100)
+    api_context_id: Optional[str] = Field(None, max_length=255)
 
 
 class CRMIntegrationResponse(BaseModel):
@@ -33,6 +35,7 @@ class CRMIntegrationResponse(BaseModel):
     provider: CRMProvider
     hubspot_portal_id: Optional[str] = None
     account_domain: Optional[str] = None
+    api_context_id: Optional[str] = None
     sync_contacts_on_call: bool
     write_call_notes: bool
     auto_create_contacts: bool

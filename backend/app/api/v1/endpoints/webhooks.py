@@ -89,6 +89,7 @@ async def _write_crm_note(db, call_log):
         from app.models.crm_integration import CRMIntegration, CRMProvider
         from app.services import hubspot_service as hubspot
         from app.services import salesdock_service as salesdock
+        from app.services import saleslane_service as saleslane
         crm = db.query(CRMIntegration).filter(
             CRMIntegration.company_id == call_log.company_id,
             CRMIntegration.is_active == True,
@@ -116,6 +117,25 @@ async def _write_crm_note(db, call_log):
                     description=note_body,
                 )
                 logger.info(f"Salesdock task created for relation {contact['id']}")
+        elif crm.provider == CRMProvider.SALESLANE and crm.api_key_encrypted:
+            pk, ctx_id, prefix = saleslane.get_valid_credentials(crm, db)
+            contact = await saleslane.search_contact_by_phone(
+                pk, ctx_id, prefix, call_log.caller_number
+            )
+            if contact and contact.get("saleslane_transactions"):
+                txn = contact["saleslane_transactions"][0]
+                ref_id = txn.get("reference_id")
+                if ref_id:
+                    await saleslane.tag_transaction(
+                        pk, ctx_id, prefix,
+                        reference_id=f"{ref_id}01",
+                        tag="ai_call_completed",
+                        description=f"Gesprek afgerond ({duration}s)",
+                        label_type="info",
+                    )
+                    logger.info(f"Saleslane transaction tagged for contact {contact['id']}")
+            else:
+                logger.info("Saleslane: no transactions found to tag after call")
         elif crm.access_token_encrypted:
             access_token = await hubspot.get_valid_access_token(crm, db)
             contact = await hubspot.search_contact_by_phone(
@@ -384,6 +404,7 @@ async def twilio_voice_webhook(
         from app.models.crm_integration import CRMIntegration, CRMProvider
         from app.services import hubspot_service as hubspot
         from app.services import salesdock_service as salesdock
+        from app.services import saleslane_service as saleslane
         crm_integration = db.query(CRMIntegration).filter(
             CRMIntegration.company_id == company.id,
             CRMIntegration.is_active == True,
@@ -395,6 +416,9 @@ async def twilio_voice_webhook(
                 if crm_integration.provider == CRMProvider.SALESDOCK and crm_integration.api_key_encrypted:
                     api_key, domain = salesdock.get_valid_credentials(crm_integration, db)
                     contact = await salesdock.search_relation_by_phone(api_key, domain, from_number)
+                elif crm_integration.provider == CRMProvider.SALESLANE and crm_integration.api_key_encrypted:
+                    pk, ctx_id, prefix = saleslane.get_valid_credentials(crm_integration, db)
+                    contact = await saleslane.search_contact_by_phone(pk, ctx_id, prefix, from_number)
                 elif crm_integration.access_token_encrypted:
                     access_token = await hubspot.get_valid_access_token(crm_integration, db)
                     contact = await hubspot.search_contact_by_phone(access_token, from_number)

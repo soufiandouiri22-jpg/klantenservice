@@ -27,6 +27,7 @@ from app.schemas.crm import (
 from app.api.deps import get_current_user, get_current_company, require_admin
 from app.services import hubspot_service as hubspot
 from app.services import salesdock_service as salesdock
+from app.services import saleslane_service as saleslane
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -35,7 +36,7 @@ router = APIRouter()
 
 def _to_response(crm: CRMIntegration) -> dict:
     """Convert a CRMIntegration to a response dict with is_connected."""
-    if crm.provider == CRMProvider.SALESDOCK:
+    if crm.provider in (CRMProvider.SALESDOCK, CRMProvider.SALESLANE):
         is_connected = crm.api_key_encrypted is not None
     else:
         is_connected = crm.access_token_encrypted is not None
@@ -47,6 +48,7 @@ def _to_response(crm: CRMIntegration) -> dict:
         "provider": crm.provider,
         "hubspot_portal_id": crm.hubspot_portal_id,
         "account_domain": crm.account_domain,
+        "api_context_id": crm.api_context_id,
         "sync_contacts_on_call": crm.sync_contacts_on_call,
         "write_call_notes": crm.write_call_notes,
         "auto_create_contacts": crm.auto_create_contacts,
@@ -71,15 +73,15 @@ async def get_oauth_url(
     db: Session = Depends(get_db),
 ):
     """Get OAuth authorization URL for the CRM provider."""
-    if provider == CRMProvider.SALESDOCK:
+    if provider in (CRMProvider.SALESDOCK, CRMProvider.SALESLANE):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Salesdock gebruikt API-key authenticatie, geen OAuth.",
+            detail=f"{provider.value.title()} gebruikt geen OAuth maar directe API-authenticatie.",
         )
     if provider != CRMProvider.HUBSPOT:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Alleen HubSpot en Salesdock worden momenteel ondersteund",
+            detail="Alleen HubSpot ondersteunt OAuth. Salesdock en Saleslane gebruiken API-key authenticatie.",
         )
 
     crm = _get_crm_or_404(crm_id, company.id, db)
@@ -218,6 +220,16 @@ async def create_crm_integration(
         crm.api_key_encrypted = encrypt_value(data.api_key)
         crm.account_domain = data.account_domain
 
+    elif data.provider == CRMProvider.SALESLANE:
+        if not data.api_key or not data.account_domain or not data.api_context_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Saleslane vereist een RSA private key, client prefix en API Context ID.",
+            )
+        crm.api_key_encrypted = encrypt_value(data.api_key)
+        crm.account_domain = data.account_domain
+        crm.api_context_id = data.api_context_id
+
     db.add(crm)
     db.commit()
     db.refresh(crm)
@@ -249,7 +261,7 @@ async def update_crm_integration(
     update_data = data.model_dump(exclude_unset=True)
 
     new_api_key = update_data.pop("api_key", None)
-    if new_api_key and crm.provider == CRMProvider.SALESDOCK:
+    if new_api_key and crm.provider in (CRMProvider.SALESDOCK, CRMProvider.SALESLANE):
         crm.api_key_encrypted = encrypt_value(new_api_key)
 
     for field, value in update_data.items():
@@ -287,6 +299,9 @@ async def test_crm_connection(
         if crm.provider == CRMProvider.SALESDOCK:
             api_key, domain = salesdock.get_valid_credentials(crm, db)
             account_info = await salesdock.test_connection(api_key, domain)
+        elif crm.provider == CRMProvider.SALESLANE:
+            pk, ctx_id, prefix = saleslane.get_valid_credentials(crm, db)
+            account_info = await saleslane.test_connection(pk, ctx_id, prefix)
         else:
             if not crm.access_token_encrypted:
                 raise HTTPException(status_code=400, detail="CRM is nog niet gekoppeld.")

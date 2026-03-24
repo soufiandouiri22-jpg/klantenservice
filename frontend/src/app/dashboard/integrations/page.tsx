@@ -38,6 +38,15 @@ const providers = [
     authType: 'api_key' as const,
   },
   {
+    id: 'saleslane',
+    name: 'Saleslane',
+    description: 'Koppel uw Saleslane CRM voor contactherkenning bij inkomende gesprekken',
+    color: 'bg-blue-50',
+    logo: '/company-logos/saleslane.png',
+    available: true,
+    authType: 'saleslane_jwt' as const,
+  },
+  {
     id: 'hubspot',
     name: 'HubSpot',
     description: 'Koppel uw HubSpot CRM voor automatische contactherkenning',
@@ -66,6 +75,10 @@ function IntegrationsPageInner() {
   const [salesdockModal, setSalesdockModal] = useState(false)
   const [salesdockDomain, setSalesdockDomain] = useState('')
   const [salesdockApiKey, setSalesdockApiKey] = useState('')
+  const [saleslaneModal, setSaleslaneModal] = useState(false)
+  const [saleslanePrefix, setSaleslanePrefix] = useState('')
+  const [saleslaneContextId, setSaleslaneContextId] = useState('')
+  const [saleslanePrivateKey, setSaleslanePrivateKey] = useState('')
 
   useEffect(() => {
     if (searchParams.get('connected') === 'true') {
@@ -86,14 +99,15 @@ function IntegrationsPageInner() {
   })
 
   const createMutation = useMutation({
-    mutationFn: async ({ provider, apiKey, accountDomain }: { provider: string; apiKey?: string; accountDomain?: string }) => {
+    mutationFn: async ({ provider, apiKey, accountDomain, apiContextId }: { provider: string; apiKey?: string; accountDomain?: string; apiContextId?: string }) => {
       const providerInfo = providers.find((p) => p.id === provider)
-      if (providerInfo?.authType === 'api_key') {
+      if (providerInfo?.authType === 'api_key' || providerInfo?.authType === 'saleslane_jwt') {
         await crmApi.create({
           name: providerInfo.name,
           provider,
           api_key: apiKey,
           account_domain: accountDomain,
+          api_context_id: apiContextId,
         })
         queryClient.invalidateQueries({ queryKey: ['crm-integrations'] })
         toast.success('CRM succesvol gekoppeld!')
@@ -237,7 +251,12 @@ function IntegrationsPageInner() {
                             )}
                             {integration.account_domain && (
                               <p className="text-xs text-gray-400 mt-1">
-                                Domein: {integration.account_domain}
+                                {integration.provider === 'saleslane' ? 'Prefix' : 'Domein'}: {integration.account_domain}
+                              </p>
+                            )}
+                            {integration.api_context_id && (
+                              <p className="text-xs text-gray-400 mt-1">
+                                Context ID: {integration.api_context_id.slice(0, 12)}...
                               </p>
                             )}
                           </div>
@@ -324,6 +343,11 @@ function IntegrationsPageInner() {
                                 setSelectedIntegration(integration)
                                 return
                               }
+                              if (providerInfo.authType === 'saleslane_jwt') {
+                                setSaleslaneModal(true)
+                                setSelectedIntegration(integration)
+                                return
+                              }
                               try {
                                 const res = await crmApi.getOAuthUrl(
                                   integration.provider,
@@ -400,6 +424,13 @@ function IntegrationsPageInner() {
                   setSalesdockDomain('')
                   setSalesdockApiKey('')
                   setSalesdockModal(true)
+                  setSelectedIntegration(null)
+                } else if (provider.authType === 'saleslane_jwt') {
+                  setIsAddModalOpen(false)
+                  setSaleslanePrefix('')
+                  setSaleslaneContextId('')
+                  setSaleslanePrivateKey('')
+                  setSaleslaneModal(true)
                   setSelectedIntegration(null)
                 } else {
                   createMutation.mutate({ provider: provider.id })
@@ -509,6 +540,115 @@ function IntegrationsPageInner() {
               type="button"
               onClick={() => {
                 setSalesdockModal(false)
+                setSelectedIntegration(null)
+              }}
+            >
+              Annuleren
+            </Button>
+            <Button type="submit" isLoading={createMutation.isPending}>
+              Koppelen
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Saleslane JWT Modal */}
+      <Modal
+        isOpen={saleslaneModal}
+        onClose={() => {
+          setSaleslaneModal(false)
+          setSelectedIntegration(null)
+        }}
+        title="Saleslane koppelen"
+        description="Voer uw Saleslane client prefix, API Context ID en RSA private key in."
+        size="md"
+      >
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault()
+            if (!saleslanePrefix.trim() || !saleslaneContextId.trim() || !saleslanePrivateKey.trim()) {
+              toast.error('Vul alle velden in')
+              return
+            }
+            try {
+              if (selectedIntegration) {
+                await crmApi.update(selectedIntegration.id, {
+                  api_key: saleslanePrivateKey.trim(),
+                  account_domain: saleslanePrefix.trim(),
+                  api_context_id: saleslaneContextId.trim(),
+                })
+                queryClient.invalidateQueries({ queryKey: ['crm-integrations'] })
+                toast.success('Saleslane gekoppeld!')
+              } else {
+                await createMutation.mutateAsync({
+                  provider: 'saleslane',
+                  apiKey: saleslanePrivateKey.trim(),
+                  accountDomain: saleslanePrefix.trim(),
+                  apiContextId: saleslaneContextId.trim(),
+                })
+              }
+              setSaleslaneModal(false)
+              setSaleslanePrefix('')
+              setSaleslaneContextId('')
+              setSaleslanePrivateKey('')
+              setSelectedIntegration(null)
+            } catch (err: any) {
+              toast.error(err.response?.data?.detail || 'Koppeling mislukt')
+            }
+          }}
+          className="space-y-4"
+        >
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Client prefix
+            </label>
+            <input
+              type="text"
+              value={saleslanePrefix}
+              onChange={(e) => setSaleslanePrefix(e.target.value)}
+              placeholder="bijv. mijnbedrijf"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500 outline-none"
+            />
+            <p className="mt-1 text-xs text-gray-400">
+              Het deel voor .saleslane.nl in uw URL (mijnbedrijf.saleslane.nl)
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              API Context ID
+            </label>
+            <input
+              type="text"
+              value={saleslaneContextId}
+              onChange={(e) => setSaleslaneContextId(e.target.value)}
+              placeholder="Plak uw API Context ID"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500 outline-none"
+            />
+            <p className="mt-1 text-xs text-gray-400">
+              Te vinden in de Saleslane API App instellingen
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              RSA Private Key (PEM)
+            </label>
+            <textarea
+              value={saleslanePrivateKey}
+              onChange={(e) => setSaleslanePrivateKey(e.target.value)}
+              placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----"
+              rows={5}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono focus:border-primary-500 focus:ring-1 focus:ring-primary-500 outline-none resize-none"
+            />
+            <p className="mt-1 text-xs text-gray-400">
+              Genereer via: openssl genpkey -algorithm RSA -out private_key.pem -pkeyopt rsa_keygen_bits:2048
+            </p>
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button
+              variant="outline"
+              type="button"
+              onClick={() => {
+                setSaleslaneModal(false)
                 setSelectedIntegration(null)
               }}
             >
