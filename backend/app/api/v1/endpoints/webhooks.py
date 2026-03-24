@@ -502,11 +502,6 @@ async def twilio_voice_webhook(
                 "tts": {
                     "voice_id": voice_id,
                 },
-                "turn": {
-                    "soft_timeout_config": {
-                        "message": "Eén moment...",
-                    },
-                },
             },
         },
     }

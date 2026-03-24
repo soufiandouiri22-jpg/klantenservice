@@ -229,11 +229,6 @@ async def get_demo_signed_url(
             "tts": {
                 "voice_id": voice_id,
             },
-            "turn": {
-                "soft_timeout_config": {
-                    "message": "Eén moment...",
-                },
-            },
         },
         "dynamic_variables": {
             "company_id": str(company.id),
