@@ -29,15 +29,6 @@ import { useAuthStore } from '@/lib/store'
 
 const providers = [
   {
-    id: 'hubspot',
-    name: 'HubSpot',
-    description: 'Koppel uw HubSpot CRM voor automatische contactherkenning',
-    color: 'bg-orange-100',
-    logo: '/company-logos/hubspot.png',
-    available: true,
-    authType: 'oauth' as const,
-  },
-  {
     id: 'salesdock',
     name: 'Salesdock',
     description: 'Koppel uw Salesdock CRM voor contactherkenning en gespreksverslagen',
@@ -47,21 +38,12 @@ const providers = [
     authType: 'api_key' as const,
   },
   {
-    id: 'pipedrive',
-    name: 'Pipedrive',
-    description: 'Koppel uw Pipedrive CRM',
-    color: 'bg-green-100',
-    logo: '/company-logos/pipedrive.png',
-    available: false,
-    authType: 'oauth' as const,
-  },
-  {
-    id: 'salesforce',
-    name: 'Salesforce',
-    description: 'Koppel uw Salesforce CRM',
-    color: 'bg-blue-100',
-    logo: '/company-logos/salesforce.png',
-    available: false,
+    id: 'hubspot',
+    name: 'HubSpot',
+    description: 'Koppel uw HubSpot CRM voor automatische contactherkenning',
+    color: 'bg-orange-100',
+    logo: '/company-logos/hubspot.png',
+    available: true,
     authType: 'oauth' as const,
   },
 ]
