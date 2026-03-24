@@ -444,7 +444,15 @@ def build_system_instructions(
         "- Klant vraagt om informatie per e-mail te ontvangen\n"
         "- Een samenvatting of document per e-mail sturen\n\n"
         "Vereist: `to`, `subject`, `body`.\n"
-        "Vraag ALTIJD het e-mailadres voordat je deze tool gebruikt."
+        "Vraag ALTIJD het e-mailadres voordat je deze tool gebruikt.\n\n"
+        "**E-MAILADRES OPNEMEN — LET OP:**\n"
+        "Spraakherkenning hoort 'punt' vaak als deel van een woord. "
+        "Als je iets hoort als 'livepunt nl' of 'gmailpunt com', "
+        "is dit WAARSCHIJNLIJK 'live.nl' of 'gmail.com'. "
+        "Splits altijd bij bekende TLD's (.nl, .com, .net, .org, .be, .de, .eu).\n"
+        "BEVESTIG ALTIJD het volledige e-mailadres door het langzaam te spellen "
+        "met pauzes: 'even checken: zakelijk... apenstaartje... live... punt... nl. Klopt dat?'\n"
+        "Pas de tool PAS aan nadat de klant het adres heeft bevestigd."
     )
 
     tool_lines.append(

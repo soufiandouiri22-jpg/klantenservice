@@ -187,8 +187,17 @@ async def get_test_call_signed_url(
         "overrides": {
             "agent": {
                 "prompt": {"prompt": full_instructions},
+                "language": "nl",
             },
-            "tts": {"voice_id": voice_id},
+            "tts": {
+                "voice_id": voice_id,
+                "stability": 0.7,
+            },
+            "turn": {
+                "soft_timeout_config": {
+                    "message": "Eén moment...",
+                },
+            },
         },
         "dynamic_variables": {
             "company_id": str(company.id),

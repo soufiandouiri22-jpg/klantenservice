@@ -224,8 +224,17 @@ async def get_demo_signed_url(
             "agent": {
                 "prompt": {"prompt": full_instructions},
                 "firstMessage": first_msg,
+                "language": "nl",
             },
-            "tts": {"voice_id": voice_id},
+            "tts": {
+                "voice_id": voice_id,
+                "stability": 0.7,
+            },
+            "turn": {
+                "soft_timeout_config": {
+                    "message": "Eén moment...",
+                },
+            },
         },
         "dynamic_variables": {
             "company_id": str(company.id),

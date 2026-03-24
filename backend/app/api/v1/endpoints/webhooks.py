@@ -497,9 +497,16 @@ async def twilio_voice_webhook(
                         "prompt": full_instructions,
                     },
                     "first_message": first_msg,
+                    "language": "nl",
                 },
                 "tts": {
                     "voice_id": voice_id,
+                    "stability": 0.7,
+                },
+                "turn": {
+                    "soft_timeout_config": {
+                        "message": "Eén moment...",
+                    },
                 },
             },
         },
