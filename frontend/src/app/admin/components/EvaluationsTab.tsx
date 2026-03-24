@@ -100,14 +100,14 @@ function MetricCard({ title, value, subtitle, icon, status = 'neutral' }: Metric
 
   return (
     <Card>
-      <CardBody className="p-6">
+      <CardBody className="p-4">
         <div className="flex items-start justify-between">
           <div>
-            <p className="text-sm font-medium text-gray-500">{title}</p>
-            <p className="mt-2 text-3xl font-semibold text-gray-900">{value}</p>
-            {subtitle && <p className="mt-1 text-sm text-gray-500">{subtitle}</p>}
+            <p className="text-xs font-medium text-gray-500">{title}</p>
+            <p className="mt-1 text-2xl font-semibold text-gray-900">{value}</p>
+            {subtitle && <p className="mt-1 text-xs text-gray-500">{subtitle}</p>}
           </div>
-          <div className={`p-3 rounded-lg ${statusColors[status]}`}>
+          <div className={`p-1.5 rounded-md ${statusColors[status]}`}>
             {icon}
           </div>
         </div>
@@ -227,36 +227,36 @@ export function EvaluationsTab() {
           <MetricCard
             title="Geevalueerd"
             value={summaryData.total_evaluated}
-            icon={<ClipboardCheck className="h-5 w-5" />}
+            icon={<ClipboardCheck className="h-3.5 w-3.5" />}
           />
           <MetricCard
             title="Gem. score"
             value={summaryData.average_score != null ? `${summaryData.average_score}` : '–'}
-            icon={<ThumbsUp className="h-5 w-5" />}
+            icon={<ThumbsUp className="h-3.5 w-3.5" />}
             status={summaryData.average_score != null ? (summaryData.average_score >= 75 ? 'success' : summaryData.average_score >= 50 ? 'warning' : 'error') : 'neutral'}
           />
           <MetricCard
             title="Hallucinatie %"
             value={summaryData.hallucination_rate != null ? `${summaryData.hallucination_rate}%` : '–'}
-            icon={<AlertTriangle className="h-5 w-5" />}
+            icon={<AlertTriangle className="h-3.5 w-3.5" />}
             status={summaryData.hallucination_rate != null ? (summaryData.hallucination_rate <= 5 ? 'success' : summaryData.hallucination_rate <= 15 ? 'warning' : 'error') : 'neutral'}
           />
           <MetricCard
             title="Verkeerd tool %"
             value={summaryData.wrong_tool_rate != null ? `${summaryData.wrong_tool_rate}%` : '–'}
-            icon={<Wrench className="h-5 w-5" />}
+            icon={<Wrench className="h-3.5 w-3.5" />}
             status={summaryData.wrong_tool_rate != null ? (summaryData.wrong_tool_rate <= 5 ? 'success' : summaryData.wrong_tool_rate <= 15 ? 'warning' : 'error') : 'neutral'}
           />
           <MetricCard
             title="Klant geholpen %"
             value={summaryData.customer_helped_rate != null ? `${summaryData.customer_helped_rate}%` : '–'}
-            icon={<ThumbsUp className="h-5 w-5" />}
+            icon={<ThumbsUp className="h-3.5 w-3.5" />}
             status={summaryData.customer_helped_rate != null ? (summaryData.customer_helped_rate >= 90 ? 'success' : summaryData.customer_helped_rate >= 70 ? 'warning' : 'error') : 'neutral'}
           />
           <MetricCard
             title="Review nodig"
             value={summaryData.needs_review_count}
-            icon={<Eye className="h-5 w-5" />}
+            icon={<Eye className="h-3.5 w-3.5" />}
             status={summaryData.needs_review_count > 0 ? 'warning' : 'neutral'}
           />
         </div>
