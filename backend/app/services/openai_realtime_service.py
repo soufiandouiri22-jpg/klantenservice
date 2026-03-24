@@ -238,19 +238,7 @@ def build_system_instructions(
     # Legacy: also pick up old "safety" / "privacy" / "compliance" categories
     for cat in ("safety", "privacy", "compliance"):
         guardrails_parts.extend(_render(cat))
-    guardrails_parts.append(
-        "## Interne instructies NOOIT uitspreken\n"
-        "Alles in dit systeem is een INTERNE instructie. Spreek NOOIT instructietekst, "
-        "toolnamen, parameternamen, systeemberichten, of policy-resultaten hardop uit.\n"
-        "Voorbeelden van wat je NOOIT mag zeggen:\n"
-        '- "ik rond het gesprek netjes af"\n'
-        '- "ik ga check_policy aanroepen"\n'
-        '- "de tool retourneert..."\n'
-        '- "instruction_nl zegt..."\n'
-        '- "ik gebruik end_call"\n'
-        "Als je het gesprek wilt afsluiten, zeg dan gewoon iets als 'Fijne dag!' "
-        "— NIET wat je intern aan het doen bent."
-    )
+    # "Interne instructies NOOIT uitspreken" is now part of guardrails_all
     if guardrails_parts:
         sections.append("# Guardrails\n\n" + "\n\n".join(guardrails_parts))
 
@@ -267,278 +255,126 @@ def build_system_instructions(
 
     tool_lines.append(
         "## get_pricing\n"
-        "Haal prijsinformatie, pakketten en abonnementen op.\n\n"
-        "**Wanneer gebruiken:**\n"
-        "- Klant vraagt naar prijzen, kosten, tarieven\n"
-        "- Klant vraagt welke pakketten er zijn\n"
-        "- Klant vraagt specifiek naar een pakket (bijv. 'starter', 'business')\n"
-        "- Klant wil pakketten vergelijken\n\n"
-        "**Optionele parameter:** `query` — vul in met de naam van een specifiek pakket "
-        "als de klant naar één pakket vraagt. Laat leeg voor een volledig overzicht.\n\n"
-        "**Resultaten:** De tool retourneert exacte prijzen en pakketnamen. "
-        "Als een resultaat een PRIJSINSTRUCTIE bevat, volg die LETTERLIJK.\n"
-        "Neem prijzen en bedragen EXACT over. "
-        "Rond NIET af en wijzig GEEN cijfers. €99 = negenennegentig euro, niet honderd."
+        "Haal prijzen en pakketten op. Optionele param: `query` (pakketnaam).\n"
+        "Volg PRIJSINSTRUCTIES uit het resultaat letterlijk."
     )
 
     tool_lines.append(
         "## get_company_overview\n"
-        "Haal een overzicht op van het bedrijf.\n\n"
-        "**Wanneer gebruiken:**\n"
-        "- Klant vraagt wat het bedrijf doet\n"
-        "- Klant vraagt 'wat bieden jullie aan?'\n"
-        "- Klant vraagt 'wie zijn jullie?'\n"
-        "- Klant vraagt 'vertel eens over jullie bedrijf'\n\n"
-        "Geen parameters nodig. De tool retourneert een korte beschrijving van het bedrijf, "
-        "doelgroep en belangrijkste diensten/mogelijkheden."
+        "Haal bedrijfsoverzicht op. Geen parameters."
     )
 
     tool_lines.append(
         "## get_contact_info\n"
-        "Haal contactgegevens op (telefoon, email, whatsapp).\n\n"
-        "**Wanneer gebruiken:**\n"
-        "- Klant vraagt hoe ze contact kunnen opnemen\n"
-        "- Klant vraagt naar telefoonnummer, e-mail, of contactpagina\n"
-        "- Klant wil iemand bereiken\n\n"
-        "Geen parameters nodig. De tool retourneert beschikbare contactgegevens."
+        "Haal contactgegevens op. Geen parameters."
     )
 
     tool_lines.append(
         "## get_opening_hours\n"
-        "Haal openingstijden op.\n\n"
-        "**Wanneer gebruiken:**\n"
-        "- Klant vraagt wanneer het bedrijf open of dicht is\n"
-        "- Klant vraagt naar openingstijden of bereikbaarheid\n"
-        "- Klant vraagt 'zijn jullie morgen open?'\n\n"
-        "Geen parameters nodig. De tool retourneert de weekschema openingstijden."
+        "Haal openingstijden op. Geen parameters."
     )
 
     tool_lines.append(
         "## get_services\n"
-        "Haal een lijst van aangeboden diensten/services op.\n\n"
-        "**Wanneer gebruiken:**\n"
-        "- Klant vraagt welke diensten of services worden aangeboden\n"
-        "- Klant vraagt 'wat voor services bieden jullie?'\n"
-        "- Klant vraagt naar specifieke mogelijkheden of aanbod\n\n"
-        "Geen parameters nodig. De tool retourneert een overzicht van diensten.\n"
-        "Let op: dit is anders dan get_company_overview. Overview = wie is het bedrijf, "
-        "services = concrete diensten/producten."
+        "Haal aangeboden diensten op. Geen parameters. Anders dan get_company_overview (= wie is het bedrijf)."
     )
 
     tool_lines.append(
         "## get_location\n"
-        "Haal locatie- en adresgegevens op.\n\n"
-        "**Wanneer gebruiken:**\n"
-        "- Klant vraagt waar het bedrijf zit\n"
-        "- Klant vraagt naar het adres of de vestiging\n"
-        "- Klant vraagt hoe ze er kunnen komen\n\n"
-        "Geen parameters nodig. De tool retourneert adres, stad en eventueel meerdere vestigingen."
+        "Haal adres en vestigingen op. Geen parameters."
     )
 
     tool_lines.append(
         "## search_knowledge\n"
-        "Zoek in de bedrijfskennisbank voor overige vragen. "
-        "De resultaten bevatten bedrijfsinformatie, inclusief opgeslagen Q&A. "
-        "Beantwoord nooit uit eigen kennis.\n\n"
-        "**Wanneer gebruiken:**\n"
-        "- FAQ en beleid (retour, garantie, etc.)\n"
-        "- Overige inhoudelijke vragen over het bedrijf\n\n"
-        "**NIET gebruiken voor:**\n"
-        "- Prijzen of pakketten (gebruik get_pricing)\n"
-        "- Bedrijfsoverzicht / 'wat doen jullie?' (gebruik get_company_overview)\n"
-        "- Contactgegevens (gebruik get_contact_info)\n"
-        "- Openingstijden (gebruik get_opening_hours)\n"
-        "- Diensten / services (gebruik get_services)\n"
-        "- Locatie / adres (gebruik get_location)\n\n"
-        "**Foutafhandeling:**\n"
-        'Als de tool faalt: "Dat heb ik even niet bij de hand. '
-        'Zal ik een collega vragen om u terug te bellen?"\n'
-        "Verzin nooit een antwoord. Noem nooit de tool of kennisbank tegen de klant."
+        "Zoek in kennisbank voor FAQ, beleid en overige vragen. Beantwoord nooit uit eigen kennis.\n"
+        "Niet voor: prijzen (get_pricing), overzicht (get_company_overview), contact (get_contact_info), "
+        "openingstijden (get_opening_hours), diensten (get_services), locatie (get_location).\n"
+        "Param: `query`. Bij falen: bied terugbelverzoek aan."
     )
 
     if worker.can_make_appointments:
         tool_lines.append(
             "## check_availability\n"
-            "Haal beschikbare agenda-slots op voor een datum of periode.\n\n"
-            "**Wanneer gebruiken:**\n"
-            "- Klant wil EXPLICIET een afspraak maken\n"
-            "- Klant vraagt wanneer er plek is\n\n"
-            "**NIET gebruiken als:**\n"
-            "- De klant afscheid neemt of aangeeft tevreden te zijn\n"
-            "- De klant zegt: 'ik weet genoeg', 'dat was het', 'dankjewel', 'nee hoeft niet', 'fijne dag'\n"
-            "- Het gesprek in de afsluitfase zit\n\n"
-            "Geef een `start_date` mee (ISO-formaat). De tool retourneert beschikbare tijden.\n"
-            "De tool retourneert ook `next_action`. Volg die instructie voor de volgende stap.\n"
-            "Bied de klant maximaal 3 opties aan en vraag welk moment het beste uitkomt.\n\n"
-            "**Bij mislukking (ok=false):**\n"
-            "Roep deze tool NIET opnieuw aan met dezelfde parameters. "
-            "Vertel de klant dat er helaas geen beschikbaarheid is op dat moment "
-            "en vraag of een andere dag/tijd beter uitkomt, of bied aan om een collega te laten terugbellen."
+            "Haal beschikbare agenda-slots op. Param: `start_date` (ISO).\n"
+            "Bied max 3 opties aan. Volg `next_action` uit het resultaat.\n"
+            "Bij ok=false: niet opnieuw met dezelfde params, vraag andere datum."
         )
 
         tool_lines.append(
             "## book_appointment\n"
-            "Plan een afspraak in de agenda.\n\n"
-            "**Wanneer gebruiken:**\n"
-            "- Nadat de klant een tijdstip heeft gekozen uit check_availability\n\n"
-            "**NIET gebruiken als:**\n"
-            "- De klant afscheid neemt of aangeeft tevreden te zijn\n"
-            "- Het gesprek in de afsluitfase zit\n\n"
-            "Vereiste parameters: `starts_at`, `ends_at`, `customer_name`.\n"
-            "Optioneel: `title`, `customer_email`.\n"
-            "Vraag ALTIJD de naam van de klant voordat je boekt.\n"
-            "Vraag ook naar het e-mailadres als de klant een bevestiging per e-mail wil. "
-            "Het e-mailadres is NIET verplicht — als de klant het niet wil geven, boek gewoon zonder.\n"
-            "Bevestig datum, tijd en naam voordat je de tool aanroept.\n"
-            "Als de tool `missing` retourneert: vraag het ontbrekende gegeven en roep de tool opnieuw aan zodra je het hebt."
+            "Plan afspraak in. Params: `starts_at`, `ends_at`, `customer_name`. Optioneel: `title`, `customer_email`.\n"
+            "Vraag altijd naam. Bevestig datum+tijd+naam voordat je boekt.\n"
+            "E-mail is niet verplicht. Bij `missing`: vraag ontbrekend gegeven."
         )
 
         tool_lines.append(
             "## cancel_appointment\n"
-            "Annuleer een bestaande afspraak.\n\n"
-            "**Wanneer gebruiken:**\n"
-            "- Klant wil een afspraak annuleren\n"
-            "- Zoekt automatisch op telefoonnummer, naam en/of datum\n\n"
-            "**NIET gebruiken als:**\n"
-            "- De klant afscheid neemt of tevreden is\n\n"
-            "Optionele parameters: `customer_name`, `appointment_date`.\n"
-            "Als er meerdere afspraken worden gevonden, vraag de klant welke bedoeld wordt."
+            "Annuleer afspraak. Optioneel: `customer_name`, `appointment_date`.\n"
+            "Bij meerdere matches: vraag welke bedoeld wordt."
         )
 
         tool_lines.append(
             "## reschedule_appointment\n"
-            "Verzet een bestaande afspraak naar een nieuw tijdstip.\n\n"
-            "**Wanneer gebruiken:**\n"
-            "- Klant wil een afspraak verplaatsen of verzetten\n\n"
-            "**Flow:**\n"
-            "1. Gebruik eerst check_availability om een nieuw tijdstip te vinden\n"
-            "2. Laat de klant een nieuw tijdstip kiezen\n"
-            "3. Roep dan reschedule_appointment aan met `new_starts_at` en `new_ends_at`\n\n"
-            "Optioneel: `customer_name`, `appointment_date` om de juiste afspraak te vinden."
+            "Verzet afspraak. Gebruik eerst check_availability, laat klant kiezen, dan aanroepen.\n"
+            "Params: `new_starts_at`, `new_ends_at`. Optioneel: `customer_name`, `appointment_date`."
         )
 
     tool_lines.append(
         "## create_lead\n"
-        "Leg een geïnteresseerde / lead vast.\n\n"
-        "**Wanneer gebruiken:**\n"
-        "- Klant is geïnteresseerd in het product/dienst\n"
-        "- Klant wil een demo of meer informatie\n"
-        "- Klant wil dat iemand contact met hen opneemt over een aanbod\n\n"
-        "Vereist: `name`. Optioneel: `phone`, `email`, `notes`."
+        "Leg geïnteresseerde vast. Vereist: `name`. Optioneel: `phone`, `email`, `notes`."
     )
 
     tool_lines.append(
         "## send_sms\n"
-        "Stuur een SMS-bericht.\n\n"
-        "**Wanneer gebruiken:**\n"
-        "- Klant vraagt om informatie per SMS te ontvangen\n"
-        "- Een link of bevestiging per SMS sturen\n\n"
-        "Parameter `to` is optioneel — als leeg, wordt het nummer van de beller gebruikt.\n"
-        "Vereist: `message`."
+        "Stuur SMS. Vereist: `message`. `to` optioneel (default: bellernummer)."
     )
 
     tool_lines.append(
         "## send_email\n"
-        "Stuur een e-mail namens het bedrijf.\n\n"
-        "**Wanneer gebruiken:**\n"
-        "- Klant vraagt om informatie per e-mail te ontvangen\n"
-        "- Een samenvatting of document per e-mail sturen\n\n"
-        "Vereist: `to`, `subject`, `body`.\n"
-        "Vraag ALTIJD het e-mailadres voordat je deze tool gebruikt.\n\n"
-        "**E-MAILADRES OPNEMEN — LET OP:**\n"
-        "Spraakherkenning hoort 'punt' vaak als deel van een woord. "
-        "Als je iets hoort als 'livepunt nl' of 'gmailpunt com', "
-        "is dit WAARSCHIJNLIJK 'live.nl' of 'gmail.com'. "
-        "Splits altijd bij bekende TLD's (.nl, .com, .net, .org, .be, .de, .eu).\n"
-        "BEVESTIG ALTIJD het volledige e-mailadres door het langzaam te spellen "
-        "met pauzes: 'even checken: zakelijk... apenstaartje... live... punt... nl. Klopt dat?'\n"
-        "Pas de tool PAS aan nadat de klant het adres heeft bevestigd."
+        "Stuur e-mail. Vereist: `to` (e.g. 'john@company.com'), `subject`, `body`.\n"
+        "Vraag altijd e-mailadres en bevestig door langzaam te spellen voordat je stuurt."
     )
 
     tool_lines.append(
         "## leave_message\n"
-        "Laat een bericht achter voor een collega.\n\n"
-        "**Wanneer gebruiken:**\n"
-        "- Klant wil een boodschap achterlaten\n"
-        "- Klant wil iets doorgeven aan het bedrijf\n\n"
-        "Vereist: `message`. Optioneel: `customer_name`."
+        "Laat bericht achter. Vereist: `message`. Optioneel: `customer_name`."
     )
 
     tool_lines.append(
         "## create_callback_request\n"
-        "Maak een terugbelverzoek aan.\n\n"
-        "**Wanneer gebruiken:**\n"
-        "- Klant wil worden teruggebeld\n"
-        "- Klant zegt 'laat iemand mij bellen'\n\n"
-        "Bevestig het telefoonnummer van de klant.\n"
+        "Maak terugbelverzoek. Bevestig telefoonnummer.\n"
         "Optioneel: `customer_name`, `preferred_callback_time`, `notes`."
     )
 
     if worker.can_leave_notes:
         tool_lines.append(
             "## create_note\n"
-            "Gebruik om notities achter te laten voor collega's.\n\n"
-            "**Wanneer gebruiken:**\n"
-            "- Klant heeft een verzoek buiten jouw bevoegdheden\n"
-            "- Er moet iets worden doorgegeven aan een collega"
+            "Notitie voor collega's. Bij verzoeken buiten jouw bevoegdheden."
         )
 
     if transfer_enabled:
         tool_lines.append(
             "## transfer_call\n"
-            "Verbind het gesprek door naar een menselijke collega.\n\n"
-            "**Wanneer gebruiken:**\n"
-            "- Beller vraagt expliciet om een mens te spreken\n"
-            "- Situatie is te complex om zelf af te handelen na doorvragen\n"
-            "- Beller is gefrustreerd en je kunt niet helpen\n\n"
-            "**Zeg altijd:** 'Ik verbind u door met een collega' voordat je de tool gebruikt.\n"
-            "Geef een korte reden mee zodat de collega weet waarom de beller belt."
+            "Verbind door naar mens. Zeg 'Ik verbind u door' voordat je de tool gebruikt.\n"
+            "Geef korte reden mee. Gebruik bij: expliciete vraag om mens, te complex, of gefrustreerde beller."
         )
 
     tool_lines.append(
         "## flag_unknown\n"
-        "Markeer een vraag die je niet kunt beantwoorden.\n\n"
-        "**Wanneer gebruiken:**\n"
-        "- Je hebt search_knowledge gebruikt maar er is geen antwoord gevonden\n"
-        "- De klant stelt een vraag die je echt niet kunt beantwoorden\n\n"
-        "Geef de originele vraag van de klant mee als `question` parameter.\n"
-        "De vraag verschijnt dan als suggestie in het dashboard zodat het bedrijf "
-        "een antwoord kan toevoegen.\n"
-        "Noem deze tool NIET tegen de klant."
+        "Markeer onbeantwoordbare vraag. Param: `question`. Noem deze tool niet tegen de klant."
     )
 
     tool_lines.append(
         "## check_policy\n"
-        "Interne systeemcheck — resultaten zijn NOOIT hardop voor te lezen.\n\n"
-        "**Verplicht vóór:**\n"
-        "- Het beëindigen van het gesprek (trigger_reason: `ending_call`)\n"
-        "- Het doorverbinden naar een mens (trigger_reason: `escalation`)\n\n"
-        "**Optioneel bij:**\n"
-        "- Lage zoekresultaten (trigger_reason: `low_confidence`)\n"
-        "- Herhaalde mislukte beantwoording (trigger_reason: `repeated_failure`)\n"
-        "- Off-topic verzoeken (trigger_reason: `off_topic`)\n"
-        "- Stilte (trigger_reason: `silence`)\n\n"
-        "**Parameters:**\n"
-        "- `trigger_reason` (string): reden\n"
-        "- `customer_message` (string): laatste klantuiting\n\n"
-        "**Resultaat:**\n"
-        "- `allowed`: true/false\n"
-        "- `instruction_nl`: interne routeringsinstructie — NIET voorlezen, gebruik als leidraad voor je eigen woorden\n"
-        "- `required_action`: proceed / wait / escalate / clarify / reprompt / block\n\n"
-        "**Einde gesprek:**\n"
-        "1. Zeg 'Fijne dag!' (of vergelijkbaar)\n"
-        "2. Roep check_policy aan met trigger_reason='ending_call'\n"
-        "3. allowed=false → wacht op klant\n"
-        "4. allowed=true → gebruik end_call"
+        "Interne check — resultaten NOOIT voorlezen.\n"
+        "Verplicht vóór: ending_call, escalation. Optioneel bij: low_confidence, repeated_failure, off_topic, silence.\n"
+        "Params: `trigger_reason`, `customer_message`. Resultaat: `allowed`, `instruction_nl`, `required_action`.\n"
+        "Einde gesprek: zeg afscheid → check_policy(ending_call) → allowed=true → end_call."
     )
 
     tool_lines.append(
         "## end_call\n"
-        "Beëindig de verbinding (intern, niet uitspreken).\n\n"
-        "**Wanneer gebruiken:**\n"
-        "- ALLEEN nadat check_policy met trigger_reason='ending_call' allowed=true retourneert\n"
-        "- NOOIT direct na je eigen afscheid — altijd eerst check_policy\n"
-        "- Bij 5+ seconden stilte na je afscheid: roep check_policy aan"
+        "Beëindig verbinding. Alleen na check_policy(ending_call) allowed=true. Nooit direct na afscheid."
     )
 
     sections.append("# Tools\n\n" + "\n\n".join(tool_lines))
