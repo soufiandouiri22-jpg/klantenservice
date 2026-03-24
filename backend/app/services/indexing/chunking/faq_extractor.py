@@ -23,6 +23,21 @@ _HEADING_QA = re.compile(
 )
 
 
+def _is_real_answer(answer: str) -> bool:
+    """Reject 'answers' that are actually just another question or a list of questions."""
+    stripped = answer.strip()
+    if not stripped or len(stripped) < 15:
+        return False
+    sentences = re.split(r"[.!?\n]", stripped)
+    sentences = [s.strip() for s in sentences if s.strip()]
+    if not sentences:
+        return False
+    questions = sum(1 for s in sentences if s.endswith("?") or "?" in s)
+    if questions / max(len(sentences), 1) > 0.5:
+        return False
+    return True
+
+
 def extract_faq_chunks(text: str, heading_hierarchy: list[str] | None = None) -> List[Chunk]:
     """Extract FAQ question/answer pairs as individual chunks."""
     chunks: List[Chunk] = []
@@ -32,7 +47,7 @@ def extract_faq_chunks(text: str, heading_hierarchy: list[str] | None = None) ->
     for m in _HEADING_QA.finditer(text):
         question = m.group("question").strip()
         answer = m.group("answer").strip()
-        if len(answer) < 20:
+        if not _is_real_answer(answer):
             continue
         chunks.append(Chunk(
             content=f"Vraag: {question}\nAntwoord: {answer}",
@@ -51,9 +66,8 @@ def extract_faq_chunks(text: str, heading_hierarchy: list[str] | None = None) ->
         for m in pattern.finditer(text):
             question = m.group("question").strip()
             answer = m.group("answer").strip()
-            if len(answer) < 20:
+            if not _is_real_answer(answer):
                 continue
-            # Avoid duplicates
             if any(question in c.metadata.get("faq_question", "") for c in chunks):
                 continue
             chunks.append(Chunk(

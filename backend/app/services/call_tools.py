@@ -15,6 +15,7 @@ Tools:
 - check_policy: Policy engine — checks whether an action is allowed
 """
 import logging
+import re
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 from uuid import UUID, uuid4
@@ -662,6 +663,45 @@ def _format_service_response(services: List) -> Dict[str, Any]:
     }
 
 
+def _is_low_quality_chunk(chunk: Dict) -> bool:
+    """Detect broken or useless retrieval chunks that would cause hallucination."""
+    content = chunk.get("content", "").strip()
+    chunk_type = chunk.get("chunk_type", "")
+
+    if len(content) < 30:
+        return True
+
+    lines = [ln.strip() for ln in content.split("\n") if ln.strip()]
+    if not lines:
+        return True
+
+    question_lines = sum(1 for ln in lines if ln.rstrip().endswith("?"))
+    total = len(lines)
+
+    if chunk_type == "faq":
+        has_answer_marker = any("antwoord:" in ln.lower() for ln in lines)
+        if has_answer_marker:
+            for i, ln in enumerate(lines):
+                if ln.lower().startswith("antwoord:"):
+                    answer_text = ln.split(":", 1)[1].strip()
+                    rest = " ".join(lines[i + 1:]).strip() if i + 1 < len(lines) else ""
+                    full_answer = f"{answer_text} {rest}".strip()
+                    if not full_answer or len(full_answer) < 15:
+                        return True
+                    q_in_answer = sum(1 for s in re.split(r"[.!?\n]", full_answer)
+                                      if s.strip() and "?" in s)
+                    if q_in_answer / max(len(re.split(r"[.!?\n]", full_answer)), 1) > 0.5:
+                        return True
+                    break
+        if question_lines > 0 and question_lines / total >= 0.7:
+            return True
+
+    if question_lines > 2 and question_lines / total >= 0.8:
+        return True
+
+    return False
+
+
 def tool_search_knowledge(
     db: Session,
     company_id: str,
@@ -698,7 +738,17 @@ def tool_search_knowledge(
             r.get("content", "")[:250].replace("\n", " "),
         )
 
-    # 2. ExampleAnswers — training/voorbeeldantwoorden (substring match)
+    # 2b. Content quality filter — strip broken/empty chunks
+    pre_filter_count = len(retrieval_results)
+    retrieval_results = [r for r in retrieval_results if not _is_low_quality_chunk(r)]
+    filtered_count = pre_filter_count - len(retrieval_results)
+    if filtered_count > 0:
+        logger.warning(
+            "[search_knowledge] quality_filter removed %d/%d low-quality chunks",
+            filtered_count, pre_filter_count,
+        )
+
+    # 3. ExampleAnswers — training/voorbeeldantwoorden (substring match)
     qa_results = []
     try:
         qa_all = (

@@ -1,12 +1,14 @@
 """
 Content cleaning pipeline – HTML -> clean markdown/plain text.
 
-Pipeline: raw HTML -> boilerplate removal -> main content extraction
-          -> heading-aware markdown conversion -> whitespace normalisation.
+Pipeline: raw HTML -> JSON-LD extraction (FAQ, etc.) -> boilerplate removal
+          -> main content extraction -> heading-aware markdown conversion
+          -> whitespace normalisation.
 """
 import hashlib
+import json
 import re
-from typing import Optional
+from typing import List, Optional, Tuple
 
 from bs4 import BeautifulSoup, NavigableString, Tag
 
@@ -27,6 +29,9 @@ class ContentCleaner:
             return None
 
         soup = BeautifulSoup(html, "lxml")
+
+        jsonld_faq = self._extract_jsonld_faq(soup)
+
         self._boilerplate.clean(soup)
         main = self._extractor.extract(soup)
 
@@ -34,12 +39,55 @@ class ContentCleaner:
             return None
 
         text = self._to_structured_text(main)
+
+        if jsonld_faq:
+            text = self._inject_faq_from_jsonld(text, jsonld_faq)
+
         text = self._normalize_whitespace(text)
 
         if len(text.strip()) < 50:
             return None
 
         return text.strip()
+
+    @staticmethod
+    def _extract_jsonld_faq(soup: BeautifulSoup) -> List[Tuple[str, str]]:
+        """Extract FAQ Q&A pairs from JSON-LD before scripts get stripped."""
+        pairs: List[Tuple[str, str]] = []
+        for script in soup.find_all("script", type="application/ld+json"):
+            try:
+                data = json.loads(script.string or "")
+            except (json.JSONDecodeError, TypeError):
+                continue
+            if isinstance(data, dict) and data.get("@type") == "FAQPage":
+                for entity in data.get("mainEntity", []):
+                    q = entity.get("name", "").strip()
+                    a_obj = entity.get("acceptedAnswer", {})
+                    a = a_obj.get("text", "").strip() if isinstance(a_obj, dict) else ""
+                    if q and a and len(a) > 10:
+                        pairs.append((q, a))
+        return pairs
+
+    @staticmethod
+    def _inject_faq_from_jsonld(text: str, pairs: List[Tuple[str, str]]) -> str:
+        """Replace question-only FAQ lines with full Q&A from JSON-LD data."""
+        faq_section = "\n\n## Veelgestelde vragen\n\n"
+        for q, a in pairs:
+            faq_section += f"### {q}\n{a}\n\n"
+
+        faq_markers = ["Veelgestelde vragen", "Frequently Asked Questions", "FAQ"]
+        for marker in faq_markers:
+            idx = text.find(marker)
+            if idx != -1:
+                section_end = len(text)
+                next_heading = re.search(r"\n#{1,3}\s+(?!.*\?)", text[idx + len(marker):])
+                if next_heading:
+                    section_end = idx + len(marker) + next_heading.start()
+                text = text[:idx] + faq_section.strip() + "\n\n" + text[section_end:]
+                return text
+
+        text += faq_section
+        return text
 
     def content_hash(self, text: str) -> str:
         return hashlib.sha256(text.encode()).hexdigest()[:16]
