@@ -264,6 +264,9 @@ async def evaluate_call(db: Session, call_log: CallLog) -> Optional[CallEvaluati
         evaluated_at=datetime.utcnow(),
     )
 
+    if eval_result.get("summary"):
+        call_log.summary = eval_result["summary"]
+
     db.add(evaluation)
     db.commit()
     db.refresh(evaluation)

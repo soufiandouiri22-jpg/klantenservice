@@ -383,7 +383,7 @@ async def fetch_and_process_transcript(
                         type=NotificationType.CALL_ERROR,
                         title="Ontevreden klant",
                         message=f"Gesprek met {caller} is als negatief beoordeeld.",
-                        url="/dashboard/calls",
+                        url=f"/dashboard/calls?call_id={call_log.id}",
                     )
                 except Exception:
                     logger.warning(

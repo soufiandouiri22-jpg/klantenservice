@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import { Phone, Search, Filter, Play, Clock, User, MessageSquare, X } from 'lucide-react'
@@ -16,7 +17,15 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { callsApi } from '@/lib/api'
 import { formatDateTime, formatDuration, formatPhoneNumber, getStatusLabel, getStatusColor } from '@/lib/utils'
 
+const sentimentConfig: Record<string, { label: string; color: string }> = {
+  positive: { label: 'Positief', color: 'bg-green-100 text-green-800' },
+  neutral:  { label: 'Neutraal', color: 'bg-gray-100 text-gray-800' },
+  negative: { label: 'Negatief', color: 'bg-red-100 text-red-800' },
+}
+
 export default function CallsPage() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
   const [page, setPage] = useState(1)
   const [selectedCall, setSelectedCall] = useState<any>(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -24,6 +33,15 @@ export default function CallsPage() {
   const [showFilters, setShowFilters] = useState(false)
   const [statusFilter, setStatusFilter] = useState('')
   const [outcomeFilter, setOutcomeFilter] = useState('')
+
+  const closeModal = useCallback(() => {
+    setSelectedCall(null)
+    const params = new URLSearchParams(searchParams.toString())
+    if (params.has('call_id')) {
+      params.delete('call_id')
+      router.replace(`/dashboard/calls${params.toString() ? `?${params}` : ''}`)
+    }
+  }, [searchParams, router])
 
   // Debounce search input so it doesn't fire on every keystroke
   useEffect(() => {
@@ -33,6 +51,14 @@ export default function CallsPage() {
     }, 300)
     return () => clearTimeout(timer)
   }, [searchQuery])
+
+  // Deep-link: auto-open modal when ?call_id=xxx is in the URL
+  useEffect(() => {
+    const callId = searchParams.get('call_id')
+    if (callId && (!selectedCall || selectedCall.id !== callId)) {
+      setSelectedCall({ id: callId })
+    }
+  }, [searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const activeFilterCount = [statusFilter, outcomeFilter].filter(Boolean).length
 
@@ -272,7 +298,7 @@ export default function CallsPage() {
       {/* Call Detail Modal */}
       <Modal
         isOpen={!!selectedCall}
-        onClose={() => setSelectedCall(null)}
+        onClose={closeModal}
         title="Gespreksdetails"
         size="xl"
       >
@@ -310,6 +336,14 @@ export default function CallsPage() {
                 <p className="text-sm text-gray-500">Uitkomst</p>
                 <p className="font-medium text-gray-900">{callDetail.outcome?.replace('_', ' ') || '-'}</p>
               </div>
+              {callDetail.sentiment && sentimentConfig[callDetail.sentiment] && (
+                <div>
+                  <p className="text-sm text-gray-500">Sentiment</p>
+                  <span className={`inline-flex items-center mt-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${sentimentConfig[callDetail.sentiment].color}`}>
+                    {sentimentConfig[callDetail.sentiment].label}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Summary */}
