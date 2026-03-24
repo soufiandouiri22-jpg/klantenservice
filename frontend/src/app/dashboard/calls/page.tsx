@@ -19,7 +19,7 @@ import { formatDateTime, formatDuration, formatPhoneNumber, getStatusLabel, getS
 
 const sentimentConfig: Record<string, { label: string; color: string }> = {
   positive: { label: 'Positief', color: 'bg-green-100 text-green-800' },
-  neutral:  { label: 'Neutraal', color: 'bg-gray-100 text-gray-800' },
+  neutral:  { label: 'Positief', color: 'bg-green-100 text-green-800' },
   negative: { label: 'Negatief', color: 'bg-red-100 text-red-800' },
 }
 
