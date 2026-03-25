@@ -132,9 +132,10 @@ async def list_ai_workers(
     for worker in workers:
         worker_dict = AIWorkerResponse.model_validate(worker).model_dump()
         
-        # Find linked phone number
+        # Find linked active phone number
         phone = db.query(PhoneNumber).filter(
             PhoneNumber.ai_worker_id == worker.id,
+            PhoneNumber.is_active == True,
         ).first()
         worker_dict["linked_phone"] = {
             "id": str(phone.id),

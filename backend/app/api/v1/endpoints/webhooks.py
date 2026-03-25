@@ -240,12 +240,14 @@ async def twilio_voice_webhook(
             detail="Missing required parameters",
         )
     
-    # Find the phone number and associated company
+    # Find the active phone number and associated company
     from app.models.phone_number import PhoneNumber
-    phone = db.query(PhoneNumber).filter(PhoneNumber.number == to_number).first()
-    
+    phone = db.query(PhoneNumber).filter(
+        PhoneNumber.number == to_number,
+        PhoneNumber.is_active == True,
+    ).first()
+
     if not phone:
-        # Return TwiML to reject the call
         twiml = _tts_twiml("Dit nummer is niet in gebruik.")
         return Response(content=twiml, media_type="text/xml")
     
