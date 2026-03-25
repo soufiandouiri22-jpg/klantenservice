@@ -23,7 +23,7 @@ from app.models.ai_worker import AIWorker
 from app.models.call_log import CallLog, CallStatus
 from app.models.phone_number import PhoneNumber
 from app.models.training import TrainingRule
-from app.services.openai_realtime_service import build_system_instructions
+from app.services.openai_realtime_service import build_system_instructions, prefetch_company_context
 from app.api.deps import get_current_user, get_current_company
 
 router = APIRouter()
@@ -91,6 +91,8 @@ async def get_test_call_signed_url(
 
     disclosure_message = company.disclosure_message or None
 
+    company_context = prefetch_company_context(db, str(company.id))
+
     full_instructions = build_system_instructions(
         worker=worker,
         company_name=company.name,
@@ -102,6 +104,7 @@ async def get_test_call_signed_url(
         caller_context=None,
         custom_instructions=company.custom_instructions,
         transfer_enabled=transfer_enabled,
+        company_context=company_context,
     )
 
     ams_hour = datetime.now(ZoneInfo("Europe/Amsterdam")).hour

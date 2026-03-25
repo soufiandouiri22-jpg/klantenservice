@@ -17,9 +17,103 @@ from typing import Optional
 from app.core.config import get_settings
 from app.models.ai_worker import AIWorker, AddressForm
 from app.models.system_prompt import SystemPrompt
+from app.models.business_facts import (
+    CompanyOverview, PricingPlan, ContactInfo, OpeningHours,
+    BusinessLocation, BusinessService,
+)
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
+
+_WEEKDAY_NAMES = ["maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag", "zondag"]
+
+
+def prefetch_company_context(db, company_id: str) -> str:
+    """
+    Pre-fetch static company data (overview, pricing, hours, contact, services,
+    location) and return as a compact text block for injection into the prompt.
+    Eliminates tool calls for common questions, saving ~800ms per avoided call.
+    """
+    parts = []
+
+    overview = db.query(CompanyOverview).filter_by(company_id=company_id).first()
+    if overview:
+        lines = [f"Bedrijf: {overview.summary}"]
+        if overview.capabilities and isinstance(overview.capabilities, list):
+            lines.append("Mogelijkheden: " + ", ".join(overview.capabilities[:8]))
+        if overview.target_audience:
+            lines.append(f"Doelgroep: {overview.target_audience}")
+        parts.append("\n".join(lines))
+
+    plans = (
+        db.query(PricingPlan)
+        .filter_by(company_id=company_id)
+        .order_by(PricingPlan.display_order)
+        .all()
+    )
+    if plans:
+        plan_lines = []
+        for p in plans:
+            if p.price_type == "fixed" and p.price is not None:
+                price = f"\u20ac{int(p.price)}" if p.price == int(p.price) else f"\u20ac{p.price}"
+                period = f"/{p.billing_period}" if p.billing_period else ""
+                feat_str = ""
+                if p.features and isinstance(p.features, list):
+                    feat_str = " (" + ", ".join(p.features[:5]) + ")"
+                plan_lines.append(f"{p.name}: {price}{period}{feat_str}")
+            elif p.price_type == "free":
+                plan_lines.append(f"{p.name}: Gratis")
+            elif p.price_type == "contact_required":
+                plan_lines.append(f"{p.name}: Prijs op aanvraag")
+        parts.append("Pakketten:\n" + "\n".join(plan_lines))
+
+    hours = (
+        db.query(OpeningHours)
+        .filter_by(company_id=company_id)
+        .order_by(OpeningHours.weekday)
+        .all()
+    )
+    if hours:
+        hour_parts = []
+        for h in hours:
+            day = _WEEKDAY_NAMES[h.weekday] if 0 <= h.weekday <= 6 else f"Dag {h.weekday}"
+            if h.closed:
+                hour_parts.append(f"{day}: gesloten")
+            elif h.open_time and h.close_time:
+                hour_parts.append(f"{day}: {h.open_time.strftime('%H:%M')}-{h.close_time.strftime('%H:%M')}")
+        parts.append("Openingstijden: " + " | ".join(hour_parts))
+
+    contacts = db.query(ContactInfo).filter_by(company_id=company_id).all()
+    if contacts:
+        c_parts = []
+        for c in contacts:
+            if c.phone:
+                c_parts.append(f"Tel: {c.phone}")
+            if c.email:
+                c_parts.append(f"E-mail: {c.email}")
+        if c_parts:
+            parts.append("Contact: " + ", ".join(c_parts))
+
+    services = db.query(BusinessService).filter_by(company_id=company_id).all()
+    if services:
+        svc_names = [s.name for s in services[:10]]
+        parts.append("Diensten: " + ", ".join(svc_names))
+
+    locations = db.query(BusinessLocation).filter_by(company_id=company_id).all()
+    if locations:
+        loc_parts = []
+        for loc in locations:
+            loc_str = ", ".join(x for x in [loc.name, loc.address, loc.city] if x)
+            if loc_str:
+                loc_parts.append(loc_str)
+        if loc_parts:
+            parts.append("Locatie: " + " | ".join(loc_parts))
+
+    result = "\n".join(parts)
+    if result:
+        logger.info("[prefetch] Loaded %d chars of company context for %s", len(result), company_id)
+    return result
+
 
 # ElevenLabs recommended section order; models pay extra attention to # Guardrails
 _SECTION_ORDER = [
@@ -44,6 +138,7 @@ def build_system_instructions(
     caller_context: Optional[dict] = None,
     custom_instructions: Optional[str] = None,
     transfer_enabled: bool = False,
+    company_context: Optional[str] = None,
 ) -> str:
     """
     Build system instructions for the ElevenLabs Conversational AI agent.
@@ -226,6 +321,9 @@ def build_system_instructions(
         if caller_context.get("email"):
             context_lines.append(f"E-mail: {caller_context['email']}.")
 
+    if company_context:
+        context_lines.append(f"\n{company_context}")
+
     sections.append("# Context\n\n" + "\n".join(context_lines))
 
     # 3. # Tone
@@ -254,41 +352,46 @@ def build_system_instructions(
         tool_lines.append(f"## Bevoegdheden\n{chr(10).join(permissions)}")
 
     tool_lines.append(
+        "BELANGRIJK: Gebruik ALTIJD eerst de bedrijfsgegevens uit # Context. "
+        "Roep onderstaande info-tools ALLEEN aan als de klant specifiek iets vraagt "
+        "dat NIET in Context staat."
+    )
+
+    tool_lines.append(
         "## get_pricing\n"
-        "Haal prijzen en pakketten op. Optionele param: `query` (pakketnaam).\n"
-        "Volg PRIJSINSTRUCTIES uit het resultaat letterlijk."
+        "Prijzen ophalen. Param: `query` (optioneel, pakketnaam).\n"
+        "Volg PRIJSINSTRUCTIES letterlijk. Alleen als Context onvoldoende is."
     )
 
     tool_lines.append(
         "## get_company_overview\n"
-        "Haal bedrijfsoverzicht op. Geen parameters."
+        "Bedrijfsoverzicht. Alleen als Context onvoldoende is."
     )
 
     tool_lines.append(
         "## get_contact_info\n"
-        "Haal contactgegevens op. Geen parameters."
+        "Contactgegevens. Alleen als Context onvoldoende is."
     )
 
     tool_lines.append(
         "## get_opening_hours\n"
-        "Haal openingstijden op. Geen parameters."
+        "Openingstijden. Alleen als Context onvoldoende is."
     )
 
     tool_lines.append(
         "## get_services\n"
-        "Haal aangeboden diensten op. Geen parameters. Anders dan get_company_overview (= wie is het bedrijf)."
+        "Diensten. Alleen als Context onvoldoende is."
     )
 
     tool_lines.append(
         "## get_location\n"
-        "Haal adres en vestigingen op. Geen parameters."
+        "Adres/vestigingen. Alleen als Context onvoldoende is."
     )
 
     tool_lines.append(
         "## search_knowledge\n"
         "Zoek in kennisbank voor FAQ, beleid en overige vragen. Beantwoord nooit uit eigen kennis.\n"
-        "Niet voor: prijzen (get_pricing), overzicht (get_company_overview), contact (get_contact_info), "
-        "openingstijden (get_opening_hours), diensten (get_services), locatie (get_location).\n"
+        "Niet voor info die al in Context staat.\n"
         "Param: `query`. Bij falen: bied terugbelverzoek aan."
     )
 

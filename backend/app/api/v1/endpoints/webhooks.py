@@ -21,7 +21,7 @@ from urllib.parse import urlparse, parse_qs
 from app.core.database import get_db
 from app.core.config import settings
 from app.services.tts_service import generate_tts_audio, get_tts_url
-from app.services.openai_realtime_service import build_system_instructions
+from app.services.openai_realtime_service import build_system_instructions, prefetch_company_context
 from app.core.voices import DEFAULT_VOICE_ID
 
 logger = logging.getLogger(__name__)
@@ -433,6 +433,9 @@ async def twilio_voice_webhook(
     # Disclosure message
     disclosure_message = company.disclosure_message if company.disclosure_message else None
 
+    # Pre-fetch static company data to avoid tool calls for common questions
+    company_context = prefetch_company_context(db, str(company.id))
+
     # Build the full system prompt (personality, tone, rules, permissions, etc.)
     full_instructions = build_system_instructions(
         worker=available_worker,
@@ -445,6 +448,7 @@ async def twilio_voice_webhook(
         caller_context=caller_context,
         custom_instructions=company.custom_instructions,
         transfer_enabled=bool(phone.transfer_enabled and phone.transfer_number),
+        company_context=company_context,
     )
 
     logger.info(
