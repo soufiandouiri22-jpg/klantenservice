@@ -364,18 +364,8 @@ def build_system_instructions(
         "Markeer onbeantwoordbare vraag. Param: `question`. Noem deze tool niet tegen de klant."
     )
 
-    tool_lines.append(
-        "## check_policy\n"
-        "Interne check — resultaten NOOIT voorlezen.\n"
-        "Verplicht vóór: ending_call, escalation. Optioneel bij: low_confidence, repeated_failure, off_topic, silence.\n"
-        "Params: `trigger_reason`, `customer_message`. Resultaat: `allowed`, `instruction_nl`, `required_action`.\n"
-        "Einde gesprek: zeg afscheid → check_policy(ending_call) → allowed=true → end_call."
-    )
-
-    tool_lines.append(
-        "## end_call\n"
-        "Beëindig verbinding. Alleen na check_policy(ending_call) allowed=true. Nooit direct na afscheid."
-    )
+    # check_policy and end_call removed — end_call is a built-in ElevenLabs system tool,
+    # check_policy was never registered in ElevenLabs. Afscheid rules are in guardrails.
 
     sections.append("# Tools\n\n" + "\n\n".join(tool_lines))
 
