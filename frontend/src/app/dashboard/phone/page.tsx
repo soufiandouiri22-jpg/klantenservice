@@ -24,15 +24,21 @@ import { phoneNumbersApi, aiWorkersApi } from '@/lib/api'
 import { formatPhoneNumber } from '@/lib/utils'
 import { useAuthStore } from '@/lib/store'
 
-// Provider data for forwarding codes
+// Provider data for forwarding codes (GSM standard **21*)
 const providers = [
-  { id: 'kpn', name: 'KPN', code: '*21*', note: 'Vast & Mobiel' },
+  { id: 'kpn', name: 'KPN', code: '**21*', note: 'Vast & Mobiel' },
   { id: 'vodafone', name: 'Vodafone', code: '**21*', note: 'Mobiel' },
   { id: 't-mobile', name: 'T-Mobile', code: '**21*', note: 'Mobiel' },
-  { id: 'ziggo', name: 'Ziggo', code: '*21*', note: 'Vast' },
+  { id: 'ziggo', name: 'Ziggo', code: '**21*', note: 'Vast' },
   { id: 'odido', name: 'Odido', code: '**21*', note: 'Mobiel' },
-  { id: 'anders', name: 'Anders', code: '*21*', note: 'Standaard' },
+  { id: 'anders', name: 'Anders', code: '**21*', note: 'Standaard' },
 ]
+
+function toNationalFormat(number: string): string {
+  if (number.startsWith('+31')) return '0' + number.slice(3)
+  if (number.startsWith('31')) return '0' + number.slice(2)
+  return number
+}
 
 const days = [
   { key: 'monday', label: 'Maandag' },
@@ -185,12 +191,10 @@ export default function PhonePage() {
     toast.success('Gekopieerd!')
   }
 
-  // Get forwarding code for selected provider
   const getForwardingCode = () => {
     const provider = providers.find(p => p.id === selectedProvider)
     if (!provider || !createdPhone) return ''
-    const number = createdPhone.number.replace('+', '')
-    return `${provider.code}${number}#`
+    return `${provider.code}${toNationalFormat(createdPhone.number)}#`
   }
 
   // Settings functions
@@ -1066,9 +1070,8 @@ export default function PhonePage() {
                     <code className="bg-blue-100 px-2 py-1 rounded font-mono text-blue-900">
                       {(() => {
                         const provider = providers.find(p => p.id === selectedPhone.provider)
-                        const code = provider?.code || '*21*'
-                        const number = selectedPhone.number.replace('+', '')
-                        return `${code}${number}#`
+                        const code = provider?.code || '**21*'
+                        return `${code}${toNationalFormat(selectedPhone.number)}#`
                       })()}
                     </code>
                   </div>
