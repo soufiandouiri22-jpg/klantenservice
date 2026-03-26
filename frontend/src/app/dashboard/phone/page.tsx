@@ -358,9 +358,22 @@ export default function PhonePage() {
                       </div>
                     ) : (
                       <div className="mt-4 p-3 rounded-lg bg-amber-50 border border-amber-200">
-                        <div className="flex items-center gap-2 text-sm text-amber-700">
-                          <HelpCircle className="h-4 w-4" />
-                          <span>Doorschakelen nog niet ingesteld</span>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-sm text-amber-700">
+                            <HelpCircle className="h-4 w-4" />
+                            <span>Doorschakelen nog niet ingesteld</span>
+                          </div>
+                          {canEdit && (
+                            <button
+                              onClick={() => updateMutation.mutate({
+                                id: phone.id,
+                                data: { forwarding_verified: true },
+                              })}
+                              className="text-xs font-medium text-amber-800 bg-amber-200 hover:bg-amber-300 px-3 py-1 rounded-full transition-colors"
+                            >
+                              Bevestigen
+                            </button>
+                          )}
                         </div>
                       </div>
                     )}
