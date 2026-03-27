@@ -28,6 +28,10 @@ from app.models.call_log import CallLog, CallStatus
 from app.models.phone_number import PhoneNumber
 from app.models.training import TrainingRule
 from app.services.openai_realtime_service import build_system_instructions, prefetch_company_context
+from app.services.convai_client_overrides import (
+    build_conversation_config_override,
+    conversation_overrides_for_react_sdk,
+)
 
 router = APIRouter()
 settings = get_settings()
@@ -221,17 +225,14 @@ async def get_demo_signed_url(
     except Exception:
         pass
 
+    conv_rest = build_conversation_config_override(
+        voice_id=voice_id,
+        prompt_text=full_instructions,
+        first_message=first_msg,
+    )
     return {
         "signed_url": signed_url,
-        "overrides": {
-            "agent": {
-                "prompt": {"prompt": full_instructions},
-                "firstMessage": first_msg,
-            },
-            "tts": {
-                "voice_id": voice_id,
-            },
-        },
+        "overrides": conversation_overrides_for_react_sdk(conv_rest),
         "dynamic_variables": {
             "company_id": str(company.id),
             "ai_worker_id": str(worker.id),

@@ -88,7 +88,10 @@ class Settings(BaseSettings):
     # ElevenLabs (Conversational AI + TTS)
     ELEVENLABS_API_KEY: str = ""
     ELEVENLABS_AGENT_ID: str = ""  # Created via API; used for register_call
-    
+    # ConvAI client overrides (optional; empty PROMPT_LLM = use agent default, e.g. v3 stack from dashboard)
+    ELEVENLABS_CONVAI_LANGUAGE: str = "nl"
+    ELEVENLABS_CONVAI_PROMPT_LLM: str = ""
+
     # Cloudflare Browser Rendering (optional crawl provider)
     CLOUDFLARE_API_TOKEN: str = ""
     CLOUDFLARE_ACCOUNT_ID: str = ""

@@ -22,6 +22,7 @@ from app.core.database import get_db
 from app.core.config import settings
 from app.services.tts_service import generate_tts_audio, get_tts_url
 from app.services.openai_realtime_service import build_system_instructions, prefetch_company_context
+from app.services.convai_client_overrides import build_conversation_config_override
 from app.core.voices import DEFAULT_VOICE_ID
 
 logger = logging.getLogger(__name__)
@@ -483,6 +484,11 @@ async def twilio_voice_webhook(
         )
 
     # ── Connect to ElevenLabs Conversational AI ──────────────────
+    conversation_config_override = build_conversation_config_override(
+        voice_id=voice_id,
+        prompt_text=full_instructions,
+        first_message=first_msg,
+    )
     register_payload = {
         "agent_id": settings.ELEVENLABS_AGENT_ID,
         "from_number": from_number,
@@ -497,17 +503,7 @@ async def twilio_voice_webhook(
                 "company_name": company.name or "",
                 "call_sid": call_sid,
             },
-            "conversation_config_override": {
-                "agent": {
-                    "prompt": {
-                        "prompt": full_instructions,
-                    },
-                    "first_message": first_msg,
-                },
-                "tts": {
-                    "voice_id": voice_id,
-                },
-            },
+            "conversation_config_override": conversation_config_override,
         },
     }
     
