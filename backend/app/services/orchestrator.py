@@ -138,7 +138,10 @@ TOOLS_OPENAI = [
                 "properties": {
                     "start_date": {
                         "type": "string",
-                        "description": "ISO datetime of date (YYYY-MM-DD of YYYY-MM-DDTHH:MM:SS). Gebruik vandaag als geen datum genoemd."
+                        "description": (
+                            "ISO datetime of date. Als de klant al een tijd noemde (bijv. om 10 uur), "
+                            "zet die tijd in de string (YYYY-MM-DDTHH:MM). Alleen datum als nog geen tijd bekend is."
+                        ),
                     },
                     "duration_minutes": {
                         "type": "integer",

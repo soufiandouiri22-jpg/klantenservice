@@ -63,6 +63,91 @@ def _format_slots_spoken(slots: list[dict]) -> list[str]:
     return result
 
 
+def _parse_iso_to_nl_naive(dt_str: str) -> Optional[datetime]:
+    """Parse calendar slot start string to naive datetime in Europe/Amsterdam."""
+    if not dt_str or not isinstance(dt_str, str):
+        return None
+    s = dt_str.strip()
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(s)
+    except ValueError:
+        try:
+            dt = datetime.fromisoformat(s[:19])
+        except ValueError:
+            return None
+    if dt.tzinfo is not None:
+        from zoneinfo import ZoneInfo
+
+        dt = dt.astimezone(ZoneInfo("Europe/Amsterdam")).replace(tzinfo=None)
+    return dt
+
+
+def _slot_start_dt(slot: dict) -> Optional[datetime]:
+    return _parse_iso_to_nl_naive(slot.get("start") or "")
+
+
+def _is_midnight_date_only(dt: datetime) -> bool:
+    return (
+        dt.hour == 0
+        and dt.minute == 0
+        and dt.second == 0
+        and dt.microsecond == 0
+    )
+
+
+def _to_nl_naive(dt: datetime) -> datetime:
+    if dt.tzinfo is None:
+        return dt
+    from zoneinfo import ZoneInfo
+
+    return dt.astimezone(ZoneInfo("Europe/Amsterdam")).replace(tzinfo=None)
+
+
+def _next_action_for_availability(slots_raw: list[dict], start_date: datetime) -> str:
+    """
+    Tell the voice model whether to confirm one slot or offer choices.
+    Matches explicit times in start_date to a returned slot (e.g. klant zei "10 uur").
+    """
+    pick = (
+        "Bied maximaal 3 opties uit `slots` en vraag welk moment het beste uitkomt. "
+        "Vraag daarna de naam van de klant."
+    )
+    confirm = (
+        "Het gekozen tijdstip staat in `slots`. Bevestig het kort met de klant en vraag daarna de naam voor de boeking. "
+        "Bied geen andere tijdstippen aan, tenzij de klant zelf om alternatieven vraagt."
+    )
+    if not slots_raw:
+        return pick
+
+    parsed: List[datetime] = []
+    for s in slots_raw:
+        dt = _slot_start_dt(s) if isinstance(s, dict) else None
+        if dt is not None:
+            parsed.append(dt)
+    if not parsed:
+        return pick
+
+    if len(parsed) == 1:
+        return confirm
+
+    sd = _to_nl_naive(start_date)
+
+    if not _is_midnight_date_only(sd):
+        for slot_dt in parsed:
+            if abs((slot_dt - sd).total_seconds()) <= 120:
+                return confirm
+
+    if _is_midnight_date_only(sd):
+        day = sd.date()
+        same_day = [dt for dt in parsed if dt.date() == day]
+        if len(same_day) == 1:
+            return confirm
+
+    return pick
+
+
 from sqlalchemy.orm import Session
 
 from app.models.calendar_integration import CalendarIntegration, CalendarProvider
@@ -211,7 +296,8 @@ async def tool_check_availability(
                 duration_minutes=duration_minutes,
             )
 
-            formatted = _format_slots_spoken(slots[:20])
+            slots_slice = slots[:20]
+            formatted = _format_slots_spoken(slots_slice)
             logger.info(
                 "[check_availability] source=external_calendar provider=%s slots=%d company=%s",
                 calendar.provider, len(formatted), company_id,
@@ -224,7 +310,7 @@ async def tool_check_availability(
                 "calendar_name": calendar.name,
                 "message": f"Er zijn {len(formatted)} beschikbare momenten gevonden."
                     if formatted else "Er zijn geen beschikbare momenten in deze periode.",
-                "next_action": "Bied maximaal 3 opties aan en vraag welk moment het beste uitkomt. Vraag daarna de naam van de klant.",
+                "next_action": _next_action_for_availability(slots_slice, start_date),
             }
 
         except Exception as e:
@@ -247,7 +333,8 @@ async def tool_check_availability(
     if has_availability_rules:
         try:
             slots = _get_internal_availability(db, calendar, start_date, end, duration_minutes)
-            formatted = _format_slots_spoken(slots[:20])
+            slots_slice = slots[:20]
+            formatted = _format_slots_spoken(slots_slice)
             logger.info(
                 "[check_availability] source=internal_calendar slots=%d company=%s",
                 len(formatted), company_id,
@@ -260,7 +347,7 @@ async def tool_check_availability(
                 "calendar_name": calendar.name,
                 "message": f"Er zijn {len(formatted)} beschikbare momenten gevonden."
                     if formatted else "Er zijn geen beschikbare momenten in deze periode.",
-                "next_action": "Bied maximaal 3 opties aan en vraag welk moment het beste uitkomt. Vraag daarna de naam van de klant.",
+                "next_action": _next_action_for_availability(slots_slice, start_date),
             }
         except Exception as e:
             logger.error("[check_availability] internal_calendar error: %s", e, exc_info=True)

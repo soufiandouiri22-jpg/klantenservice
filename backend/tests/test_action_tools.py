@@ -779,6 +779,56 @@ class TestAvailabilitySourcePriority:
         )
 
 
+class TestNextActionAvailability:
+    """_next_action_for_availability: confirm vs max 3 options."""
+
+    @staticmethod
+    def test_single_slot_returns_confirm():
+        from datetime import datetime
+        from app.services.call_tools import _next_action_for_availability
+
+        slots = [{"start": "2026-06-02T10:00:00"}]
+        r = _next_action_for_availability(slots, datetime(2026, 6, 2, 0, 0, 0))
+        _assert("Bevestig" in r, "next_action: single slot → confirm")
+
+    @staticmethod
+    def test_explicit_time_match_returns_confirm():
+        from datetime import datetime
+        from app.services.call_tools import _next_action_for_availability
+
+        slots = [
+            {"start": "2026-06-02T09:30:00"},
+            {"start": "2026-06-02T10:00:00"},
+            {"start": "2026-06-02T10:30:00"},
+        ]
+        r = _next_action_for_availability(slots, datetime(2026, 6, 2, 10, 0, 0))
+        _assert("Bevestig" in r and "maximaal 3" not in r, "next_action: time match → confirm")
+
+    @staticmethod
+    def test_midnight_multiple_same_day_returns_pick():
+        from datetime import datetime
+        from app.services.call_tools import _next_action_for_availability
+
+        slots = [
+            {"start": "2026-06-02T09:30:00"},
+            {"start": "2026-06-02T10:00:00"},
+        ]
+        r = _next_action_for_availability(slots, datetime(2026, 6, 2, 0, 0, 0))
+        _assert("maximaal 3" in r.lower(), "next_action: date-only + multiple → pick")
+
+    @staticmethod
+    def test_date_only_one_slot_that_day_returns_confirm():
+        from datetime import datetime
+        from app.services.call_tools import _next_action_for_availability
+
+        slots = [
+            {"start": "2026-06-02T10:00:00"},
+            {"start": "2026-06-03T10:00:00"},
+        ]
+        r = _next_action_for_availability(slots, datetime(2026, 6, 2, 0, 0, 0))
+        _assert("Bevestig" in r, "next_action: date-only + one slot that day → confirm")
+
+
 test_classes = [
     TestClosingRegex,
     TestClosingBlocksAllTools,
@@ -795,6 +845,7 @@ test_classes = [
     TestToolLoopProtection,
     TestPromptLeakage,
     TestAvailabilitySourcePriority,
+    TestNextActionAvailability,
 ]
 
 

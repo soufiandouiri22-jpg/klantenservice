@@ -27,8 +27,8 @@ logger = logging.getLogger(__name__)
 
 _WEEKDAY_NAMES = ["maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag", "zondag"]
 
-# Cap prefetched Context block to stay within ElevenLabs-style prompt budget (~2k tokens total target band).
-MAX_COMPANY_CONTEXT_CHARS = 2800
+# Cap prefetched Context block (ElevenLabs: aim ~<2k tokens total prompt; prefetch is a large slice).
+MAX_COMPANY_CONTEXT_CHARS = 1200
 
 
 def prefetch_company_context(db, company_id: str) -> str:
@@ -311,8 +311,7 @@ def build_system_instructions(
 
     # 2.5 # Context — current date/time + caller info
     context_lines = [
-        f"Vandaag is het {current_date_str}. Het is nu {current_time_str} (Nederland).",
-        "Gebruik deze informatie om 'morgen', 'volgende week', etc. correct te interpreteren.",
+        f"Vandaag {current_date_str}, {current_time_str} NL — gebruik voor 'morgen', 'volgende week' e.d.",
     ]
     if caller_context:
         name_parts = []
@@ -362,94 +361,44 @@ def build_system_instructions(
         tool_lines.append(f"## Bevoegdheden\n{chr(10).join(permissions)}")
 
     tool_lines.append(
-        "BELANGRIJK: Gebruik eerst # Context. Roep get_pricing t/m get_location en search_knowledge "
-        "alleen aan als het antwoord daar niet in staat. Prijzen exact uit tool (nooit afronden). "
-        "Geen bedrijfsantwoorden uit eigen kennis — tools of kennisbank."
+        "Eerst # Context. get_pricing t/m get_location + search_knowledge alleen als antwoord daar niet in staat. "
+        "Prijzen exact uit tool; niet afronden; niet uit eigen kennis."
     )
-
-    tool_lines.append("## get_pricing\nPrijzen. Param: `query` (optioneel).")
-
-    tool_lines.append("## get_company_overview\nBedrijfsoverzicht.")
-
-    tool_lines.append("## get_contact_info\nContact.")
-
-    tool_lines.append("## get_opening_hours\nOpeningstijden.")
-
-    tool_lines.append("## get_services\nDiensten.")
-
-    tool_lines.append("## get_location\nLocatie/vestigingen.")
 
     tool_lines.append(
-        "## search_knowledge\n"
-        "FAQ, beleid, overig. Param: `query`. Niet uit eigen kennis. Bij falen: terugbelverzoek."
+        "## Feiten\n"
+        "get_pricing(query?), get_company_overview, get_contact_info, get_opening_hours, get_services, get_location."
     )
+
+    tool_lines.append("## search_knowledge\n`query` — FAQ/beleid; bij falen terugbelverzoek.")
 
     if worker.can_make_appointments:
         tool_lines.append(
             "## check_availability\n"
-            "Agenda-slots. Param: `start_date` (ISO). Max 3 opties; volg `next_action`. "
-            "Bij ok=false: andere datum, niet dezelfde params herhalen."
+            "`start_date` ISO (+tijd als klant noemde); volg `next_action` (bevestigen of max 3 slots). "
+            "Bij ok=false: andere periode."
         )
-
         tool_lines.append(
-            "## book_appointment\n"
-            "Boeken: `starts_at`, `ends_at`, `customer_name`; opt. `title`, `customer_email`. "
-            "Bevestig datum+tijd+naam voor boeken. Bij `missing`: ontbrekend vragen."
+            "## book_appointment\n`starts_at`, `ends_at`, `customer_name`; opt. title/email; bevestig voor boeken."
         )
-
+        tool_lines.append("## cancel_appointment\nOpt. naam/datum; meerdere matches: laat kiezen.")
         tool_lines.append(
-            "## cancel_appointment\n"
-            "Annuleren. Opt.: `customer_name`, `appointment_date`. Meerdere matches: laat kiezen."
-        )
-
-        tool_lines.append(
-            "## reschedule_appointment\n"
-            "Eerst check_availability, klant kiest slot. Params: `new_starts_at`, `new_ends_at`; "
-            "opt. `customer_name`, `appointment_date`."
+            "## reschedule_appointment\nEerst check_availability; `new_starts_at`, `new_ends_at`; opt. naam/datum."
         )
 
     tool_lines.append(
-        "## create_lead\n"
-        "Lead vastleggen. Vereist: `name`. Opt.: `phone`, `email`, `notes`."
-    )
-
-    tool_lines.append(
-        "## send_sms\n"
-        "SMS. Vereist: `message`. `to` opt. (default bellernummer)."
-    )
-
-    tool_lines.append(
-        "## send_email\n"
-        "E-mail: `to`, `subject`, `body`. E-mail bevestigen door te spellen; params in standaardformaat (met @ en .)."
-    )
-
-    tool_lines.append(
-        "## leave_message\n"
-        "Bericht achterlaten. Vereist: `message`. Opt.: `customer_name`."
-    )
-
-    tool_lines.append(
-        "## create_callback_request\n"
-        "Terugbelverzoek. Bevestig nummer. Opt.: `customer_name`, `preferred_callback_time`, `notes`."
+        "## create_lead · send_sms · send_email · leave_message · create_callback_request\n"
+        "create_lead: name (+phone, email, notes). send_sms: message. send_email: to, subject, body (spellen). "
+        "leave_message: message. create_callback_request: nummer bevestigen."
     )
 
     if worker.can_leave_notes:
-        tool_lines.append(
-            "## create_note\n"
-            "Interne notitie. Bij verzoeken buiten jouw bevoegdheden."
-        )
+        tool_lines.append("## create_note\nInterne notitie.")
 
     if transfer_enabled:
-        tool_lines.append(
-            "## transfer_call\n"
-            "Doorverbinden naar mens. Zeg eerst dat je doorverbindt; korte reden. "
-            "Bij: vraag om mens, te complex, gefrustreerde beller."
-        )
+        tool_lines.append("## transfer_call\nDoorverbinden; korte reden.")
 
-    tool_lines.append(
-        "## flag_unknown\n"
-        "Onbeantwoordbare vraag markeren. Param: `question`. Niet noemen tegen klant."
-    )
+    tool_lines.append("## flag_unknown\n`question` — niet tegen klant noemen.")
 
     # check_policy and end_call removed — end_call is a built-in ElevenLabs system tool,
     # check_policy was never registered in ElevenLabs. Afscheid rules are in guardrails.
